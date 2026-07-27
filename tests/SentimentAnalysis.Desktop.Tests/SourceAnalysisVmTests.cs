@@ -59,4 +59,20 @@ public class SourceAnalysisVmTests
         Assert.Empty(vm.Shares);
         Assert.Equal("—", vm.Emotion);
     }
+
+    [Fact]
+    public void Ctor_AxisSummaryUsesPlainTurkishForKnownVaPoint()
+    {
+        var vm = new SourceAnalysisVm("Metin Analizi", new ValenceArousal(0.62, 0.41), T);
+
+        Assert.Equal("Çok olumlu · Orta canlılıkta", vm.AxisSummary);
+    }
+
+    [Fact]
+    public void Empty_AxisSummaryIsEmpty()
+    {
+        var vm = SourceAnalysisVm.Empty("Metin Analizi");
+
+        Assert.Equal(string.Empty, vm.AxisSummary);
+    }
 }

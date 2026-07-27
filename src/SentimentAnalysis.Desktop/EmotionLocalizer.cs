@@ -35,4 +35,24 @@ public static class EmotionLocalizer
         IncongruencePattern.OlasiIroni => "Olası ironi",
         _ => p.ToString(),
     };
+
+    /// <summary>Valence (olumluluk ekseni) değerini sıradan kullanıcı için düz Türkçeye çevirir.</summary>
+    public static string ValenceText(double valence) => valence switch
+    {
+        >= 0.6 => "Çok olumlu",
+        >= 0.2 => "Olumlu",
+        > -0.2 => "Ne olumlu ne olumsuz",
+        > -0.6 => "Olumsuz",
+        _ => "Çok olumsuz",
+    };
+
+    /// <summary>Arousal (canlılık ekseni) değerini sıradan kullanıcı için düz Türkçeye çevirir.</summary>
+    public static string ArousalText(double arousal) => arousal switch
+    {
+        >= 0.8 => "Çok hareketli",
+        >= 0.6 => "Hareketli",
+        >= 0.4 => "Orta canlılıkta",
+        >= 0.2 => "Sakin",
+        _ => "Çok durgun",
+    };
 }

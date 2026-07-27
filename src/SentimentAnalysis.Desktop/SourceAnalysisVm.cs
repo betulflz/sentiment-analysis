@@ -27,12 +27,17 @@ public sealed class SourceAnalysisVm
     /// <summary>Henüz ölçüm gelmediyse false — UI boş durumu dürüstçe gösterir.</summary>
     public bool HasData { get; }
 
+    /// <summary>Valence/Arousal'ın jargonsuz, düz Türkçe özeti (örn. "Olumlu · Hareketli").
+    /// Boş durumda boş dizedir.</summary>
+    public string AxisSummary { get; }
+
     public SourceAnalysisVm(string title, ValenceArousal va, double temperature)
     {
         Title = title;
         Valence = va.Valence;
         Arousal = va.Arousal;
         HasData = true;
+        AxisSummary = $"{EmotionLocalizer.ValenceText(Valence)} · {EmotionLocalizer.ArousalText(Arousal)}";
 
         var shares = EmotionWheel.Distribute(va, temperature);
         Emotion = EmotionLocalizer.Emotion(shares[0].Emotion);
@@ -49,6 +54,7 @@ public sealed class SourceAnalysisVm
         Emotion = "—";
         Shares = Array.Empty<EmotionShareVm>();
         HasData = false;
+        AxisSummary = string.Empty;
     }
 
     /// <summary>Analiz başlamadan önceki boş durum.</summary>
