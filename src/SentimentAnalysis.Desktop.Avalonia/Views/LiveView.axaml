@@ -2,8 +2,53 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:desktop="clr-namespace:SentimentAnalysis.Desktop;assembly=SentimentAnalysis.Desktop"
              mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="500"
              x:Class="SentimentAnalysis.Desktop.Avalonia.Views.LiveView">
+
+    <UserControl.Resources>
+        <DataTemplate x:Key="SourcePanel" DataType="desktop:SourceAnalysisVm">
+            <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1"
+                    CornerRadius="6" Padding="12" Margin="4">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13"
+                               Foreground="{DynamicResource SystemBaseMediumColor}" />
+                    <TextBlock Text="{Binding Emotion}" FontSize="22" FontWeight="Bold" />
+
+                    <ItemsControl ItemsSource="{Binding Shares}" IsVisible="{Binding HasData}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="desktop:EmotionShareVm">
+                                <Grid ColumnDefinitions="70,*,38" Margin="0,1">
+                                    <TextBlock Grid.Column="0" Text="{Binding Emotion}" FontSize="11"
+                                               VerticalAlignment="Center" />
+                                    <ProgressBar Grid.Column="1" Minimum="0" Maximum="100"
+                                                 Value="{Binding Percent}" Height="6"
+                                                 VerticalAlignment="Center" Margin="4,0" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Percent, StringFormat='%{0}'}"
+                                               FontSize="11" TextAlignment="Right"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock IsVisible="{Binding !HasData}" FontStyle="Italic" FontSize="11"
+                               Foreground="{DynamicResource SystemBaseMediumColor}"
+                               Text="henüz ölçüm yok" />
+
+                    <TextBlock FontSize="11" IsVisible="{Binding HasData}"
+                               Foreground="{DynamicResource SystemBaseMediumColor}">
+                        <TextBlock.Text>
+                            <MultiBinding StringFormat="V {0:F2}  ·  A {1:F2}">
+                                <Binding Path="Valence" />
+                                <Binding Path="Arousal" />
+                            </MultiBinding>
+                        </TextBlock.Text>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
 
     <DockPanel>
         <StackPanel DockPanel.Dock="Top" Spacing="12" Margin="0,0,0,16">
@@ -19,17 +64,25 @@
                 </Border>
             </StackPanel>
 
-            <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16">
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Güncel Durum" FontWeight="SemiBold" FontSize="14" />
-                    <TextBlock Text="{Binding CurrentEmotion}" FontSize="24" FontWeight="Bold" />
-                    <StackPanel Orientation="Horizontal" Spacing="16">
-                        <TextBlock Text="{Binding CurrentValence, StringFormat='Valence: {0:F2}'}" />
-                        <TextBlock Text="{Binding CurrentArousal, StringFormat='Arousal: {0:F2}'}" />
-                    </StackPanel>
-                    <TextBlock Text="{Binding CongruenceBadge}" Foreground="DarkOrange" FontStyle="Italic" />
-                </StackPanel>
-            </Border>
+            <Grid ColumnDefinitions="*,*,*">
+                <ContentControl Grid.Column="0" Content="{Binding TextAnalysis}"
+                                ContentTemplate="{StaticResource SourcePanel}" />
+                <ContentControl Grid.Column="1" Content="{Binding AudioAnalysis}"
+                                ContentTemplate="{StaticResource SourcePanel}" />
+                <ContentControl Grid.Column="2" Content="{Binding FinalAnalysis}"
+                                ContentTemplate="{StaticResource SourcePanel}" />
+            </Grid>
+
+            <StackPanel Orientation="Horizontal" Spacing="16" Margin="4,0">
+                <TextBlock Text="{Binding CurrentConfidence, StringFormat='Güven: {0}'}"
+                           FontSize="12" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding CongruenceBadge}" Foreground="DarkOrange"
+                           FontStyle="Italic" FontSize="12" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <TextBlock FontSize="10" TextWrapping="Wrap"
+                       Foreground="{DynamicResource SystemBaseMediumColor}" Margin="4,0"
+                       Text="Yüzdeler, valence-arousal uzayındaki yakınlık paylarıdır — kalibre edilmiş olasılık değildir." />
         </StackPanel>
 
         <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6">
