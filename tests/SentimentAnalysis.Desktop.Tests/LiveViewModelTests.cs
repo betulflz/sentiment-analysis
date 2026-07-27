@@ -138,4 +138,67 @@ public class LiveViewModelTests
 
         Assert.Equal("Orta", vm.CurrentConfidence);
     }
+
+    [Fact]
+    public void CanStart_FileMode_RequiresSelectedFile()
+    {
+        var selected = new SelectedAudio();
+        var mode = new CaptureModeState { Mode = CaptureMode.Dosya };
+        var vm = new LiveViewModel(new FakeRunner(), null, selected, null, mode);
+
+        Assert.False(vm.StartCommand.CanExecute(null));
+
+        selected.Path = "/tmp/ses.wav";
+        vm.UseMicrophone = false;   // CanExecute yeniden değerlendirilsin
+
+        Assert.True(vm.StartCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void CanStart_MicrophoneMode_DoesNotRequireFile()
+    {
+        var mode = new CaptureModeState();
+        var vm = new LiveViewModel(new FakeRunner(), null, new SelectedAudio(), null, mode);
+
+        vm.UseMicrophone = true;
+
+        Assert.True(vm.StartCommand.CanExecute(null));
+        Assert.Equal(CaptureMode.Mikrofon, mode.Mode);
+    }
+
+    [Fact]
+    public void UseMicrophone_WritesThroughToSharedState()
+    {
+        var mode = new CaptureModeState();
+        var vm = new LiveViewModel(new FakeRunner(), null, new SelectedAudio(), null, mode);
+
+        vm.UseMicrophone = true;
+        Assert.Equal(CaptureMode.Mikrofon, mode.Mode);
+
+        vm.UseMicrophone = false;
+        Assert.Equal(CaptureMode.Dosya, mode.Mode);
+    }
+
+    private sealed class ThrowingRunner : IAnalysisRunner
+    {
+        private readonly Exception _ex;
+        public ThrowingRunner(Exception ex) => _ex = ex;
+        public Task<MeetingSummary> RunAsync(IProgress<ChunkResult> progress, CancellationToken ct)
+            => throw _ex;
+    }
+
+    [Fact]
+    public async Task Start_OnPermissionError_SurfacesFullMessageInCaptureError()
+    {
+        const string uzunMesaj = "Mikrofon izni reddedildi. Sistem Ayarları > Gizlilik ve Güvenlik > " +
+            "Mikrofon bölümünden bu uygulamaya izin verin ve tekrar deneyin.";
+        var runner = new ThrowingRunner(new InvalidOperationException(uzunMesaj));
+        var vm = new LiveViewModel(runner, null, new SelectedAudio { Path = "/tmp/ses.wav" });
+
+        vm.StartCommand.Execute(null);
+        await vm.WaitForIdleAsync();
+
+        Assert.Contains(uzunMesaj, vm.CaptureError);
+        Assert.False(vm.IsCapturing);
+    }
 }

@@ -15,6 +15,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     private readonly IAudioFilePicker? _picker;
     private readonly ISelectedAudio? _selected;
     private readonly double _temperature;
+    private readonly ICaptureModeState? _captureMode;
     private CancellationTokenSource? _cts;
     private Task? _run;
 
@@ -34,13 +35,29 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     [ObservableProperty] private SourceAnalysisVm _audioAnalysis = SourceAnalysisVm.Empty("Ses Analizi");
     [ObservableProperty] private SourceAnalysisVm _finalAnalysis = SourceAnalysisVm.Empty("Nihai Karar");
 
+    /// <summary>Canlı mikrofon mu kullanılsın (aksi halde seçili dosya)?</summary>
+    [ObservableProperty] private bool _useMicrophone;
+
+    /// <summary>Koşu sırasında oluşan hatanın (örn. reddedilen mikrofon izni) tam metni.
+    /// <see cref="CongruenceBadge"/> kısa bir rozet olduğundan uzun/açıklayıcı hatalar buraya yazılır.</summary>
+    [ObservableProperty] private string _captureError = string.Empty;
+
     public LiveViewModel(IAnalysisRunner runner, IAudioFilePicker? picker = null,
-                         ISelectedAudio? selected = null, AppConfig? config = null)
+                         ISelectedAudio? selected = null, AppConfig? config = null,
+                         ICaptureModeState? captureMode = null)
     {
         _runner = runner;
         _picker = picker;
         _selected = selected;
         _temperature = (config ?? AppConfig.Default).Fusion.DistributionTemperature;
+        _captureMode = captureMode;
+    }
+
+    partial void OnUseMicrophoneChanged(bool value)
+    {
+        if (_captureMode is not null)
+            _captureMode.Mode = value ? CaptureMode.Mikrofon : CaptureMode.Dosya;
+        StartCommand.NotifyCanExecuteChanged();
     }
 
     public void Report(ChunkResult r)
@@ -80,17 +97,20 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         _run = RunAsync(_cts.Token);
     }
 
-    private bool CanStart() => !IsCapturing && _selected?.Path != null;
+    private bool CanStart() => !IsCapturing && (UseMicrophone || _selected?.Path != null);
 
     private async Task RunAsync(CancellationToken ct)
     {
         try
         {
+            CaptureError = string.Empty;
             var summary = await _runner.RunAsync(this, ct).ConfigureAwait(true);
             Completed?.Invoke(summary);
         }
         catch (OperationCanceledException) { /* Stop ile iptal — normal */ }
-        catch (Exception ex) { CongruenceBadge = "Hata: " + ex.Message; } // sessiz yutma yok (08 deferred fix)
+        // Sessiz yutma yok (08 deferred fix): hata uzun/açıklayıcı olabileceğinden (örn. mikrofon
+        // izni reddi) küçük rozete değil, tam metni gösterebilen CaptureError'a yazılır.
+        catch (Exception ex) { CaptureError = ex.Message; }
         finally { IsCapturing = false; StartCommand.NotifyCanExecuteChanged(); }
     }
 
