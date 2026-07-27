@@ -5,6 +5,7 @@ using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Application.Fusion;
 using SentimentAnalysis.Application.Pipeline;
 using SentimentAnalysis.Desktop;
+using SentimentAnalysis.Infrastructure.Audio;
 using SentimentAnalysis.Infrastructure.Emotion;
 using SentimentAnalysis.Infrastructure.Storage;
 using SentimentAnalysis.Infrastructure.Stt;
@@ -36,11 +37,15 @@ public static class CompositionRoot
         services.AddSingleton<ISelectedAudio, SelectedAudio>();
         services.AddSingleton<IAudioSourceFactory, AfconvertAudioSourceFactory>();
         services.AddSingleton<IAudioFilePicker>(_ => new AvaloniaAudioFilePicker(() => MainWindowAccessor.Current));
+        services.AddSingleton<ICaptureModeState, CaptureModeState>();
         services.AddSingleton<Func<IAudioCaptureSource?>>(sp =>
         {
             var selected = sp.GetRequiredService<ISelectedAudio>();
+            var mode = sp.GetRequiredService<ICaptureModeState>();
             var audioSourceFactory = sp.GetRequiredService<IAudioSourceFactory>();
-            return () => selected.Path is null ? null : audioSourceFactory.Create(selected.Path);
+            return () => mode.Mode == CaptureMode.Mikrofon
+                ? new MicrophoneCaptureSource()
+                : selected.Path is null ? null : audioSourceFactory.Create(selected.Path);
         });
         services.AddSingleton<IAnalysisRunner, PipelineAnalysisRunner>();
 
@@ -48,7 +53,8 @@ public static class CompositionRoot
             sp.GetRequiredService<IAnalysisRunner>(),
             sp.GetRequiredService<IAudioFilePicker>(),
             sp.GetRequiredService<ISelectedAudio>(),
-            sp.GetRequiredService<AppConfig>()));
+            sp.GetRequiredService<AppConfig>(),
+            sp.GetRequiredService<ICaptureModeState>()));
         services.AddSingleton<ReportViewModel>();
         services.AddSingleton<HistoryViewModel>();
         services.AddSingleton<SettingsViewModel>(sp =>

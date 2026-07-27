@@ -68,3 +68,6 @@ tmp/
 
 # Superpowers SDD çalışma alanı (ledger, brief, review paketleri)
 .superpowers/
+
+# Üretilen macOS uygulama paketi
+dist/

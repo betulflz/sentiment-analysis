@@ -65,3 +65,27 @@ public interface ISessionStore { Task SaveChunkAsync(Guid, ChunkResult, Cancella
 - Yapay yavaşlatmada turbo→chunk-birleştirme degradasyonu devreye girer.
 - 1 saatlik gerçek akışta GC baskısı düşük (ArrayPool).
 - Toplantı-sonu derin geçiş (large-v3) ile yeniden analiz.
+
+## EK — Sözleşme Değişikliği (2026-07-27, Alt-proje 08e düzeltme turu)
+
+Bu spec'in orijinal metni (yukarısı, değiştirilmedi) `EmotionPipeline.RunAsync`'in iptalde
+(`CancellationToken`) `OperationCanceledException` fırlattığını varsayıyordu — bu artık DOĞRU
+DEĞİL. Kayıt için:
+
+- **Eski sözleşme:** `ct` iptal edildiğinde `RunAsync` `OperationCanceledException` fırlatırdı;
+  o ana kadar toplanan zaman çizelgesi çağırana hiç ulaşmazdı.
+- **Yeni sözleşme:** `ct` iptali artık bir HATA değil, normal bir bitiştir. `RunAsync` üreticiyi
+  (kaynağı) durdurur, kanalda kalan (henüz işlenmemiş) chunk'ları SINIRLI bir bütçe içinde
+  (en fazla `MaxDrainedChunksAfterStop`, en fazla `DrainTimeBudget` süre — bkz.
+  `EmotionPipeline.cs`) drene edip normal biçimde bir `MeetingSummary` ile döner. Drenaj
+  sınırı/bütçesi yüzünden işlenemeyen chunk'lar sessizce kaybolmaz — `DrainSkippedCount` ile
+  sayılıp raporlanır.
+- **Neden değişti:** Alt-proje 08e (canlı mikrofon) "Durdur" akışını gerçek donanımla ölçtü:
+  kullanıcı "Durdur"a bastığında sert bir iptal, o ana kadar yakalanan TÜM sesi (ve üretilen
+  chunk'ları) atıyordu — kullanıcı "Durdur, bana bir rapor ver" beklerken boş/yarım bir ekranla
+  karşılaşıyordu. Bu, canlı mikrofonun asıl var oluş nedeniyle (§ Hedef) doğrudan çelişiyordu.
+- **Korunan:** Chunk-başına hata izolasyonu (bir chunk'ın işleme hatası hattı çökertmez, o chunk
+  atlanır) DEĞİŞMEDİ — hem normal akışta hem drenaj sırasında geçerliliğini sürdürür.
+
+Bu not, `Application/Pipeline/` katmanının bu turda (plan'ın Global Constraints'inde "dokunulmaz"
+denmesine rağmen) haklı bir sebeple değiştirildiğini gelecekteki okuyucular için kayıt altına alır.
