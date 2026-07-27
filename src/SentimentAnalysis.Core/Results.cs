@@ -2,7 +2,8 @@ using System.Collections.Generic;
 
 namespace SentimentAnalysis.Core;
 
-/// <summary>Füzyon sonucu (chunk düzeyi). İki ham valence de saydamlık için taşınır.</summary>
+/// <summary>Füzyon sonucu (chunk düzeyi). Her iki modelin ham VA'sı ve güveni saydamlık için
+/// taşınır — UI bunları "Metin Analizi" ve "Ses Analizi" sütunlarında ayrı ayrı gösterir.</summary>
 public sealed record FusedResult(
     ValenceArousal Combined,
     Emotion PrimaryEmotion,
@@ -12,8 +13,10 @@ public sealed record FusedResult(
     bool Incongruent,
     IncongruencePattern Pattern,
     double Congruence,
-    double TextValence,
-    double AudioValence)
+    ValenceArousal TextVa,
+    ValenceArousal ProsodyVa,
+    double TextConfidence,
+    double ProsodyConfidence)
 {
     /// <summary>Bu chunk "işaretli/şüpheli" mi? Söz-ton uyumsuzluğu eşiği aşıldıysa
     /// (<see cref="Incongruent"/>) VEYA adı konmuş bir örüntü varsa (<see cref="Pattern"/> ≠ Yok,

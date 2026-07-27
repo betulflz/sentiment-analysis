@@ -31,4 +31,44 @@ public static class EmotionWheel
             .ToArray();
         return (ranked[0], ranked[1]);
     }
+
+    /// <summary>
+    /// VA noktasını 8 duyguya <b>yakınlık payı</b> olarak dağıtır (toplam 1.0, azalan sırada).
+    /// Her merkeze Öklid uzaklığı <c>d</c> hesaplanır ve <c>softmax(−d² / T)</c> uygulanır.
+    /// </summary>
+    /// <param name="temperature">
+    /// Keskinlik: küçük değer tek duyguyu domine ettirir, büyük değer dağılımı düzleştirir.
+    /// Pozitif olmalıdır. Varsayılan <c>FusionConfig.DistributionTemperature</c>'dan gelir ve
+    /// <b>kalibre edilmemiştir</b> (eval-09).
+    /// </param>
+    /// <remarks>
+    /// Dönen ilk öğe her zaman <see cref="Map"/> ile aynı duygudur: pay, uzaklığın monoton
+    /// azalan bir fonksiyonudur ve sıralama <see cref="Map"/> ile aynı kararlı (stable) LINQ
+    /// sıralamasını kullanır — eşitlik durumunda bildirim sırası korunur.
+    /// Sonuç bir olasılık değil, geometrik yakınlık payıdır (bkz. <see cref="EmotionShare"/>).
+    /// </remarks>
+    public static IReadOnlyList<EmotionShare> Distribute(ValenceArousal va, double temperature)
+    {
+        if (temperature <= 0.0)
+            throw new ArgumentOutOfRangeException(
+                nameof(temperature), temperature, "Dağılım sıcaklığı pozitif olmalıdır.");
+
+        var logits = Regions
+            .Select(r =>
+            {
+                double d = va.DistanceTo(r.Center);
+                return -(d * d) / temperature;
+            })
+            .ToArray();
+
+        // Taşma-güvenli softmax: üsleri almadan önce en büyük terim çıkarılır.
+        double max = logits.Max();
+        var weights = logits.Select(l => Math.Exp(l - max)).ToArray();
+        double sum = weights.Sum();
+
+        return Regions
+            .Select((r, i) => new EmotionShare(r.Emotion, weights[i] / sum))
+            .OrderByDescending(s => s.Share)
+            .ToArray();
+    }
 }

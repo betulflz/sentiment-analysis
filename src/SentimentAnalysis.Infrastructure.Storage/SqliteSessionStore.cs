@@ -31,6 +31,32 @@ public sealed class SqliteSessionStore : ISessionStore
         using var cmd = conn.CreateCommand();
         cmd.CommandText = StorageSchema.CreateSql;
         cmd.ExecuteNonQuery();
+
+        Migrate(conn);
+    }
+
+    /// <summary>08d öncesi bir veritabanına eksik sütunları ekler. `CREATE TABLE IF NOT EXISTS`
+    /// mevcut tabloya sütun eklemez; bu adım olmadan eski kurulumlar sessizce bozulur.
+    /// İdempotenttir: eksik olmayan sütun atlanır.</summary>
+    private static void Migrate(SqliteConnection conn)
+    {
+        var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        using (var q = conn.CreateCommand())
+        {
+            q.CommandText = "PRAGMA table_info(chunks)";
+            using var rd = q.ExecuteReader();
+            while (rd.Read()) existing.Add(rd.GetString(1));   // sütun 1 = ad
+        }
+
+        foreach (var (name, definition) in StorageSchema.ChunkColumnsAddedIn08d)
+        {
+            if (existing.Contains(name)) continue;
+            using var alter = conn.CreateCommand();
+            // Sütun adı/tanımı sabit literal listeden gelir (kullanıcı girdisi değil) —
+            // SQLite ALTER TABLE sütun adını parametre olarak kabul etmez.
+            alter.CommandText = $"ALTER TABLE chunks ADD COLUMN {name} {definition}";
+            alter.ExecuteNonQuery();
+        }
     }
 
     public async Task SaveChunkAsync(Guid sessionId, ChunkResult r, CancellationToken ct)
@@ -52,10 +78,12 @@ public sealed class SqliteSessionStore : ISessionStore
         cmd.CommandText = """
             INSERT INTO chunks (session_id, seq, time_start_ms, time_end_ms, transcript,
                 combined_valence, combined_arousal, primary_emotion, secondary_emotion, confidence,
-                agreement, incongruent, pattern, congruence, text_valence, audio_valence)
+                agreement, incongruent, pattern, congruence, text_valence, audio_valence,
+                text_arousal, audio_arousal, text_confidence, audio_confidence)
             VALUES ($sid,
                 (SELECT COALESCE(MAX(seq), -1) + 1 FROM chunks WHERE session_id = $sid),
-                $ts, $te, $tr, $cv, $ca, $pe, $se, $cf, $ag, $inc, $pat, $cong, $tv, $av)
+                $ts, $te, $tr, $cv, $ca, $pe, $se, $cf, $ag, $inc, $pat, $cong, $tv, $av,
+                $ta, $aa, $tc, $ac)
             """;
         var f = r.Fused;
         cmd.Parameters.AddWithValue("$sid", sessionId.ToString("N"));
@@ -71,8 +99,12 @@ public sealed class SqliteSessionStore : ISessionStore
         cmd.Parameters.AddWithValue("$inc", f.Incongruent ? 1 : 0);
         cmd.Parameters.AddWithValue("$pat", (int)f.Pattern);
         cmd.Parameters.AddWithValue("$cong", f.Congruence);
-        cmd.Parameters.AddWithValue("$tv", f.TextValence);
-        cmd.Parameters.AddWithValue("$av", f.AudioValence);
+        cmd.Parameters.AddWithValue("$tv", f.TextVa.Valence);
+        cmd.Parameters.AddWithValue("$av", f.ProsodyVa.Valence);
+        cmd.Parameters.AddWithValue("$ta", f.TextVa.Arousal);
+        cmd.Parameters.AddWithValue("$aa", f.ProsodyVa.Arousal);
+        cmd.Parameters.AddWithValue("$tc", f.TextConfidence);
+        cmd.Parameters.AddWithValue("$ac", f.ProsodyConfidence);
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
@@ -175,7 +207,8 @@ public sealed class SqliteSessionStore : ISessionStore
         cmd.CommandText = """
             SELECT time_start_ms, time_end_ms, transcript, combined_valence, combined_arousal,
                 primary_emotion, secondary_emotion, confidence, agreement, incongruent, pattern,
-                congruence, text_valence, audio_valence
+                congruence, text_valence, audio_valence,
+                text_arousal, audio_arousal, text_confidence, audio_confidence
             FROM chunks WHERE session_id = $sid ORDER BY seq
             """;
         cmd.Parameters.AddWithValue("$sid", id.ToString("N"));
@@ -188,7 +221,11 @@ public sealed class SqliteSessionStore : ISessionStore
                 new ValenceArousal(rd.GetDouble(3), rd.GetDouble(4)),
                 (Emotion)rd.GetInt32(5), (Emotion)rd.GetInt32(6), (Confidence)rd.GetInt32(7),
                 rd.GetInt32(8) != 0, rd.GetInt32(9) != 0, (IncongruencePattern)rd.GetInt32(10),
-                rd.GetDouble(11), rd.GetDouble(12), rd.GetDouble(13));
+                rd.GetDouble(11),
+                TextVa: new ValenceArousal(rd.GetDouble(12), rd.GetDouble(14)),
+                ProsodyVa: new ValenceArousal(rd.GetDouble(13), rd.GetDouble(15)),
+                TextConfidence: rd.GetDouble(16),
+                ProsodyConfidence: rd.GetDouble(17));
             chunks.Add(new ChunkResult(
                 TimeSpan.FromMilliseconds(rd.GetInt64(0)), TimeSpan.FromMilliseconds(rd.GetInt64(1)),
                 fused, rd.GetString(2)));

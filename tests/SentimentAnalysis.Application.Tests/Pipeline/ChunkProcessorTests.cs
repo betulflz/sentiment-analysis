@@ -25,7 +25,9 @@ public class ChunkProcessorTests
     private static readonly ProsodyEmotion Pr = new(new ValenceArousal(0.1, 0.6), 0.5);
     private static readonly TextEmotion Te = new(new ValenceArousal(0.3, 0.4), 0.7);
     private static readonly FusedResult Fr = new(new ValenceArousal(0.2, 0.5), Emotion.Notr, Emotion.Notr,
-        Confidence.Orta, true, false, IncongruencePattern.Yok, 1.0, 0.3, 0.1);
+        Confidence.Orta, true, false, IncongruencePattern.Yok, 1.0,
+        TextVa: new ValenceArousal(0.3, 0.5), ProsodyVa: new ValenceArousal(0.1, 0.5),
+        TextConfidence: 0.7, ProsodyConfidence: 0.7);
 
     [Fact]
     public async Task ProcessAsync_Silence_ReturnsNull_NoModelCalls()

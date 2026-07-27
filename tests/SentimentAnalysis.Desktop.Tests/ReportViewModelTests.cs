@@ -24,7 +24,9 @@ public class ReportViewModelTests
     private static MeetingSession Session() => new(Guid.NewGuid(), DateTimeOffset.UnixEpoch, DetectedLanguage.Turkish,
         new[] { new ChunkResult(TimeSpan.Zero, TimeSpan.FromSeconds(1),
             new FusedResult(new ValenceArousal(0.5,0.6), Emotion.Mutlu, Emotion.Notr, Confidence.Yuksek,
-                true, false, IncongruencePattern.Yok, 0.9, 0.5, 0.5), "merhaba") });
+                true, false, IncongruencePattern.Yok, 0.9,
+                TextVa: new ValenceArousal(0.5, 0.6), ProsodyVa: new ValenceArousal(0.5, 0.6),
+                TextConfidence: 0.5, ProsodyConfidence: 0.5), "merhaba") });
 
     [Fact]
     public void Load_ProducesLocalizedReport()

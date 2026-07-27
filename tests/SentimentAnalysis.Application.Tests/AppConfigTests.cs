@@ -17,4 +17,10 @@ public class AppConfigTests
         // Ses saklama varsayılanı 7 gün (master §D13).
         Assert.Equal(7, config.Storage.AudioRetentionDays);
     }
+
+    [Fact]
+    public void Default_DistributionTemperature_IsPositive()
+    {
+        Assert.True(AppConfig.Default.Fusion.DistributionTemperature > 0.0);
+    }
 }

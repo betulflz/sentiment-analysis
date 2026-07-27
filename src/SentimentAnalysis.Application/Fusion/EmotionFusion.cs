@@ -63,8 +63,10 @@ public sealed class EmotionFusion : IEmotionFusion
             Incongruent: incongruent,
             Pattern: pattern,
             Congruence: congruence,
-            TextValence: vt,
-            AudioValence: va);
+            TextVa: text.Va,
+            ProsodyVa: prosody.Va,
+            TextConfidence: text.ModelConfidence,
+            ProsodyConfidence: prosody.ModelConfidence);
     }
 
     /// <summary>Ağırlıklı ortalama; toplam ağırlık ~0 ise fallback döner (sıfıra bölmeyi önler).</summary>

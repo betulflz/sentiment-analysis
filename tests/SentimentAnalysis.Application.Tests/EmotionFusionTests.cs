@@ -46,8 +46,8 @@ public class EmotionFusionTests
         Assert.True(r.Incongruent);
         Assert.Equal(IncongruencePattern.Maskeleme, r.Pattern);
         Assert.True(r.Combined.Valence < 0, $"maskeleme: valence negatif olmalı, gelen {r.Combined.Valence}");
-        Assert.Equal(0.6, r.TextValence, precision: 10);
-        Assert.Equal(-0.6, r.AudioValence, precision: 10);
+        Assert.Equal(0.6, r.TextVa.Valence, precision: 10);
+        Assert.Equal(-0.6, r.ProsodyVa.Valence, precision: 10);
     }
 
     [Fact]
@@ -116,6 +116,23 @@ public class EmotionFusionTests
         var a = Fusion.Fuse(text, prosody, Clean());
         var b = Fusion.Fuse(text, prosody, Clean());
         Assert.Equal(a, b); // record değer eşitliği
+    }
+
+    [Fact]
+    public void Fuse_CarriesBothModelsVaAndConfidence_WithoutSwapping()
+    {
+        // Her alan tekil olarak ayırt edilebilsin diye metin/ses VA'ları ve ModelConfidence'ları
+        // birbirinden ve olası bir çapraz-atama (swap) hatasından ayrılacak şekilde farklı seçildi.
+        var text = new TextEmotion(new ValenceArousal(0.6, 0.2), ModelConfidence: 0.8);
+        var prosody = new ProsodyEmotion(new ValenceArousal(-0.6, 0.9), ModelConfidence: 0.3);
+        var r = Fusion.Fuse(text, prosody, Clean());
+
+        Assert.Equal(0.6, r.TextVa.Valence, precision: 10);
+        Assert.Equal(0.2, r.TextVa.Arousal, precision: 10);
+        Assert.Equal(-0.6, r.ProsodyVa.Valence, precision: 10);
+        Assert.Equal(0.9, r.ProsodyVa.Arousal, precision: 10);
+        Assert.Equal(0.8, r.TextConfidence, precision: 10);
+        Assert.Equal(0.3, r.ProsodyConfidence, precision: 10);
     }
 
     [Fact]

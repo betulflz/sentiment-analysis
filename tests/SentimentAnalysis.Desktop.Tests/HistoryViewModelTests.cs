@@ -30,7 +30,9 @@ public class HistoryViewModelTests
         for (int i = 0; i < n; i++)
             list.Add(new ChunkResult(TimeSpan.FromSeconds(i), TimeSpan.FromSeconds(i+1),
                 new FusedResult(new ValenceArousal(0,0.5), Emotion.Notr, Emotion.Notr, Confidence.Orta,
-                    true, false, IncongruencePattern.Yok, 1, 0, 0), "x"));
+                    true, false, IncongruencePattern.Yok, 1,
+                    TextVa: ValenceArousal.Neutral, ProsodyVa: ValenceArousal.Neutral,
+                    TextConfidence: 0, ProsodyConfidence: 0), "x"));
         return list;
     }
 

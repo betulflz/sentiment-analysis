@@ -47,7 +47,8 @@ public static class CompositionRoot
         services.AddSingleton<LiveViewModel>(sp => new LiveViewModel(
             sp.GetRequiredService<IAnalysisRunner>(),
             sp.GetRequiredService<IAudioFilePicker>(),
-            sp.GetRequiredService<ISelectedAudio>()));
+            sp.GetRequiredService<ISelectedAudio>(),
+            sp.GetRequiredService<AppConfig>()));
         services.AddSingleton<ReportViewModel>();
         services.AddSingleton<HistoryViewModel>();
         services.AddSingleton<SettingsViewModel>(sp =>

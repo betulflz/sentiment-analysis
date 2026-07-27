@@ -13,6 +13,10 @@ public sealed class ChunkRowVm
     public string Badge { get; }
     public string Transcript { get; }
 
+    /// <summary>Valence/Arousal'ın jargonsuz, düz Türkçe özeti. <see cref="SourceAnalysisVm.AxisSummary"/>
+    /// ile aynı üretici metotları kullanır — iki yüzey asla ayrışmasın diye.</summary>
+    public string AxisSummary { get; }
+
     public ChunkRowVm(ChunkResult r)
     {
         Time = r.TimeStart;
@@ -22,5 +26,6 @@ public sealed class ChunkRowVm
         Flagged = r.Fused.Flagged;
         Badge = r.Fused.Flagged ? EmotionLocalizer.Pattern(r.Fused.Pattern) : string.Empty;
         Transcript = r.Transcript;
+        AxisSummary = $"{EmotionLocalizer.ValenceText(Valence)} · {EmotionLocalizer.ArousalText(Arousal)}";
     }
 }
