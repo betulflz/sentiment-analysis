@@ -6,11 +6,14 @@ using SentimentAnalysis.Core;
 
 namespace SentimentAnalysis.Desktop;
 
-public sealed class EmotionShareVm
+/// <summary>Zaman-payı satırı: bir duygunun oturum boyunca kapladığı süre oranı.</summary>
+/// <remarks>08d planındaki <see cref="EmotionShareVm"/> (yakınlık payı yüzdesi) ile karışmasın diye
+/// bu tip <c>TimeShareVm</c> olarak adlandırıldı.</remarks>
+public sealed class TimeShareVm
 {
     public string Emotion { get; }
     public double Share { get; }
-    public EmotionShareVm(Emotion e, double share) { Emotion = EmotionLocalizer.Emotion(e); Share = share; }
+    public TimeShareVm(Emotion e, double share) { Emotion = EmotionLocalizer.Emotion(e); Share = share; }
 }
 
 /// <summary>Toplantı-sonu rapor VM'i: bir oturumu <see cref="IMeetingAggregator"/> ile özetler, lokalize sunar.</summary>
@@ -25,7 +28,7 @@ public sealed partial class ReportViewModel : ObservableObject
     [ObservableProperty] private double _volatility;
     [ObservableProperty] private double _averageCongruence;
 
-    public IReadOnlyList<EmotionShareVm> TimeShare { get; private set; } = System.Array.Empty<EmotionShareVm>();
+    public IReadOnlyList<TimeShareVm> TimeShare { get; private set; } = System.Array.Empty<TimeShareVm>();
     public IReadOnlyList<ChunkRowVm> PeakMoments { get; private set; } = System.Array.Empty<ChunkRowVm>();
 
     public ReportViewModel(IMeetingAggregator aggregator) => _aggregator = aggregator;
@@ -38,7 +41,7 @@ public sealed partial class ReportViewModel : ObservableObject
         ValenceTrend = s.ValenceTrend;
         Volatility = s.EmotionalVolatility;
         AverageCongruence = s.AverageCongruence;
-        TimeShare = s.TimeShareByEmotion.Select(kv => new EmotionShareVm(kv.Key, kv.Value)).ToList();
+        TimeShare = s.TimeShareByEmotion.Select(kv => new TimeShareVm(kv.Key, kv.Value)).ToList();
         PeakMoments = s.PeakMoments.Select(c => new ChunkRowVm(c)).ToList();
         HasReport = true;
     }
@@ -52,7 +55,7 @@ public sealed partial class ReportViewModel : ObservableObject
         ValenceTrend = s.ValenceTrend;
         Volatility = s.EmotionalVolatility;
         AverageCongruence = s.AverageCongruence;
-        TimeShare = s.TimeShareByEmotion.Select(kv => new EmotionShareVm(kv.Key, kv.Value)).ToList();
+        TimeShare = s.TimeShareByEmotion.Select(kv => new TimeShareVm(kv.Key, kv.Value)).ToList();
         PeakMoments = s.PeakMoments.Select(c => new ChunkRowVm(c)).ToList();
         HasReport = true;
     }

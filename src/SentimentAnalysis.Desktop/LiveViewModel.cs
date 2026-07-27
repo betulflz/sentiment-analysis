@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Core;
 
 namespace SentimentAnalysis.Desktop;
@@ -13,6 +14,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     private readonly IAnalysisRunner _runner;
     private readonly IAudioFilePicker? _picker;
     private readonly ISelectedAudio? _selected;
+    private readonly double _temperature;
     private CancellationTokenSource? _cts;
     private Task? _run;
 
@@ -27,12 +29,18 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     [ObservableProperty] private string _congruenceBadge = string.Empty;
     [ObservableProperty] private bool _isCapturing;
     [ObservableProperty] private string _selectedFile = "(dosya seçilmedi)";
+    [ObservableProperty] private string _currentConfidence = "—";
+    [ObservableProperty] private SourceAnalysisVm _textAnalysis = SourceAnalysisVm.Empty("Metin Analizi");
+    [ObservableProperty] private SourceAnalysisVm _audioAnalysis = SourceAnalysisVm.Empty("Ses Analizi");
+    [ObservableProperty] private SourceAnalysisVm _finalAnalysis = SourceAnalysisVm.Empty("Nihai Karar");
 
-    public LiveViewModel(IAnalysisRunner runner, IAudioFilePicker? picker = null, ISelectedAudio? selected = null)
+    public LiveViewModel(IAnalysisRunner runner, IAudioFilePicker? picker = null,
+                         ISelectedAudio? selected = null, AppConfig? config = null)
     {
         _runner = runner;
         _picker = picker;
         _selected = selected;
+        _temperature = (config ?? AppConfig.Default).Fusion.DistributionTemperature;
     }
 
     public void Report(ChunkResult r)
@@ -43,6 +51,12 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         CurrentValence = row.Valence;
         CurrentArousal = row.Arousal;
         CongruenceBadge = row.Badge;
+
+        // Üç kaynak ayrı ayrı — söz-ton uyumsuzluğu böylece ekranda görünür hale gelir.
+        CurrentConfidence = EmotionLocalizer.Confidence(r.Fused.Confidence);
+        TextAnalysis  = new SourceAnalysisVm("Metin Analizi", r.Fused.TextVa, _temperature);
+        AudioAnalysis = new SourceAnalysisVm("Ses Analizi", r.Fused.ProsodyVa, _temperature);
+        FinalAnalysis = new SourceAnalysisVm("Nihai Karar", r.Fused.Combined, _temperature);
     }
 
     [RelayCommand]
