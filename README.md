@@ -83,8 +83,9 @@ chunk düşürülür ve düşen sayısı raporlanır — geri basınç sessizce 
 - **macOS** (Apple Silicon önerilir — Whisper Metal ile hızlanır)
 - ~2 GB boş disk (model dosyaları için)
 
-Windows ve Linux'ta çekirdek mimari çalışır; canlı sistem-sesi yakalama şu an macOS'a
-özgüdür.
+Kod cross-platform .NET'tir ve platforma özgü API kullanmaz, ancak **yalnızca macOS'ta
+(Apple Silicon) çalıştırılıp doğrulanmıştır** — Windows ve Linux henüz denenmemiştir.
+Canlı sistem-sesi yakalama ise tasarım gereği platforma özgüdür.
 
 ## Kurulum
 
