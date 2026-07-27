@@ -20,7 +20,8 @@ public sealed record FusionConfig(
     double IronyArousalCeiling = 0.35,         // ironi için ses "düz" (düşük arousal)
     double IronyAudioValenceCeiling = 0.25,    // ironi için ses net olumlu değil
     int PeakMomentCount = 3,                   // toplantı özetinde tepe an sayısı
-    double MinReliabilityForHighConfidence = 0.5); // rAudio*rText bunun altındaysa "Yuksek" güven verilmez
+    double MinReliabilityForHighConfidence = 0.5, // rAudio*rText bunun altındaysa "Yuksek" güven verilmez
+    double DistributionTemperature = 0.35);    // 8-duygu yakınlık payı keskinliği — KALİBRE EDİLMEMİŞ (eval-09)
 
 /// <summary>Depolama/gizlilik ayarları (master §D13).</summary>
 public sealed record StorageConfig(
