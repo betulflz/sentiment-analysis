@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.1" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.1" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
+    <!-- Diagnostics only in Debug builds -->
+    <PackageReference Include="Avalonia.Diagnostics" Version="11.3.1">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SentimentAnalysis.Desktop\SentimentAnalysis.Desktop.csproj" />
+    <ProjectReference Include="..\SentimentAnalysis.Infrastructure.Stt\SentimentAnalysis.Infrastructure.Stt.csproj" />
+    <ProjectReference Include="..\SentimentAnalysis.Infrastructure.Emotion\SentimentAnalysis.Infrastructure.Emotion.csproj" />
+    <ProjectReference Include="..\SentimentAnalysis.Infrastructure.Vad\SentimentAnalysis.Infrastructure.Vad.csproj" />
+    <ProjectReference Include="..\SentimentAnalysis.Infrastructure.Audio\SentimentAnalysis.Infrastructure.Audio.csproj" />
+    <ProjectReference Include="..\SentimentAnalysis.Infrastructure.Storage\SentimentAnalysis.Infrastructure.Storage.csproj" />
+  </ItemGroup>
+</Project>

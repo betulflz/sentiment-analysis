@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="260" d:DesignHeight="380"
+             x:Class="SentimentAnalysis.Desktop.Avalonia.Views.SourceAnalysisPanel">
+
+    <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1"
+            CornerRadius="6" Padding="12">
+        <StackPanel Spacing="6">
+            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13" />
+
+            <TextBlock Text="{Binding Emotion}" FontSize="22" FontWeight="Bold" />
+
+            <TextBlock FontSize="11" Foreground="{DynamicResource SystemBaseMediumColor}">
+                <Run Text="V" />
+                <Run Text="{Binding Valence, StringFormat='{}{0:+0.00;-0.00}'}" />
+                <Run Text=" · A" />
+                <Run Text="{Binding Arousal, StringFormat='{}{0:0.00}'}" />
+            </TextBlock>
+
+            <!-- Bir kanal sıfır ağırlık aldıysa bunu saklama: panel dolu görünürken
+                 karara hiç etki etmemiş olur. -->
+            <Border Background="#B34700" CornerRadius="3" Padding="6,3" IsVisible="{Binding Silent}">
+                <TextBlock Text="Bu kanal karara katılmadı (ağırlık 0)"
+                           FontSize="10" TextWrapping="Wrap" Foreground="White" />
+            </Border>
+
+            <ItemsControl ItemsSource="{Binding Shares}" Margin="0,4,0,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid ColumnDefinitions="66,*,34" Margin="0,1">
+                            <TextBlock Grid.Column="0" Text="{Binding Emotion}" FontSize="11"
+                                       VerticalAlignment="Center" />
+                            <ProgressBar Grid.Column="1" Minimum="0" Maximum="100"
+                                         Value="{Binding Percent}" Height="8"
+                                         VerticalAlignment="Center" Margin="4,0" />
+                            <TextBlock Grid.Column="2" Text="{Binding Percent, StringFormat='%{0}'}"
+                                       FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+</UserControl>

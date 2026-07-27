@@ -1,0 +1,16 @@
+<Project>
+
+  <!--
+    Tüm projeler için ortak ayarlar.
+
+    RollForward=Major: proje net9.0 hedefliyor, ancak makinede yalnızca .NET 8 ve .NET 10
+    runtime'ları kurulu olabilir. Varsayılan davranış (LatestPatch) 9.0.x arar ve bulamayınca
+    "You must install or update .NET" ile çöker. Major, uygulamanın bir sonraki büyük sürümde
+    (10.x) çalışmasına izin verir. Hedef çerçeveyi net10.0'a taşımak yerine bu tercih edildi:
+    proje macOS'ta .NET 9 ile de derlenmeye devam etsin (arkadaşın makinesi).
+  -->
+  <PropertyGroup>
+    <RollForward>Major</RollForward>
+  </PropertyGroup>
+
+</Project>

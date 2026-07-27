@@ -1,0 +1,67 @@
+# .NET derleme çıktıları
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]64/
+*.user
+*.suo
+*.userprefs
+project.lock.json
+artifacts/
+
+# Test / kapsam çıktıları
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+coverage*.json
+coverage*.xml
+*.opencover.xml
+
+# Model dosyaları — repoya ASLA girmez (yüzlerce MB; kaynakları spec'lerde dokümante)
+*.onnx
+*.bin
+*.gguf
+*.ggml
+sentencepiece*.model
+
+# Ses ve veri — gizlilik: kullanıcı sesi repoya girmez
+*.wav
+*.mp3
+*.m4a
+*.flac
+eval/data/
+
+# Yerel durum: veritabanı, şifreleme anahtarı, şifreli ses
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.key
+*.pem
+*.p12
+*.enc
+
+# Ortam / gizli değerler
+.env
+.env.*
+*.secrets.json
+appsettings.Local.json
+
+# IDE / editör
+.vs/
+.vscode/
+.idea/
+*.swp
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# Geçici
+scratchpad/
+tmp/
+*.log
