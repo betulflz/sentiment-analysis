@@ -13,7 +13,9 @@ public class InMemorySessionStoreTests
     private static ChunkResult Result(double start) =>
         new(TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(start + 1),
             new FusedResult(ValenceArousal.Neutral, Emotion.Notr, Emotion.Notr,
-                Confidence.Orta, true, false, IncongruencePattern.Yok, 1.0, 0.0, 0.0),
+                Confidence.Orta, true, false, IncongruencePattern.Yok, 1.0,
+                TextVa: ValenceArousal.Neutral, ProsodyVa: ValenceArousal.Neutral,
+                TextConfidence: 0.0, ProsodyConfidence: 0.0),
             $"chunk-{start}");
 
     [Fact]

@@ -74,7 +74,9 @@ public class EmotionPipelineTests
 
     private static ChunkResult ResultFor(AudioChunk c) =>
         new(c.Start, c.End, new FusedResult(ValenceArousal.Neutral, Emotion.Notr, Emotion.Notr,
-            Confidence.Orta, true, false, IncongruencePattern.Yok, 1.0, 0, 0), $"c{c.Start.TotalSeconds}");
+            Confidence.Orta, true, false, IncongruencePattern.Yok, 1.0,
+            TextVa: ValenceArousal.Neutral, ProsodyVa: ValenceArousal.Neutral,
+            TextConfidence: 0, ProsodyConfidence: 0), $"c{c.Start.TotalSeconds}");
 
     private static AppConfig Cfg(int cap) =>
         AppConfig.Default with { Pipeline = AppConfig.Default.Pipeline with { ChannelCapacity = cap } };

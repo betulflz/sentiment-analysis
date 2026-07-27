@@ -14,7 +14,9 @@ public class LiveViewModelTests
         new(TimeSpan.FromSeconds(t), TimeSpan.FromSeconds(t + 1),
             new FusedResult(new ValenceArousal(v, 0.6), e, Emotion.Notr, Confidence.Orta,
                 !flagged, flagged, flagged ? IncongruencePattern.Maskeleme : IncongruencePattern.Yok,
-                flagged ? 0.2 : 0.9, v, v),
+                flagged ? 0.2 : 0.9,
+                TextVa: new ValenceArousal(v, 0.6), ProsodyVa: new ValenceArousal(v, 0.6),
+                TextConfidence: 0.7, ProsodyConfidence: 0.7),
             $"metin-{t}");
 
     private sealed class FakeRunner : IAnalysisRunner

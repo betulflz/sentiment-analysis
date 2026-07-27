@@ -24,7 +24,9 @@ public class SqliteSessionStoreTests
     private static ChunkResult Result(double start, string transcript) =>
         new(TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(start + 1),
             new FusedResult(new ValenceArousal(0.3, 0.6), Emotion.Mutlu, Emotion.Sakin,
-                Confidence.Yuksek, true, false, IncongruencePattern.Yok, 0.9, 0.3, 0.2),
+                Confidence.Yuksek, true, false, IncongruencePattern.Yok, 0.9,
+                TextVa: new ValenceArousal(0.3, 0.6), ProsodyVa: new ValenceArousal(0.2, 0.6),
+                TextConfidence: 0.8, ProsodyConfidence: 0.7),
             transcript);
 
     [Fact]

@@ -13,7 +13,9 @@ public class MeetingAggregatorTests
 
     private static FusedResult Fused(double v, double a, Emotion primary, double congruence = 0.9) =>
         new(new ValenceArousal(v, a), primary, Emotion.Notr,
-            Confidence.Orta, true, false, IncongruencePattern.Yok, congruence, v, v);
+            Confidence.Orta, true, false, IncongruencePattern.Yok, congruence,
+            TextVa: new ValenceArousal(v, a), ProsodyVa: new ValenceArousal(v, a),
+            TextConfidence: 0.7, ProsodyConfidence: 0.7);
 
     private static ChunkResult Chunk(int startSec, int endSec, double v, double a, Emotion e, double congruence = 0.9) =>
         new(TimeSpan.FromSeconds(startSec), TimeSpan.FromSeconds(endSec), Fused(v, a, e, congruence), "x");

@@ -30,7 +30,9 @@ public class FileAnalysisWiringTests
     private static ChunkResult Chunk(double t) =>
         new(TimeSpan.FromSeconds(t), TimeSpan.FromSeconds(t+1),
             new FusedResult(new ValenceArousal(0.5,0.6), Emotion.Mutlu, Emotion.Notr, Confidence.Orta,
-                true, false, IncongruencePattern.Yok, 0.9, 0.5, 0.5), $"m{t}");
+                true, false, IncongruencePattern.Yok, 0.9,
+                TextVa: new ValenceArousal(0.5, 0.6), ProsodyVa: new ValenceArousal(0.5, 0.6),
+                TextConfidence: 0.5, ProsodyConfidence: 0.5), $"m{t}");
 
     [Fact]
     public void Start_DisabledUntilFileSelected()

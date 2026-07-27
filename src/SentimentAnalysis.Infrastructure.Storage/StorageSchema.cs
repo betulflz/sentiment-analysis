@@ -29,7 +29,22 @@ public static class StorageSchema
             congruence REAL NOT NULL,
             text_valence REAL NOT NULL,
             audio_valence REAL NOT NULL,
+            text_arousal REAL NOT NULL DEFAULT 0,
+            audio_arousal REAL NOT NULL DEFAULT 0,
+            text_confidence REAL NOT NULL DEFAULT 0,
+            audio_confidence REAL NOT NULL DEFAULT 0,
             PRIMARY KEY (session_id, seq)
         );
         """;
+
+    /// <summary>08d ile eklenen `chunks` sütunları. Mevcut veritabanlarına
+    /// <c>ALTER TABLE</c> ile eklenir (bkz. <c>SqliteSessionStore</c> geçişi).
+    /// Varsayılan 0 = "bu satır 08d öncesinden, değer ölçülmedi" — uydurma değer üretilmez.</summary>
+    public static readonly (string Name, string Definition)[] ChunkColumnsAddedIn08d =
+    [
+        ("text_arousal",     "REAL NOT NULL DEFAULT 0"),
+        ("audio_arousal",    "REAL NOT NULL DEFAULT 0"),
+        ("text_confidence",  "REAL NOT NULL DEFAULT 0"),
+        ("audio_confidence", "REAL NOT NULL DEFAULT 0"),
+    ];
 }
