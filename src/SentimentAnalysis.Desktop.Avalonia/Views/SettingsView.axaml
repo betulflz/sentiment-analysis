@@ -1,0 +1,25 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="400"
+             x:Class="SentimentAnalysis.Desktop.Avalonia.Views.SettingsView">
+
+    <StackPanel Spacing="16" MaxWidth="420" HorizontalAlignment="Left">
+        <TextBlock Text="Ayarlar" FontSize="18" FontWeight="SemiBold" />
+
+        <StackPanel Spacing="4">
+            <TextBlock Text="Ses Saklama Süresi (gün)" />
+            <TextBox Text="{Binding RetentionDays}" Watermark="7" />
+        </StackPanel>
+
+        <CheckBox Content="Sesi sakla" IsChecked="{Binding KeepAudio}" />
+
+        <StackPanel Spacing="4">
+            <TextBlock Text="Dil (tr / en)" />
+            <TextBox Text="{Binding Language}" Watermark="tr" />
+        </StackPanel>
+
+        <Button Content="Kaydet" Command="{Binding SaveCommand}" HorizontalAlignment="Left" />
+    </StackPanel>
+</UserControl>

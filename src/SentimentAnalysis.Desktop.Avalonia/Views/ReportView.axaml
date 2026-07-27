@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="500"
+             x:Class="SentimentAnalysis.Desktop.Avalonia.Views.ReportView">
+
+    <Grid RowDefinitions="Auto,*">
+        <TextBlock Grid.Row="0" Text="Rapor henüz yok. Bir oturum tamamlandığında veya Geçmiş'ten seçildiğinde burada görünür."
+                   IsVisible="{Binding !HasReport}" FontStyle="Italic" Opacity="0.7" />
+
+        <ScrollViewer Grid.Row="1" IsVisible="{Binding HasReport}">
+            <StackPanel Spacing="16">
+                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Toplantı Özeti" FontWeight="SemiBold" FontSize="16" />
+                        <TextBlock Text="{Binding DominantEmotion, StringFormat='Baskın Duygu: {0}'}" />
+                        <TextBlock Text="{Binding ValenceTrend, StringFormat='Valence Eğilimi: {0:F2}'}" />
+                        <TextBlock Text="{Binding Volatility, StringFormat='Duygusal Oynaklık: {0:F2}'}" />
+                        <TextBlock Text="{Binding AverageCongruence, StringFormat='Ortalama Uyum: {0:F2}'}" />
+                        <TextBlock Text="{Binding TurkishSummary}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Duygu Payları" FontWeight="SemiBold" FontSize="16" />
+                        <ItemsControl ItemsSource="{Binding TimeShare}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="150,*">
+                                        <TextBlock Grid.Column="0" Text="{Binding Emotion}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Share, StringFormat='{}{0:P1}'}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Tepe Anlar" FontWeight="SemiBold" FontSize="16" />
+                        <ItemsControl ItemsSource="{Binding PeakMoments}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="80,110,*" Margin="0,4">
+                                        <TextBlock Grid.Column="0" Text="{Binding Time, StringFormat='{}{0:hh\\:mm\\:ss}'}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Emotion}" FontWeight="SemiBold" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Transcript}" TextWrapping="Wrap" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

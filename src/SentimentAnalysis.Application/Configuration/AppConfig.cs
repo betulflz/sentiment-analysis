@@ -1,0 +1,75 @@
+namespace SentimentAnalysis.Application.Configuration;
+
+/// <summary>Füzyon başlangıç ağırlıkları ve eşikleri. Nihai değerler
+/// Alt-proje 09 (eval) ile kalibre edilip buraya yansıtılır — keyfi sabit değil.</summary>
+public sealed record FusionConfig(
+    double AudioArousalWeight = 0.75,
+    double TextArousalWeight  = 0.25,
+    double TextValenceWeight  = 0.70,
+    double AudioValenceWeight = 0.30,
+    double IncongruenceThreshold = 0.8,       // |valence_text − valence_audio| eşiği
+    double LowConfidenceThreshold = 0.35,     // altı "düşük güven"
+    double HighConfidenceThreshold = 0.65,    // üstü "yüksek güven"
+    double IncongruentValenceProsodyWeight = 0.75, // uyumsuzda valence prozodiye yaslanma payı
+    double SnrLowDb = 0.0,                     // bu SNR'de ses güvenilirliği ~0
+    double SnrHighDb = 15.0,                   // bu SNR'de ses güvenilirliği ~1
+    double MinReliableSeconds = 3.0,           // altında süre kısa → ses güvenilirliği düşer
+    double MinReliableWords = 3.0,             // altında transkript kısa → metin güvenilirliği düşer
+    double LogProbFloor = -1.0,                // Whisper avg-logprob tabanı (bu değerde güven ~0)
+    double IronyValenceFloor = 0.3,            // ironi için metin en az bu kadar olumlu
+    double IronyArousalCeiling = 0.35,         // ironi için ses "düz" (düşük arousal)
+    double IronyAudioValenceCeiling = 0.25,    // ironi için ses net olumlu değil
+    int PeakMomentCount = 3,                   // toplantı özetinde tepe an sayısı
+    double MinReliabilityForHighConfidence = 0.5); // rAudio*rText bunun altındaysa "Yuksek" güven verilmez
+
+/// <summary>Depolama/gizlilik ayarları (master §D13).</summary>
+public sealed record StorageConfig(
+    int AudioRetentionDays = 7,
+    bool KeepAudio = true,
+    string OpusBitrate = "24k",
+    string? StorageDirectory = null);   // 07 — db + ses + anahtar konumu; null → uygulama-veri varsayılanı
+
+/// <summary>STT profil ayarları (master §D6, spec 03 fizibilite ölçümü).</summary>
+public sealed record SttConfig(
+    string LiveModel = "large-v3-turbo",   // canlı varsayılan (M1 8GB'da ~779 MB, RTF 0.17)
+    string? DeepModel = "large-v3",        // opsiyonel toplantı-sonu derin geçiş (1.91 GB tepe)
+    string Quantization = "q5_0",          // model dosya adı: ggml-{model}-{quantization}.bin
+    string? ModelDirectory = null,         // null → FileSttModelProvider varsayılanı (uygulama veri klasörü)
+    int Threads = 4,                       // spike'ta 4 iş parçacığı optimaldi
+    string? Language = "tr");              // null → otomatik dil algılama (çok-dilli-hazır)
+
+/// <summary>Duygu modelleri (prozodi + metin) ayarları (spec 04).</summary>
+public sealed record EmotionConfig(
+    string ProsodyModelFile = "prosody-msp-dim.onnx", // audeering wav2vec2 boyutsal (model.onnx yeniden adlandırılır)
+    string? ModelDirectory = null,                    // null → FileEmotionModelProvider varsayılanı
+    string ExecutionProvider = "coreml",              // "coreml" (macOS, CPU fallback) | "cpu"
+    string TextModelFile = "text-emotion-xlmr.onnx",  // 04b — XLM-R 11-duygu ONNX
+    string TokenizerFile = "sentencepiece.bpe.model"); // 04b — XLM-R-base SentencePiece (~5 MB)
+
+/// <summary>VAD (Silero) ayarları (spec 05). Eşik eval-09 kalibre eder.</summary>
+public sealed record VadConfig(
+    string VadModelFile = "silero_vad.onnx",
+    string? ModelDirectory = null,        // null → FileVadModelProvider varsayılanı
+    double SpeechThreshold = 0.5);        // max pencere prob ≥ bu → konuşma
+
+/// <summary>Pipeline orkestrasyon ayarları (spec 06).</summary>
+public sealed record PipelineConfig(
+    int ChannelCapacity = 32);   // bounded kanal kapasitesi; taşarsa en eski chunk düşer
+
+/// <summary>Uygulama genel konfigürasyonu (stajyerin config.py karşılığı).</summary>
+public sealed record AppConfig(
+    FusionConfig Fusion,
+    StorageConfig Storage,
+    SttConfig Stt,
+    EmotionConfig Emotion,
+    VadConfig Vad,
+    PipelineConfig Pipeline)
+{
+    public static AppConfig Default => new(
+        Fusion: new FusionConfig(),
+        Storage: new StorageConfig(),
+        Stt: new SttConfig(),
+        Emotion: new EmotionConfig(),
+        Vad: new VadConfig(),
+        Pipeline: new PipelineConfig());
+}
