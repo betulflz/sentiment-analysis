@@ -41,7 +41,7 @@
 
                     <TextBlock FontSize="11" IsVisible="{Binding HasData}"
                                Foreground="{DynamicResource SystemBaseMediumColor}"
-                               Text="{Binding AxisSummary}" TextTrimming="CharacterEllipsis" />
+                               Text="{Binding AxisSummary}" TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
         </DataTemplate>
@@ -99,7 +99,7 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="0,0,0,1" Padding="8">
-                            <Grid ColumnDefinitions="80,100,150,Auto,*" ColumnSpacing="8">
+                            <Grid ColumnDefinitions="80,100,180,Auto,*" ColumnSpacing="8">
                                 <TextBlock Grid.Column="0" Text="{Binding Time, StringFormat='{}{0:hh\\:mm\\:ss}'}"
                                            FontSize="11" Foreground="{DynamicResource SystemBaseMediumColor}"
                                            VerticalAlignment="Center" />
@@ -107,7 +107,7 @@
                                            VerticalAlignment="Center" />
                                 <TextBlock Grid.Column="2" Text="{Binding AxisSummary}" FontSize="11"
                                            Foreground="{DynamicResource SystemBaseMediumColor}"
-                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                           VerticalAlignment="Center" TextWrapping="Wrap" />
                                 <Border Grid.Column="3" IsVisible="{Binding Flagged}"
                                         Background="{DynamicResource SystemAccentColor}" CornerRadius="4"
                                         Padding="6,2" VerticalAlignment="Center">

@@ -355,3 +355,23 @@ Dilim 1 (saf) → Dilim 2 (saf + şema) → SPIKE (ölç + raporla) → Dilim 3 
 
 Her task sonrası `dotnet build && dotnet test` çalıştırılır ve kullanıcı onayı beklenir
 (hız tercihi: hızlı iterasyon, saf task'larda hafif review, task araları onay kapısı).
+
+## Uygulama Sırasında Sapmalar (2026-07-27)
+
+Aşağıdaki üç nokta, bu spec'te planlananla uygulamaya konan arasında farklılık gösterir.
+Üçü de görsel QA sırasında kullanıcının doğrudan geri bildirimiyle ortaya çıktı ve bilinçli
+iyileştirmelerdir — regresyon değildir. 08e planlaması bu spec'e değil, aşağıdaki güncel
+duruma dayanmalıdır.
+
+1. **Güven ve uyumsuzluk rozeti nihai sütunun içinde değil, üç sütunun altında paylaşılan
+   tek bir şeritte gösteriliyor.** Nihai sütunun içine gömülü olsaydı bu bilgi yalnızca bir
+   panele ait gibi görünürdü; oysa güven ve uyumsuzluk üç kaynağın karşılaştırmasından doğan
+   bütünsel bir sinyal. Ortak şerit bunu doğru şekilde vurguluyor ve tekrar etmiyor.
+2. **`V ±0.00 · A 0.00` sayısal satırı kaldırıldı; yerine düz Türkçe `AxisSummary`
+   metni (ör. "Ne olumlu ne olumsuz · Orta canlılıkta") kondu.** Ham valence/arousal sayıları
+   uzmanlık gerektiriyordu ve genel kullanıcı için okunaksızdı; Türkçe özet aynı bilgiyi
+   herkesin anlayacağı biçimde taşıyor.
+3. **"Zaman çizelgesi bu turda değişmez" iddiası doğru çıkmadı: zaman çizelgesine bir
+   `AxisSummary` sütunu ve bir rozet çipi eklendi.** Panellerden sayısal satır kaldırılınca
+   zaman çizelgesindeki geçmiş kayıtlar da aynı eksen bilgisinden yoksun kalıyordu; tutarlılık
+   için aynı Türkçe özet zaman çizelgesine de taşındı.
