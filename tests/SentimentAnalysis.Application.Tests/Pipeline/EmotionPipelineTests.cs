@@ -303,6 +303,66 @@ public class EmotionPipelineTests
         Assert.Equal("özet", summary.TurkishSummary);
     }
 
+    /// <summary>İlk chunk'ı bir "gate" ile bloklayıp (cancel gözlemlenene kadar) sonrasında her
+    /// chunk için küçük bir gecikme ekleyen sahte işlemci — 08e düzeltme turu Fix 1 testinde
+    /// "yavaş consumer" senaryosunu (Whisper/ONNX chunk başına birkaç sn) deterministik ve hızlı
+    /// biçimde taklit eder.</summary>
+    private sealed class FirstGatedThenSlowProcessor(TaskCompletionSource firstGate, Func<AudioChunk, ChunkResult?> map) : IChunkProcessor
+    {
+        private int _seen;
+        public async Task<ChunkResult?> ProcessAsync(AudioChunk chunk, CancellationToken ct)
+        {
+            int n = Interlocked.Increment(ref _seen);
+            if (n == 1) await firstGate.Task.ConfigureAwait(false);
+            // ct'yi burada GERÇEKTEN gözetiyoruz (gerçek Whisper/ONNX çağrıları gibi) — bu, ana
+            // döngüde "Durdur" sonrası ilk denenen chunk'ın hemen iptal olup cancelledMidRun yolunu
+            // tetiklemesini sağlar (aksi halde kanaldaki hazır veri iptali hiç gözetmeden tüketilmeye
+            // devam eder — bkz. test yorumu aşağıda).
+            else await Task.Delay(50, ct).ConfigureAwait(false); // "yavaş" consumer simülasyonu
+            return map(chunk);
+        }
+    }
+
+    /// <summary>08e düzeltme turu Fix 1: kanal dolu kuyruğa alınmış chunk'larla "Durdur"
+    /// basıldığında ve consumer YAVAŞSA, sınırsız drenaj gerçek dünyada (Whisper+ONNX) dakikalarca
+    /// sürebilir. Bu test, drenajın SAYI bakımından sınırlı (<see cref="EmotionPipeline"/>'daki
+    /// <c>MaxDrainedChunksAfterStop</c> = 8) olduğunu, aşan kısmın <see cref="EmotionPipeline.DrainSkippedCount"/>
+    /// ile SAYILARAK atlandığını (sessizce yutulmadığını) ve koşunun yine de makul bir sürede
+    /// (zaman bütçesinden çok kısa) bir özetle döndüğünü kanıtlar.</summary>
+    [Fact]
+    public async Task RunAsync_CancelledMidRun_DrainIsBoundedByCap_SkipsRestCounted_StillReturnsSummary()
+    {
+        var store = new RecordingStore(); var agg = new FakeAggregator();
+        var firstGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var proc = new FirstGatedThenSlowProcessor(firstGate, ResultFor);
+        var pipeline = new EmotionPipeline(proc, store, agg, Cfg(32));
+        using var cts = new CancellationTokenSource();
+        var id = Guid.NewGuid(); var started = DateTimeOffset.UnixEpoch;
+
+        // 40 chunk üretilecek — kanal kapasitesi 32; ilk chunk consumer'da bloklu kaldığı sürece
+        // üretici kanalı doldurur, DropOldest devreye girer, kalan kuyruk 8'in çok üstünde kalır.
+        var run = pipeline.RunAsync(new FakeSource(40, ChunkAt), Opts, id, started, DetectedLanguage.Turkish, null, cts.Token);
+
+        await Task.Delay(TimeSpan.FromMilliseconds(200)); // üreticiye kanalı doldurma fırsatı
+
+        cts.Cancel();          // "Durdur"
+        firstGate.SetResult(); // bloklu ilk chunk BAŞARIYLA biter (iptalle değil) → cancelledMidRun yolu tetiklenir
+
+        var winner = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(10)));
+        Assert.Same(run, winner); // sınırsız drenaj olsaydı gerçek modellerle dakikalarca sürebilirdi —
+                                   // burada cap sayesinde saniyeler içinde bitmesi asıl garantiyi kanıtlar.
+        var summary = await run; // fırlatmamalı
+
+        Assert.NotNull(summary);
+        Assert.Equal("özet", summary.TurkishSummary);
+        // İlk (gate'teki) chunk + drenajda en fazla MaxDrainedChunksAfterStop (8) daha işlenmiş olabilir.
+        Assert.True(pipeline.Timeline.Count <= 9,
+            $"drenaj sayı sınırı (cap + ilk chunk) aşılmamalı: {pipeline.Timeline.Count}");
+        // Kapasiteyi (32) ve cap'i (8) aşan üretim atlanmış SAYILMALI (sessizce yutulmamalı).
+        Assert.True(pipeline.DrainSkippedCount > 0,
+            $"backlog cap'i aşıyor olmalı, atlanan sayılmalı: {pipeline.DrainSkippedCount}");
+    }
+
     /// <summary>"Durdur" ilk chunk işlenmeden basılırsa (boş oturum) BuildSummary çökmemeli —
     /// MeetingAggregator boş listede geçerli, boş-ama-başarılı bir özet döner.</summary>
     [Fact]

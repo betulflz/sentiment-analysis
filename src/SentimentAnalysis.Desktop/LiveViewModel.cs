@@ -51,8 +51,23 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     /// tamamlanana kadar) "Analiz tamamlanıyor…".</summary>
     [ObservableProperty] private string _captureStatusText = "Dinleniyor";
 
+    /// <summary>Son koşuda kanal taşması veya "Durdur" sonrası drenaj sınırı/bütçesi yüzünden
+    /// işlenemeden atlanan chunk sayısı (bkz. <see cref="IAnalysisRunner.SkippedChunkCount"/>,
+    /// 08e düzeltme turu Fix 2). Sıfırsa kullanıcıya HİÇBİR ŞEY gösterilmez (bkz. <see cref="SkippedChunksNotice"/>);
+    /// canlı mikrofonda düzenli bir durum olduğundan sessizce yutulmak yerine burada görünür kılınır.</summary>
+    [ObservableProperty] private int _skippedChunkCount;
+
+    /// <summary>UI'da bağlanacak Türkçe metin: <see cref="SkippedChunkCount"/> sıfırsa boş (şerit
+    /// çöker, sessiz kalır) — sıfır değilse kısa bir not (alarm değil, dipnot niteliğinde).</summary>
+    [ObservableProperty] private string _skippedChunksNotice = string.Empty;
+
     partial void OnIsFinishingChanged(bool value) =>
         CaptureStatusText = value ? "Analiz tamamlanıyor…" : "Dinleniyor";
+
+    partial void OnSkippedChunkCountChanged(int value) =>
+        SkippedChunksNotice = value > 0
+            ? $"{value} ses parçası yetişilemediği için atlandı."
+            : string.Empty;
 
     public LiveViewModel(IAnalysisRunner runner, IAudioFilePicker? picker = null,
                          ISelectedAudio? selected = null, AppConfig? config = null,
@@ -117,7 +132,9 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         {
             CaptureError = string.Empty;
             CongruenceBadge = string.Empty; // önceki koşudan kalan rozet ("Maskeleme" vb.) sarkmasın
+            SkippedChunkCount = 0; // önceki koşudan kalan sayı sarkmasın
             var summary = await _runner.RunAsync(this, ct).ConfigureAwait(true);
+            SkippedChunkCount = _runner.SkippedChunkCount;
             Completed?.Invoke(summary);
         }
         catch (OperationCanceledException) { /* Stop ile iptal — normal */ }

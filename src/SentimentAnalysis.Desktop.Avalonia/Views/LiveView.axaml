@@ -99,6 +99,13 @@
                 <TextBlock Text="{Binding CaptureError}" Foreground="White" TextWrapping="Wrap" FontSize="12" />
             </Border>
 
+            <!-- Atlanan chunk uyarısı (kanal taşması / drenaj sınırı): sessizce yutulmaz, ama
+                 alarm değil dipnot niteliğinde — sıfırsa şerit tamamen çöker. -->
+            <TextBlock FontSize="11" FontStyle="Italic" TextWrapping="Wrap"
+                       Foreground="{DynamicResource SystemBaseMediumColor}"
+                       Text="{Binding SkippedChunksNotice}"
+                       IsVisible="{Binding SkippedChunksNotice, Converter={StaticResource StringNotEmptyConverter}}" />
+
             <TextBlock FontSize="10" FontStyle="Italic" TextWrapping="Wrap"
                        Foreground="{DynamicResource SystemBaseMediumColor}"
                        Text="Yüzdeler, valence-arousal uzayındaki yakınlık paylarıdır — kalibre edilmiş olasılık değildir." />

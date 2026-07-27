@@ -19,6 +19,23 @@ public sealed class EmotionPipeline
 
     private readonly List<ChunkResult> _timeline = new();
     private int _droppedCount;
+    private int _drainSkippedCount;
+
+    /// <summary>"Durdur" sonrası kanalda kalan chunk'ları drene ederken en fazla kaç tanesi işlenir —
+    /// SINIRSIZ değil: kanal 32 kapasiteli ve mikrofon modunda chunk başına 10 sn'lik ses taşıyabilir;
+    /// Whisper+ONNX chunk başına 8 sn'den yavaşsa (M1 Air 8GB'da olası) kanal sürekli dolu kalır ve
+    /// sınırsız drenaj "Durdur"u dakikalarca donuk bırakır (bkz. 08e düzeltme turu Fix 1). 8 seçildi:
+    /// en YENİ ~80 sn'lik konuşmayı (kullanıcının demin söylediği, önemsediği kısmı) kapsar ve en kötü
+    /// durumda bile aşağıdaki <see cref="DrainTimeBudget"/> içinde kalma ihtimali yüksektir.
+    /// Kapasitenin (32) tamamını değil bunu seçmemizin nedeni: geri kalanı zaten DroppedCount'a değil
+    /// (kanal taşması değil bu), <see cref="DrainSkippedCount"/>'a sayılır — sessizce kaybolmaz.</summary>
+    private const int MaxDrainedChunksAfterStop = 8;
+
+    /// <summary>Drenajın toplam zaman bütçesi. Bu süre dolarsa drenaj bir HATA sayılmaz — elde ne
+    /// varsa onunla bir <see cref="MeetingSummary"/> üretilir (dürüstlük ilkesi: işlenemeyen kalan
+    /// chunk'lar <see cref="DrainSkippedCount"/> ile ayrıca raporlanır, sessizce yutulmaz). 30 sn:
+    /// kullanıcının "Durdur" sonrası makul bir bekleme toleransı + "asla sonsuza dek donmama" garantisi.</summary>
+    private static readonly TimeSpan DrainTimeBudget = TimeSpan.FromSeconds(30);
 
     public EmotionPipeline(IChunkProcessor processor, ISessionStore store, IMeetingAggregator aggregator, AppConfig config)
     {
@@ -31,6 +48,12 @@ public sealed class EmotionPipeline
     public IReadOnlyList<ChunkResult> Timeline => _timeline;
     public int DroppedCount => Volatile.Read(ref _droppedCount);
 
+    /// <summary>"Durdur" sonrası drenaj sınırı (<see cref="MaxDrainedChunksAfterStop"/>) veya zaman
+    /// bütçesi (<see cref="DrainTimeBudget"/>) yüzünden işlenemeden atlanan chunk sayısı.
+    /// <see cref="DroppedCount"/>'tan AYRI tutulur (o yalnızca kanal taşmasını sayar) ama ikisi de
+    /// kullanıcıya "yetişilemeyen ses" olarak BİRLİKTE gösterilmelidir (bkz. LiveViewModel).</summary>
+    public int DrainSkippedCount => Volatile.Read(ref _drainSkippedCount);
+
     public async Task<MeetingSummary> RunAsync(
         IAudioCaptureSource source, CaptureOptions options, Guid sessionId,
         DateTimeOffset startedAt, DetectedLanguage language,
@@ -38,6 +61,7 @@ public sealed class EmotionPipeline
     {
         _timeline.Clear();
         _droppedCount = 0;
+        _drainSkippedCount = 0;
 
         var channel = Channel.CreateBounded<AudioChunk>(
             new BoundedChannelOptions(_capacity)
@@ -115,11 +139,38 @@ public sealed class EmotionPipeline
         if (cancelledMidRun)
         {
             // Üretici artık kesin bitti (yukarıda beklendi) — kanalda kalan (henüz işlenmemiş)
-            // chunk'lar varsa kaybetmeden işle. Model çağrıları iptal edilmiş ct İLE YAPILAMAZ
-            // (anında iptal olurdu) — bu yüzden drene ederken CancellationToken.None kullanılır.
-            // TryRead asla bloklamaz (hang riski yok): kanal boşalınca döngü kendiliğinden biter.
+            // chunk'ları kaybetmeden TryRead ile topla (TryRead asla bloklamaz — hang riski yok,
+            // kanal boşalınca döngü kendiliğinden biter). Kanal kapasitesi zaten sınırlı (varsayılan
+            // 32) olduğundan bu liste sınırsız büyümez.
+            var pendingChunks = new List<AudioChunk>();
             while (channel.Reader.TryRead(out var pending))
-                await ProcessOneAsync(pending, sessionId, progress, CancellationToken.None).ConfigureAwait(false);
+                pendingChunks.Add(pending);
+
+            // Yalnızca en YENİ MaxDrainedChunksAfterStop chunk'ı işleriz (kullanıcının demin
+            // konuştuğu, önemsediği ses) — kapasitenin tamamını sınırsız drene etmek "Durdur"u
+            // dakikalarca donuk bırakabilir (bkz. Fix 1). Kapak öncesi (en eski, en az önemli)
+            // olanlar sessizce değil, SAYILARAK atlanır.
+            int skippedByCap = Math.Max(0, pendingChunks.Count - MaxDrainedChunksAfterStop);
+            if (skippedByCap > 0)
+                Interlocked.Add(ref _drainSkippedCount, skippedByCap);
+
+            // Zaman bütçesi: model çağrıları iptal edilmiş ct İLE YAPILAMAZ (anında iptal olurdu) —
+            // bu yüzden drene ederken taze bir CancellationTokenSource (timeout) kullanılır.
+            // Bütçe dolması bir HATA değildir (aşağıdaki catch), yalnızca drenajı erken keser.
+            using var drainCts = new CancellationTokenSource(DrainTimeBudget);
+            int i = skippedByCap;
+            try
+            {
+                for (; i < pendingChunks.Count; i++)
+                    await ProcessOneAsync(pendingChunks[i], sessionId, progress, drainCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Zaman bütçesi doldu: elimizdeki kadarıyla devam ederiz (dürüstlük ilkesi —
+                // sessizce yutma yok), kalan işlenemeyenler de atlanmış sayılır.
+                int remaining = pendingChunks.Count - i;
+                if (remaining > 0) Interlocked.Add(ref _drainSkippedCount, remaining);
+            }
         }
 
         return BuildSummary(sessionId, startedAt, language);

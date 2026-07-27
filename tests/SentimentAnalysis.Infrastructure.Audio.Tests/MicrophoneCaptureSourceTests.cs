@@ -45,8 +45,13 @@ public class MicrophoneCaptureSourceTests
         for (int i = 1; i < collected.Count; i++)
             Assert.True(collected[i].Start > collected[i - 1].Start);
 
-        // MUTLAK EŞİK KULLANMA (spike dersi): sessiz oda tabanı 0,0098-0,0168 ölçüldü,
-        // konuşma 0,0805. Dijital sessizlikten AÇIKÇA ayrıldığını doğrula.
+        // Bu, göreli değil MUTLAK bir eşiktir — ama kasıtlı ve savunulabilir: "konuşma
+        // algılama" iddiası YOK, yalnızca "dijital sessizlikten (izin reddi → tam 0) ayrı,
+        // mikrofondan GERÇEKTEN bir şey geliyor" iddiası var. Spike'ta ölçülen sessiz oda
+        // tabanı 0,0098-0,0168; izin reddedildiğinde/veri hiç akmadığında tepe TAM OLARAK 0
+        // olur. 0.005 bu ikisini ayırmak için seçildi (sessiz-oda tabanının altında, "hiç
+        // sinyal yok" ile "bir şey var" arasında net bir çizgi) — konuşma tespiti iddia
+        // etmediğinden ölçülen değerlerin altında kalıp flaky olma riski yoktur.
         double peak = collected.SelectMany(c => c.Samples).Max(Math.Abs);
         Assert.True(peak > 0.005,
             $"Mikrofondan anlamlı sinyal gelmedi (tepe {peak:F4}). İzin verilmiş mi? " +

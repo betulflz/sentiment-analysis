@@ -101,6 +101,7 @@ public class LiveViewModelTests
     {
         public readonly TaskCompletionSource Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int SkippedChunkCount { get; set; }
         public async Task<MeetingSummary> RunAsync(IProgress<ChunkResult> progress, CancellationToken ct)
         {
             Started.TrySetResult();
@@ -154,6 +155,38 @@ public class LiveViewModelTests
 
         Assert.False(vm.IsFinishing);
         Assert.Equal("Dinleniyor", vm.CaptureStatusText);
+    }
+
+    /// <summary>08e düzeltme turu Fix 2: <see cref="IAnalysisRunner.SkippedChunkCount"/> sıfır
+    /// olmayan bir değerle döndüğünde (kanal taşması/drenaj sınırı) LiveViewModel bunu görünür
+    /// bir Türkçe nota çevirir; sıfırsa not tamamen boş kalır (şerit çöker, alarm göstermez).</summary>
+    [Fact]
+    public async Task Completed_WithSkippedChunks_ShowsNotice_ThenHiddenOnCleanRun()
+    {
+        var runner = new GatedRunner { SkippedChunkCount = 3 };
+        var vm = new LiveViewModel(runner);
+
+        Assert.Equal(string.Empty, vm.SkippedChunksNotice); // koşu öncesi: gizli
+
+        vm.StartCommand.Execute(null);
+        await runner.Started.Task;
+        runner.Release();
+        await vm.WaitForIdleAsync();
+
+        Assert.Equal(3, vm.SkippedChunkCount);
+        Assert.Contains("3 ses parçası", vm.SkippedChunksNotice);
+        Assert.Contains("atlandı", vm.SkippedChunksNotice);
+
+        // Bir sonraki koşu temiz (atlanan yok) ise not tekrar gizlenmeli — sarkan eski bilgi kalmamalı.
+        var cleanRunner = new GatedRunner { SkippedChunkCount = 0 };
+        var vm2 = new LiveViewModel(cleanRunner);
+        vm2.StartCommand.Execute(null);
+        await cleanRunner.Started.Task;
+        cleanRunner.Release();
+        await vm2.WaitForIdleAsync();
+
+        Assert.Equal(0, vm2.SkippedChunkCount);
+        Assert.Equal(string.Empty, vm2.SkippedChunksNotice);
     }
 
     [Fact]
