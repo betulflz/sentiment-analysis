@@ -104,6 +104,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         try
         {
             CaptureError = string.Empty;
+            CongruenceBadge = string.Empty; // önceki koşudan kalan rozet ("Maskeleme" vb.) sarkmasın
             var summary = await _runner.RunAsync(this, ct).ConfigureAwait(true);
             Completed?.Invoke(summary);
         }

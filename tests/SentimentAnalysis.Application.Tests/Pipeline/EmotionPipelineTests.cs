@@ -65,6 +65,18 @@ public class EmotionPipelineTests
         }
     }
 
+    /// <summary>N'inci chunk işlendiğinde verilen <see cref="CancellationTokenSource"/>'u iptal eder —
+    /// canlı mikrofonda kullanıcının "Durdur"a basmasını simüle eder (birkaç chunk toplanmış olur).</summary>
+    private sealed class CancelAfterCountProcessor(int cancelAfter, CancellationTokenSource cts, Func<AudioChunk, ChunkResult?> map) : IChunkProcessor
+    {
+        private int _count;
+        public Task<ChunkResult?> ProcessAsync(AudioChunk chunk, CancellationToken ct)
+        {
+            if (Interlocked.Increment(ref _count) == cancelAfter) cts.Cancel();
+            return Task.FromResult(map(chunk));
+        }
+    }
+
     private sealed class RecordingStore : ISessionStore
     {
         public readonly List<(Guid, ChunkResult)> Saved = new();
@@ -211,5 +223,50 @@ public class EmotionPipelineTests
 
         // ThrowsAny: iptal bazen alt-sınıf TaskCanceledException olarak gelir (ThrowsAsync tam-tip ister → flaky).
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+    }
+
+    /// <summary>Canlı mikrofonda "Durdur" tam olarak bu şekli alır: RunAsync iptal ile çıkar (yukarıdaki
+    /// test bunu doğruluyor — motorun sözleşmesi bu), ama o ana kadar toplanan zaman çizelgesi kaybolmaz.
+    /// Çağıran taraf (PipelineAnalysisRunner) BuildSummary ile bunu bir özete çevirebilir — "Durdur"
+    /// sessizce boş bir sonuca düşmez.</summary>
+    [Fact]
+    public async Task RunAsync_CancelledMidRun_BuildSummary_ReflectsChunksCollectedSoFar()
+    {
+        var store = new RecordingStore(); var agg = new FakeAggregator();
+        using var cts = new CancellationTokenSource();
+        var proc = new CancelAfterCountProcessor(cancelAfter: 3, cts, ResultFor);
+        var pipeline = new EmotionPipeline(proc, store, agg, Cfg(32));
+        var id = Guid.NewGuid(); var started = DateTimeOffset.UnixEpoch;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            pipeline.RunAsync(new FakeSource(20, ChunkAt), Opts, id, started, DetectedLanguage.Turkish, null, cts.Token));
+
+        // İptalden önce işlenen chunk'lar zaman çizelgesinde kalır — motor onları atmaz.
+        Assert.True(pipeline.Timeline.Count >= 1, "iptal öncesi en az bir chunk işlenmiş olmalı");
+
+        var summary = pipeline.BuildSummary(id, started, DetectedLanguage.Turkish);
+
+        Assert.NotNull(agg.Seen);
+        Assert.Equal(pipeline.Timeline.Count, agg.Seen!.Chunks.Count);
+        Assert.True(agg.Seen.Chunks.Count > 0);
+        Assert.Equal("özet", summary.TurkishSummary);
+    }
+
+    /// <summary>"Durdur" ilk chunk işlenmeden basılırsa (boş oturum) BuildSummary çökmemeli —
+    /// MeetingAggregator boş listede geçerli, boş-ama-başarılı bir özet döner.</summary>
+    [Fact]
+    public void BuildSummary_EmptyTimeline_ReturnsValidEmptySummary_DoesNotThrow()
+    {
+        var store = new RecordingStore(); var agg = new FakeAggregator();
+        var proc = new GatedProcessor(ResultFor);
+        var pipeline = new EmotionPipeline(proc, store, agg, Cfg(32));
+        var id = Guid.NewGuid(); var started = DateTimeOffset.UnixEpoch;
+
+        var summary = pipeline.BuildSummary(id, started, DetectedLanguage.Turkish);
+
+        Assert.Empty(pipeline.Timeline);
+        Assert.NotNull(agg.Seen);
+        Assert.Empty(agg.Seen!.Chunks);
+        Assert.Equal("özet", summary.TurkishSummary);
     }
 }

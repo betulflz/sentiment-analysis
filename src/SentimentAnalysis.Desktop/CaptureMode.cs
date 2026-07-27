@@ -17,6 +17,7 @@ public interface ICaptureModeState
     CaptureMode Mode { get; set; }
 }
 
+/// <summary><see cref="ICaptureModeState"/>'in DI'da tekil (singleton) olarak kaydedilen somut hâli.</summary>
 public sealed class CaptureModeState : ICaptureModeState
 {
     public CaptureMode Mode { get; set; } = CaptureMode.Dosya;

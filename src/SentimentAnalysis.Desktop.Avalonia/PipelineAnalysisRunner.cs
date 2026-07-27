@@ -43,9 +43,24 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
                 ? new CaptureOptions(ChunkLength: TimeSpan.FromSeconds(10), Overlap: TimeSpan.FromSeconds(2))
                 : new CaptureOptions(ChunkLength: TimeSpan.FromSeconds(30), Overlap: TimeSpan.FromSeconds(5));
             var language = ParseLanguage(_config.Stt.Language);
+            var sessionId = Guid.NewGuid();
+            var startedAt = DateTimeOffset.Now;
 
-            return await _pipeline.RunAsync(source, options, Guid.NewGuid(), DateTimeOffset.Now, language, progress, ct)
-                .ConfigureAwait(false);
+            try
+            {
+                return await _pipeline.RunAsync(source, options, sessionId, startedAt, language, progress, ct)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Canlı mikrofonda "Durdur" iptal ile biter — bu ürün için normal bir bitiştir,
+                // hata değil (motorun kendi sözleşmesi iptali fırlatmaya devam eder; bkz.
+                // EmotionPipelineTests.RunAsync_Cancelled_ThrowsOperationCanceled_DoesNotHang).
+                // O ana kadar toplanan zaman çizelgesinden bir özet üretip dönüyoruz ki
+                // LiveViewModel.Completed tetiklensin ve Rapor/Geçmiş güncellensin — aksi halde
+                // "Durdur"a basmak analizi sessizce yok ediyordu.
+                return _pipeline.BuildSummary(sessionId, startedAt, language);
+            }
         }
         finally
         {

@@ -77,6 +77,75 @@ public class LiveViewModelTests
         Assert.False(vm.IsCapturing); // çökme olmamalı
     }
 
+    /// <summary>Gerçek mikrofon akışında "Durdur" iptal ile biter, ama PipelineAnalysisRunner bunu
+    /// normal bitiş sayıp toplanan zaman çizelgesinden bir özet döner (bkz. görev 5 düzeltme turu —
+    /// aksi halde Completed hiç tetiklenmez, Rapor/Geçmiş güncellenmez). Bu test, runner Stop sonrası
+    /// (istisna fırlatmadan) bir özetle döndüğünde LiveViewModel'in Completed'i tetiklediğini
+    /// doğruluyor — PipelineAnalysisRunner'ın kendisi Desktop.Avalonia'da olduğundan (test projesi yok)
+    /// oradaki gerçek davranışı burada taklit ediyoruz.</summary>
+    private sealed class StoppableRunner : IAnalysisRunner
+    {
+        public readonly TaskCompletionSource Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async Task<MeetingSummary> RunAsync(IProgress<ChunkResult> progress, CancellationToken ct)
+        {
+            Started.TrySetResult();
+            var stopped = new TaskCompletionSource();
+            using var reg = ct.Register(() => stopped.TrySetResult());
+            await stopped.Task.ConfigureAwait(false); // Durdur'u bekle
+            return new MeetingSummary(Emotion.Mutlu, new System.Collections.Generic.Dictionary<Emotion, double>(),
+                0, 0, Array.Empty<ChunkResult>(), new ValenceArousal(0.3, 0.5), 0.8, "durdurulan-özet");
+        }
+    }
+
+    private sealed class GatedRunner : IAnalysisRunner
+    {
+        public readonly TaskCompletionSource Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async Task<MeetingSummary> RunAsync(IProgress<ChunkResult> progress, CancellationToken ct)
+        {
+            Started.TrySetResult();
+            await _release.Task.ConfigureAwait(false);
+            return new MeetingSummary(Emotion.Notr, new System.Collections.Generic.Dictionary<Emotion, double>(),
+                0, 0, Array.Empty<ChunkResult>(), ValenceArousal.Neutral, 1.0, "özet");
+        }
+        public void Release() => _release.TrySetResult();
+    }
+
+    [Fact]
+    public async Task Start_ClearsStaleCongruenceBadgeFromPreviousRun()
+    {
+        var runner = new GatedRunner();
+        var vm = new LiveViewModel(runner);
+        vm.Report(Chunk(0, Emotion.Kizgin, -0.7, flagged: true)); // önceki koşudan "Maskeleme" rozeti
+        Assert.Contains("Maskeleme", vm.CongruenceBadge);
+
+        vm.StartCommand.Execute(null);
+        await runner.Started.Task;
+
+        // İlk chunk henüz gelmeden rozet sıfırlanmış olmalı — sarkan eski rozet gösterilmemeli.
+        Assert.Equal(string.Empty, vm.CongruenceBadge);
+
+        runner.Release();
+        await vm.WaitForIdleAsync();
+    }
+
+    [Fact]
+    public async Task Stop_WhenRunnerEndsGracefully_RaisesCompleted()
+    {
+        var runner = new StoppableRunner();
+        var vm = new LiveViewModel(runner);
+        MeetingSummary? completed = null;
+        vm.Completed += s => completed = s;
+
+        vm.StartCommand.Execute(null);
+        await runner.Started.Task;
+        vm.StopCommand.Execute(null);
+        await vm.WaitForIdleAsync();
+
+        Assert.NotNull(completed);
+        Assert.Equal("durdurulan-özet", completed!.TurkishSummary);
+    }
+
     /// <summary>Metin ve ses birbirinden AYRI VA taşıyan chunk — panellerin karışmadığını gösterir.</summary>
     private static ChunkResult SplitChunk(ValenceArousal text, ValenceArousal prosody, ValenceArousal combined) =>
         new(TimeSpan.Zero, TimeSpan.FromSeconds(1),
@@ -148,8 +217,8 @@ public class LiveViewModelTests
 
         Assert.False(vm.StartCommand.CanExecute(null));
 
+        // CanExecute(null) canlı durumu doğrudan okur, ayrı bir tetikleyiciye gerek yok.
         selected.Path = "/tmp/ses.wav";
-        vm.UseMicrophone = false;   // CanExecute yeniden değerlendirilsin
 
         Assert.True(vm.StartCommand.CanExecute(null));
     }

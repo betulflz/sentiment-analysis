@@ -109,6 +109,16 @@ public sealed class EmotionPipeline
             try { await producer.ConfigureAwait(false); } catch { /* iptal/producer hatası yutulur; asıl akış yukarı gider */ }
         }
 
+        return BuildSummary(sessionId, startedAt, language);
+    }
+
+    /// <summary>O ana kadar toplanan <see cref="Timeline"/>'dan bir <see cref="MeetingSummary"/> üretir.
+    /// Motor kendisi bir koşunun ne zaman "normal" sayılacağına karar vermez — <see cref="RunAsync"/>
+    /// akışın sonuna ulaştığında bunu kullanır; çağıran taraf (ör. canlı mikrofonda "Durdur" ile gelen
+    /// iptal) bunu kendi normal-bitiş kararı için de kullanabilir (bkz. <c>PipelineAnalysisRunner</c>).
+    /// Boş zaman çizelgesinde <see cref="IMeetingAggregator"/> geçerli, boş-ama-çökmeyen bir özet döner.</summary>
+    public MeetingSummary BuildSummary(Guid sessionId, DateTimeOffset startedAt, DetectedLanguage language)
+    {
         var session = new MeetingSession(sessionId, startedAt, language, _timeline.ToList());
         return _aggregator.Aggregate(session);
     }
