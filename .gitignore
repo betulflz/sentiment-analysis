@@ -65,3 +65,6 @@ appsettings.Local.json
 scratchpad/
 tmp/
 *.log
+
+# Superpowers SDD çalışma alanı (ledger, brief, review paketleri)
+.superpowers/
