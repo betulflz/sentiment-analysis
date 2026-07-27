@@ -42,6 +42,18 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     /// <see cref="CongruenceBadge"/> kısa bir rozet olduğundan uzun/açıklayıcı hatalar buraya yazılır.</summary>
     [ObservableProperty] private string _captureError = string.Empty;
 
+    /// <summary>"Durdur"a basıldı ama koşu henüz bitmedi: motor kanalda kalan chunk'ları drene
+    /// edip (Whisper/ONNX ile) işliyor — bu birkaç saniye sürebilir. Kullanıcı bu sürede ekranın
+    /// donduğunu/hiçbir şey olmadığını düşünmesin diye ayrı bir durum olarak gösterilir.</summary>
+    [ObservableProperty] private bool _isFinishing;
+
+    /// <summary>Dinleme rozetinin metni: normalde "Dinleniyor", Durdur sonrası (drene/analiz
+    /// tamamlanana kadar) "Analiz tamamlanıyor…".</summary>
+    [ObservableProperty] private string _captureStatusText = "Dinleniyor";
+
+    partial void OnIsFinishingChanged(bool value) =>
+        CaptureStatusText = value ? "Analiz tamamlanıyor…" : "Dinleniyor";
+
     public LiveViewModel(IAnalysisRunner runner, IAudioFilePicker? picker = null,
                          ISelectedAudio? selected = null, AppConfig? config = null,
                          ICaptureModeState? captureMode = null)
@@ -112,11 +124,15 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         // Sessiz yutma yok (08 deferred fix): hata uzun/açıklayıcı olabileceğinden (örn. mikrofon
         // izni reddi) küçük rozete değil, tam metni gösterebilen CaptureError'a yazılır.
         catch (Exception ex) { CaptureError = ex.Message; }
-        finally { IsCapturing = false; StartCommand.NotifyCanExecuteChanged(); }
+        finally { IsCapturing = false; IsFinishing = false; StartCommand.NotifyCanExecuteChanged(); }
     }
 
     [RelayCommand]
-    private void Stop() => _cts?.Cancel();
+    private void Stop()
+    {
+        if (IsCapturing) IsFinishing = true; // motor kalan chunk'ları drene edip özet üretene dek
+        _cts?.Cancel();
+    }
 
     /// <summary>Test yardımcısı: aktif koşu görevini bekler (yoksa hemen döner).</summary>
     public Task WaitForIdleAsync() => _run ?? Task.CompletedTask;

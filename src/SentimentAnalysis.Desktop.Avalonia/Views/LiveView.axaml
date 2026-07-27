@@ -63,7 +63,7 @@
                 <Button Content="Durdur" Command="{Binding StopCommand}" IsEnabled="{Binding IsCapturing}" />
                 <Border Background="{DynamicResource SystemAccentColor}" CornerRadius="4" Padding="8,4"
                         IsVisible="{Binding IsCapturing}" VerticalAlignment="Center">
-                    <TextBlock Text="Dinleniyor" Foreground="White" FontSize="12" />
+                    <TextBlock Text="{Binding CaptureStatusText}" Foreground="White" FontSize="12" />
                 </Border>
             </StackPanel>
 

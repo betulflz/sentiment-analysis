@@ -65,18 +65,6 @@ public class EmotionPipelineTests
         }
     }
 
-    /// <summary>N'inci chunk işlendiğinde verilen <see cref="CancellationTokenSource"/>'u iptal eder —
-    /// canlı mikrofonda kullanıcının "Durdur"a basmasını simüle eder (birkaç chunk toplanmış olur).</summary>
-    private sealed class CancelAfterCountProcessor(int cancelAfter, CancellationTokenSource cts, Func<AudioChunk, ChunkResult?> map) : IChunkProcessor
-    {
-        private int _count;
-        public Task<ChunkResult?> ProcessAsync(AudioChunk chunk, CancellationToken ct)
-        {
-            if (Interlocked.Increment(ref _count) == cancelAfter) cts.Cancel();
-            return Task.FromResult(map(chunk));
-        }
-    }
-
     private sealed class RecordingStore : ISessionStore
     {
         public readonly List<(Guid, ChunkResult)> Saved = new();
@@ -203,8 +191,16 @@ public class EmotionPipelineTests
         Assert.Empty(store.Saved);
     }
 
+    /// <summary>SÖZLEŞME DEĞİŞİKLİĞİ (görev 5 düzeltme turu 2): eskiden bu test iptalin
+    /// <see cref="OperationCanceledException"/> olarak fırlamasını doğruluyordu — canlı
+    /// mikrofonda kullanıcının "Durdur"a basması TAM OLARAK bu yolu izlediğinden (ve kullanıcı
+    /// "durdura basınca rapor vermesini istiyorum" dediğinden), iptal artık bir HATA değil,
+    /// normal bir bitiştir: <see cref="EmotionPipeline.RunAsync"/> fırlatmaz, bir
+    /// <see cref="MeetingSummary"/> ile döner. "Does not hang" garantisi (asıl amaç) burada
+    /// bir zaman aşımı ile hâlâ doğrulanıyor — yalnızca artık "fırlatarak" değil "normal dönerek"
+    /// hang'i önlüyoruz.</summary>
     [Fact]
-    public async Task RunAsync_Cancelled_ThrowsOperationCanceled_DoesNotHang()
+    public async Task RunAsync_Cancelled_CompletesGracefullyWithSummary_DoesNotHang()
     {
         var store = new RecordingStore(); var agg = new FakeAggregator();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -221,34 +217,89 @@ public class EmotionPipelineTests
         cts.Cancel();
         gate.TrySetCanceled(cts.Token);
 
-        // ThrowsAny: iptal bazen alt-sınıf TaskCanceledException olarak gelir (ThrowsAsync tam-tip ister → flaky).
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+        // "Does not hang": makul bir sürede tamamlanmalı (hiçbir yerde sonsuz beklemeye
+        // düşmemeli) — eskiden bunu istisna fırlatarak kanıtlıyorduk, şimdi normal dönerek.
+        var winner = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(5)));
+        Assert.Same(run, winner);
+
+        var summary = await run; // fırlatmamalı
+        Assert.NotNull(summary);
+        Assert.Equal("özet", summary.TurkishSummary);
     }
 
-    /// <summary>Canlı mikrofonda "Durdur" tam olarak bu şekli alır: RunAsync iptal ile çıkar (yukarıdaki
-    /// test bunu doğruluyor — motorun sözleşmesi bu), ama o ana kadar toplanan zaman çizelgesi kaybolmaz.
-    /// Çağıran taraf (PipelineAnalysisRunner) BuildSummary ile bunu bir özete çevirebilir — "Durdur"
-    /// sessizce boş bir sonuca düşmez.</summary>
+    /// <summary>Canlı mikrofonda "Durdur" tam olarak bu şekli alır: kullanıcı konuşurken kanalda
+    /// zaten kuyruğa alınmış ama henüz İŞLENMEMİŞ chunk'lar olabilir — gerçek dünyada gözlemlenen
+    /// kök neden, bu chunk'ların "Durdur" anında kanal okumasının iptal olmasıyla birlikte hiç
+    /// işlenmeden kaybolmasıydı. Bu test, iptalden SONRA kanalda kalanların da drene edilip
+    /// işlendiğini ve zaman çizelgesine/özete yansıdığını kanıtlıyor.</summary>
     [Fact]
-    public async Task RunAsync_CancelledMidRun_BuildSummary_ReflectsChunksCollectedSoFar()
+    public async Task RunAsync_CancelledMidRun_DrainsQueuedChunks_ReturnsSummary_DoesNotHang()
     {
         var store = new RecordingStore(); var agg = new FakeAggregator();
-        using var cts = new CancellationTokenSource();
-        var proc = new CancelAfterCountProcessor(cancelAfter: 3, cts, ResultFor);
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var proc = new GatedProcessor(ResultFor, gate); // ilk chunk gate'te bekletilir
         var pipeline = new EmotionPipeline(proc, store, agg, Cfg(32));
+        using var cts = new CancellationTokenSource();
         var id = Guid.NewGuid(); var started = DateTimeOffset.UnixEpoch;
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            pipeline.RunAsync(new FakeSource(20, ChunkAt), Opts, id, started, DetectedLanguage.Turkish, null, cts.Token));
+        var run = pipeline.RunAsync(new FakeSource(10, ChunkAt), Opts, id, started, DetectedLanguage.Turkish, null, cts.Token);
 
-        // İptalden önce işlenen chunk'lar zaman çizelgesinde kalır — motor onları atmaz.
-        Assert.True(pipeline.Timeline.Count >= 1, "iptal öncesi en az bir chunk işlenmiş olmalı");
+        // Üretici, consumer gate'te bloklu kalırken (kapasite 32, 10 chunk) kanala serbestçe
+        // yazabilir — kısa bir bekleme üreticiye önden kuyruğa yazma fırsatı verir.
+        await Task.Delay(TimeSpan.FromMilliseconds(200));
 
-        var summary = pipeline.BuildSummary(id, started, DetectedLanguage.Turkish);
+        cts.Cancel();     // "Durdur"
+        gate.SetResult(); // gate'teki ilk chunk'ı serbest bırak (BAŞARIYLA biter, iptal ile değil)
 
+        var winner = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(5)));
+        Assert.Same(run, winner);
+        var summary = await run; // fırlatmamalı
+
+        // En az gate'teki ilk chunk + kanalda üreticinin önden yazdığı en az bir chunk daha
+        // işlenmiş olmalı — yalnızca "1" değil, drenajın gerçekten çalıştığını kanıtlar.
+        Assert.True(pipeline.Timeline.Count > 1,
+            $"iptal sonrası drene edilen chunk sayısı yetersiz: {pipeline.Timeline.Count}");
         Assert.NotNull(agg.Seen);
         Assert.Equal(pipeline.Timeline.Count, agg.Seen!.Chunks.Count);
-        Assert.True(agg.Seen.Chunks.Count > 0);
+        Assert.Equal("özet", summary.TurkishSummary);
+    }
+
+    /// <summary>Gerçek MicrophoneCaptureSource'un YENİ davranışını taklit eden bir sahte kaynak:
+    /// iptali dışarı fırlatmak yerine, enumerasyonu normal bitirmeden önce tampondaki artığı
+    /// (StreamingChunkBuffer.Flush eşdeğeri) verir. Bu, "ilk tam chunk oluşmadan Durdur'a
+    /// basılırsa" senaryosunu (6 sn'lik konuşma, 10 sn'lik chunk uzunluğu) modelliyor.</summary>
+    private sealed class GracefullyEndingAfterCancelSource(AudioChunk tail) : IAudioCaptureSource
+    {
+        public async IAsyncEnumerable<AudioChunk> CaptureAsync(
+            CaptureOptions options, [EnumeratorCancellation] CancellationToken ct)
+        {
+            var stopped = new TaskCompletionSource();
+            using var reg = ct.Register(() => stopped.TrySetResult());
+            await stopped.Task.ConfigureAwait(false); // "Durdur"u bekle
+            yield return tail; // buffer.Flush() eşdeğeri — artık, tam olmayan bir chunk
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_SourceEndsGracefullyAfterCancelBeforeAnyFullChunk_StillReturnsSummaryFromTail()
+    {
+        var store = new RecordingStore(); var agg = new FakeAggregator();
+        var proc = new GatedProcessor(ResultFor);
+        var pipeline = new EmotionPipeline(proc, store, agg, Cfg(32));
+        using var cts = new CancellationTokenSource();
+        var id = Guid.NewGuid(); var started = DateTimeOffset.UnixEpoch;
+        var tail = ChunkAt(0); // tek, tam olmayan artık chunk
+
+        var run = pipeline.RunAsync(new GracefullyEndingAfterCancelSource(tail), Opts, id, started,
+            DetectedLanguage.Turkish, null, cts.Token);
+
+        cts.Cancel(); // "Durdur" — ilk tam chunk oluşmadan (6 sn'lik konuşma senaryosu)
+
+        var winner = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(5)));
+        Assert.Same(run, winner);
+        var summary = await run; // fırlatmamalı
+
+        Assert.Single(pipeline.Timeline); // yalnızca artık (tail) chunk
         Assert.Equal("özet", summary.TurkishSummary);
     }
 

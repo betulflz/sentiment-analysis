@@ -46,21 +46,14 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
             var sessionId = Guid.NewGuid();
             var startedAt = DateTimeOffset.Now;
 
-            try
-            {
-                return await _pipeline.RunAsync(source, options, sessionId, startedAt, language, progress, ct)
-                    .ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                // Canlı mikrofonda "Durdur" iptal ile biter — bu ürün için normal bir bitiştir,
-                // hata değil (motorun kendi sözleşmesi iptali fırlatmaya devam eder; bkz.
-                // EmotionPipelineTests.RunAsync_Cancelled_ThrowsOperationCanceled_DoesNotHang).
-                // O ana kadar toplanan zaman çizelgesinden bir özet üretip dönüyoruz ki
-                // LiveViewModel.Completed tetiklensin ve Rapor/Geçmiş güncellensin — aksi halde
-                // "Durdur"a basmak analizi sessizce yok ediyordu.
-                return _pipeline.BuildSummary(sessionId, startedAt, language);
-            }
+            // NOT: EmotionPipeline.RunAsync artık "Durdur" (ct iptali) sonrasında
+            // OperationCanceledException FIRLATMAZ — motor bunu kendi içinde normal bir bitiş
+            // sayıp kanalda kalan chunk'ları drene edip bir MeetingSummary ile döner (görev 5
+            // düzeltme turu 2). Bu yüzden burada artık ayrı bir catch(OperationCanceledException)
+            // + BuildSummary çağrısına gerek yok — önceki turda eklenen o yol artık ölü koddu,
+            // kaldırıldı (BuildSummary'nin kendisi EmotionPipeline içinde hâlâ kullanılıyor).
+            return await _pipeline.RunAsync(source, options, sessionId, startedAt, language, progress, ct)
+                .ConfigureAwait(false);
         }
         finally
         {

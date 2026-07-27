@@ -129,6 +129,33 @@ public class LiveViewModelTests
         await vm.WaitForIdleAsync();
     }
 
+    /// <summary>"Durdur"dan sonra motor kanalda kalan chunk'ları drene edip özet üretene kadar
+    /// birkaç saniye geçebilir (Whisper/ONNX) — bu süre boyunca ekran donmuş görünmesin diye
+    /// "Dinleniyor" rozeti "Analiz tamamlanıyor…"ya döner, Completed ateşlenince eski hâline
+    /// döner (görev 5 düzeltme turu 2).</summary>
+    [Fact]
+    public async Task Stop_ShowsFinishingText_ThenClearsWhenRunCompletes()
+    {
+        var runner = new GatedRunner();
+        var vm = new LiveViewModel(runner);
+
+        vm.StartCommand.Execute(null);
+        await runner.Started.Task;
+        Assert.False(vm.IsFinishing);
+        Assert.Equal("Dinleniyor", vm.CaptureStatusText);
+
+        vm.StopCommand.Execute(null);
+
+        Assert.True(vm.IsFinishing);
+        Assert.Equal("Analiz tamamlanıyor…", vm.CaptureStatusText);
+
+        runner.Release(); // motor "drene" işini bitirdi (bu testte gerçek drene yok, taklit)
+        await vm.WaitForIdleAsync();
+
+        Assert.False(vm.IsFinishing);
+        Assert.Equal("Dinleniyor", vm.CaptureStatusText);
+    }
+
     [Fact]
     public async Task Stop_WhenRunnerEndsGracefully_RaisesCompleted()
     {

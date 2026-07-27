@@ -129,20 +129,65 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
             // Dispose() çağrısı kurtarabilirdi.
             Start();
 
-            await foreach (var chunk in chunks.Reader.ReadAllAsync(ct).ConfigureAwait(false))
-                yield return chunk;
+            // "Durdur" (ct iptali) artık normal bir bitiştir, hata değil — kullanıcı konuştuğu
+            // sürenin analiz EDİLMESİNİ ister (bkz. görev 5 düzeltme turu 2). Bunu sağlamak için
+            // manuel enumerator kullanıyoruz: yield NOT olamayacağı için (CS1626: catch içeren
+            // try'da yield yasak) MoveNextAsync'i AYRI bir try/catch içinde çağırıp chunk'ı o
+            // try'ın DIŞINDA yield ediyoruz.
+            var enumerator = chunks.Reader.ReadAllAsync(ct).GetAsyncEnumerator(ct);
+            try
+            {
+                while (true)
+                {
+                    AudioChunk? current = null;
+                    bool hasCurrent = false, cancelled = false;
+                    try
+                    {
+                        if (await enumerator.MoveNextAsync().ConfigureAwait(false))
+                        {
+                            current = enumerator.Current;
+                            hasCurrent = true;
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // yield burada OLAMAZ (CS1626: catch içinde yasak) — yalnızca bayrak
+                        // bırakıyoruz, asıl "kalanı ver" işi aşağıda, catch DIŞINDA yapılır.
+                        cancelled = true;
+                    }
+
+                    if (cancelled)
+                    {
+                        // Durdur: kanalda zaten kuyruğa alınmış ama henüz verilmemiş chunk'lar
+                        // varsa onları da kaybetmeden ver — yalnızca ct nedeniyle iptal edilen
+                        // bir okuma, üretilmiş veriyi çöpe atmamalı.
+                        while (chunks.Reader.TryRead(out var pending))
+                            yield return pending;
+                        break;
+                    }
+
+                    if (!hasCurrent) break; // kanal normal tamamlandı (iptal yok)
+
+                    yield return current!;
+                }
+            }
+            finally
+            {
+                await enumerator.DisposeAsync().ConfigureAwait(false);
+            }
         }
         finally
         {
             // NOT: yield return burada OLAMAZ (finally içinde yield C#'ta derleme hatasıdır,
             // CS1625). Kuyruk durdurma/temizleme burada; kalan artığın verilmesi try/finally
-            // dışında, yalnızca akış iptal olmadan normal bittiğinde yapılır.
+            // dışında yapılır — hem normal bitişte hem de iptalden sonra (artık ikisi de aynı
+            // yoldan geçer, çünkü iptal artık yukarıda yutulur).
             StopQueue();
         }
 
-        // İptal edilmişse (ct tetiklendiyse) yukarıdaki await foreach zaten
-        // OperationCanceledException fırlatıp buraya hiç ulaşmadan metottan çıkar —
-        // yani iptalden sonra artık chunk asla verilmez.
+        // Buraya HEM normal bitişte (kaynak tükendi) HEM DE iptalden sonra ulaşılır — tamponda
+        // henüz tam bir chunk'a ulaşmamış ama gerçek konuşma içeren bir artık varsa (ör. 10
+        // saniyelik chunk uzunluğunda 6 saniyede "Durdur"a basılması) bunu kaybetmeden ver.
         var tail = buffer.Flush();
         if (tail is not null)
             yield return tail;
