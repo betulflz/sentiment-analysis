@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using SentimentAnalysis.Application.Abstractions;
@@ -59,5 +60,44 @@ public class MicrophoneCaptureSourceTests
 
         source.Dispose();
         source.Dispose();   // idempotent
+    }
+
+    private static readonly CaptureOptions Options = new(TimeSpan.FromSeconds(1), TimeSpan.Zero);
+
+    /// <summary>Yeniden giriş koruması: gerçek donanım/AudioQueue başlatmadan test etmek için
+    /// private <c>_queue</c> alanına yansıma ile sahte (sıfır olmayan) bir işaretçi yerleştiriyoruz
+    /// — bu, "bu örnekte zaten canlı bir kuyruk var" durumunu taklit eder. AudioQueueStart hiç
+    /// çağrılmaz, yani gerçek mikrofon yakalaması BAŞLATILMAZ (görev talimatı gereği). Testin
+    /// sonunda sahte işaretçiyi sıfırlıyoruz ki Dispose native API'yi geçersiz bir işaretçiyle
+    /// çağırmasın.</summary>
+    [Fact]
+    public async Task CaptureAsync_WhileQueueAlreadyLive_ThrowsInvalidOperationException()
+    {
+        using var source = new MicrophoneCaptureSource();
+        var queueField = typeof(MicrophoneCaptureSource)
+            .GetField("_queue", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        queueField.SetValue(source, new IntPtr(1));
+
+        try
+        {
+            var enumerator = source.CaptureAsync(Options, CancellationToken.None).GetAsyncEnumerator();
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await enumerator.MoveNextAsync());
+        }
+        finally
+        {
+            // Temizlik: gerçek olmayan işaretçiyi sıfırla ki Dispose() native
+            // AudioQueueStop/Dispose'u geçersiz bir adresle çağırıp çökmesin.
+            queueField.SetValue(source, IntPtr.Zero);
+        }
+    }
+
+    [Fact]
+    public async Task CaptureAsync_AfterDispose_ThrowsObjectDisposedException()
+    {
+        var source = new MicrophoneCaptureSource();
+        source.Dispose();
+
+        var enumerator = source.CaptureAsync(Options, CancellationToken.None).GetAsyncEnumerator();
+        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await enumerator.MoveNextAsync());
     }
 }

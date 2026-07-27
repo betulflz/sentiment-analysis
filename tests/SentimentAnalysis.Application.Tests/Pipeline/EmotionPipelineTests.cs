@@ -24,6 +24,22 @@ public class EmotionPipelineTests
         }
     }
 
+    /// <summary>Yakalama kaynağının kendisi hata fırlattığında (ör. gerçek
+    /// MicrophonePermissionException) hattın bunu yutup boş-ama-başarılı bir özete
+    /// düşmediğini kanıtlamak için kullanılır.</summary>
+    private sealed class ThrowingSource(Exception toThrow) : IAudioCaptureSource
+    {
+        public async IAsyncEnumerable<AudioChunk> CaptureAsync(
+            CaptureOptions options, [EnumeratorCancellation] CancellationToken ct)
+        {
+            await Task.Yield();
+            throw toThrow;
+#pragma warning disable CS0162 // erişilemez kod: yalnızca derleyicinin metodu iterator olarak tanıması için
+            yield break;
+#pragma warning restore CS0162
+        }
+    }
+
     private sealed class GatedProcessor : IChunkProcessor
     {
         private readonly Func<AudioChunk, ChunkResult?> _map;
@@ -155,6 +171,24 @@ public class EmotionPipelineTests
         Assert.True(pipeline.Timeline.Count <= 3, $"bounded: kapasite+1'i aşmamalı, {pipeline.Timeline.Count}");
         // Hayatta kalanlar en YENİ chunk'lar (en yüksek indeks 19 dahil).
         Assert.Contains(pipeline.Timeline, c => (int)c.TimeStart.TotalSeconds == 19);
+    }
+
+    [Fact]
+    public async Task RunAsync_CaptureSourceThrows_PropagatesError_NotSwallowedIntoEmptySummary()
+    {
+        var store = new RecordingStore(); var agg = new FakeAggregator();
+        var proc = new GatedProcessor(ResultFor);
+        var pipeline = new EmotionPipeline(proc, store, agg, Cfg(32));
+        var boom = new InvalidOperationException("mikrofon izni reddi simülasyonu");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            pipeline.RunAsync(new ThrowingSource(boom), Opts, Guid.NewGuid(), DateTimeOffset.UnixEpoch,
+                DetectedLanguage.Turkish, null, CancellationToken.None));
+
+        // Hata sessizce yutulup boş-ama-başarılı bir özete düşülmediğini doğrula.
+        Assert.Empty(pipeline.Timeline);
+        Assert.Null(agg.Seen);
+        Assert.Empty(store.Saved);
     }
 
     [Fact]

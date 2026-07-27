@@ -42,10 +42,21 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
     public async IAsyncEnumerable<AudioChunk> CaptureAsync(
         CaptureOptions options, [EnumeratorCancellation] CancellationToken ct)
     {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(MicrophoneCaptureSource));
+
         if (!OperatingSystem.IsMacOS())
             throw new PlatformNotSupportedException(
                 "Canlı mikrofon yakalama şu an yalnızca macOS'ta destekleniyor. " +
                 "Windows (WASAPI) implementasyonu sonraki turda; dosya analizi her platformda çalışır.");
+
+        // Yeniden giriş koruması: aynı örnek üzerinde bir kuyruk zaten canlıyken ikinci bir
+        // CaptureAsync çağrısı, ilk kuyruğun tek GC kökü olan handle'ı çalar (aşağıdaki
+        // realloc) → native taraf, artık kimsenin pinlemediği bir delege üzerinden çağrılır
+        // ve çöker. Bunu en baştan reddet.
+        if (_queue != IntPtr.Zero)
+            throw new InvalidOperationException(
+                "Bu kaynak üzerinde zaten bir yakalama sürüyor; önce mevcut akışı durdurun.");
 
         var chunks = Channel.CreateUnbounded<AudioChunk>(new UnboundedChannelOptions
         {
@@ -59,44 +70,65 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
 
         _callback = (userData, queue, bufferPtr, startTime, numPackets, packetDescs) =>
         {
-            var native = Marshal.PtrToStructure<AudioQueueInterop.AudioQueueBuffer>(bufferPtr);
-            int byteCount = (int)native.mAudioDataByteSize;
-
-            if (byteCount > 0)
+            try
             {
-                var raw = new byte[byteCount];
-                Marshal.Copy(native.mAudioData, raw, 0, byteCount);
+                var native = Marshal.PtrToStructure<AudioQueueInterop.AudioQueueBuffer>(bufferPtr);
+                int byteCount = (int)native.mAudioDataByteSize;
 
-                var samples = new float[byteCount / 2];
-                Pcm16Converter.ToFloat(raw, samples);
-
-                watchdog.Observe(samples);
-                if (watchdog.LooksDead && !deadStreamReported)
+                if (byteCount > 0)
                 {
-                    deadStreamReported = true;
-                    chunks.Writer.TryComplete(new MicrophonePermissionException(
-                        "Mikrofondan yalnızca sessizlik geliyor. Büyük olasılıkla mikrofon izni " +
-                        "verilmemiş: Sistem Ayarları → Gizlilik ve Güvenlik → Mikrofon bölümünden " +
-                        "bu uygulamaya izin verin ve tekrar deneyin."));
-                    return;
+                    var raw = new byte[byteCount];
+                    Marshal.Copy(native.mAudioData, raw, 0, byteCount);
+
+                    var samples = new float[byteCount / 2];
+                    Pcm16Converter.ToFloat(raw, samples);
+
+                    watchdog.Observe(samples);
+                    if (watchdog.LooksDead && !deadStreamReported)
+                    {
+                        deadStreamReported = true;
+                        chunks.Writer.TryComplete(new MicrophonePermissionException(
+                            "Mikrofondan yalnızca sessizlik geliyor. Büyük olasılıkla mikrofon izni " +
+                            "verilmemiş: Sistem Ayarları → Gizlilik ve Güvenlik → Mikrofon bölümünden " +
+                            "bu uygulamaya izin verin ve tekrar deneyin."));
+                        return;
+                    }
+
+                    foreach (var chunk in buffer.Append(samples))
+                        chunks.Writer.TryWrite(chunk);
                 }
-
-                foreach (var chunk in buffer.Append(samples))
-                    chunks.Writer.TryWrite(chunk);
             }
-
-            // Tamponu kuyruğa geri ver (durdurulmuşsa hata döner, önemsizdir).
-            AudioQueueInterop.AudioQueueEnqueueBuffer(queue, bufferPtr, 0, IntPtr.Zero);
+            catch (Exception ex)
+            {
+                // Reverse P/Invoke sınırından yönetilmeyen bir istisna kaçarsa süreç çöker
+                // (native AudioQueue çağrı yığını, .NET exception'ını tanımaz). Bunun yerine
+                // istisnayı kanala taşıyıp tüketiciye dürüstçe fırlatıyoruz. TryComplete zaten
+                // tamamlanmış bir kanalda güvenle false döner, tekrar fırlatmaz (doğrulandı).
+                chunks.Writer.TryComplete(ex);
+            }
+            finally
+            {
+                // Tamponu HER durumda kuyruğa geri ver (hata olsa bile) — aksi halde
+                // AudioQueue'nun elindeki tampon sayısı tükenir ve akış sessizce durur.
+                // Durdurulmuş bir kuyruğa karşı hata dönebilir, önemsizdir.
+                AudioQueueInterop.AudioQueueEnqueueBuffer(queue, bufferPtr, 0, IntPtr.Zero);
+            }
         };
 
-        // Önceki bir yakalamadan kalan pinlenmiş handle varsa serbest bırak (kaynak sızıntısı olmasın).
+        // Önceki bir yakalamadan kalan pinlenmiş handle varsa serbest bırak (kaynak sızıntısı
+        // olmasın). Yukarıdaki _queue kontrolü sayesinde burada asla CANLI bir kuyruğun
+        // handle'ını çalmıyoruz.
         if (_callbackHandle.IsAllocated) _callbackHandle.Free();
         _callbackHandle = GCHandle.Alloc(_callback);
 
-        Start();
-
         try
         {
+            // Start() try içinde: AudioQueueNewInput kuyruğu oluşturduktan SONRA
+            // AudioQueueStart (veya tampon ayırma) başarısız olursa, oluşturulmuş kuyruk
+            // finally'deki StopQueue() ile temizlenir — aksi halde yalnızca açık bir
+            // Dispose() çağrısı kurtarabilirdi.
+            Start();
+
             await foreach (var chunk in chunks.Reader.ReadAllAsync(ct).ConfigureAwait(false))
                 yield return chunk;
         }
@@ -140,8 +172,18 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
 
         for (int i = 0; i < BufferCount; i++)
         {
-            AudioQueueInterop.AudioQueueAllocateBuffer(_queue, BufferBytes, out var b);
-            AudioQueueInterop.AudioQueueEnqueueBuffer(_queue, b, 0, IntPtr.Zero);
+            // Sessizce yutulan bir hata burada özellikle tehlikeli: sıfır tampon kuyruğa
+            // girerse hiç callback tetiklenmez, SilenceWatchdog bunu "izin reddi" sanıp
+            // kullanıcıya yanlış güvenle mikrofon izni mesajı gösterir. Durumu adıyla fırlat.
+            int allocStatus = AudioQueueInterop.AudioQueueAllocateBuffer(_queue, BufferBytes, out var b);
+            if (allocStatus != 0)
+                throw new InvalidOperationException(
+                    $"Mikrofon tamponu ayrılamadı (AudioQueueAllocateBuffer → {allocStatus}).");
+
+            int enqueueStatus = AudioQueueInterop.AudioQueueEnqueueBuffer(_queue, b, 0, IntPtr.Zero);
+            if (enqueueStatus != 0)
+                throw new InvalidOperationException(
+                    $"Mikrofon tamponu kuyruğa eklenemedi (AudioQueueEnqueueBuffer → {enqueueStatus}).");
         }
 
         status = AudioQueueInterop.AudioQueueStart(_queue, IntPtr.Zero);

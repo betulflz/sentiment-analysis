@@ -50,14 +50,30 @@ public sealed class EmotionPipeline
 
         var producer = Task.Run(async () =>
         {
+            Exception? producerError = null;
             try
             {
                 await foreach (var chunk in source.CaptureAsync(options, ct).ConfigureAwait(false))
                     await channel.Writer.WriteAsync(chunk, ct).ConfigureAwait(false);
             }
+            catch (OperationCanceledException)
+            {
+                // İptal normaldir, hata değildir: kanalı hatasız tamamlıyoruz (davranış
+                // değişmedi) — asıl OperationCanceledException tüketicinin kendi ct
+                // kontrolünden (ReadAllAsync(ct)) zaten yukarı akar.
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Kaynağın gerçek hatası (ör. MicrophonePermissionException): kanalı BU
+                // hatayla tamamla ki tüketicinin ReadAllAsync'i onu fırlatsın. Aksi halde
+                // kanal sessizce normal biter ve çalışma boş bir özete düşer — spec bunu
+                // yasaklıyor (bkz. sub-project 08e planı).
+                producerError = ex;
+            }
             finally
             {
-                channel.Writer.Complete();
+                channel.Writer.Complete(producerError);
             }
         }, ct);
 
