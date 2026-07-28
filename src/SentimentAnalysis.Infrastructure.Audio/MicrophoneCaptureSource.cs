@@ -39,16 +39,157 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
     private AudioQueueInterop.InputCallback? _callback;
     private bool _disposed;
 
+    private PortAudioSharp.Stream? _paStream;
+    private PortAudioSharp.Stream.Callback? _paCallback;
+
     public async IAsyncEnumerable<AudioChunk> CaptureAsync(
         CaptureOptions options, [EnumeratorCancellation] CancellationToken ct)
     {
         if (_disposed)
             throw new ObjectDisposedException(nameof(MicrophoneCaptureSource));
 
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux())
+        {
+            if (_paStream != null || _queue != IntPtr.Zero)
+                throw new InvalidOperationException(
+                    "Bu kaynak üzerinde zaten bir yakalama sürüyor; önce mevcut akışı durdurun.");
+
+            var paChunks = Channel.CreateUnbounded<AudioChunk>(new UnboundedChannelOptions
+            {
+                SingleReader = true,
+                SingleWriter = true,
+            });
+
+            var paBuffer = new StreamingChunkBuffer(TargetRate, options.ChunkLength, options.Overlap);
+            var paWatchdog = new SilenceWatchdog(TargetRate, DeadStreamWindow);
+            bool paDeadStreamReported = false;
+
+            _paCallback = (IntPtr input, IntPtr output, uint frameCount,
+                ref PortAudioSharp.StreamCallbackTimeInfo timeInfo,
+                PortAudioSharp.StreamCallbackFlags statusFlags,
+                IntPtr userDataPtr) =>
+            {
+                try
+                {
+                    if (input != IntPtr.Zero && frameCount > 0)
+                    {
+                        var samples = new float[frameCount];
+                        Marshal.Copy(input, samples, 0, (int)frameCount);
+
+                        paWatchdog.Observe(samples);
+                        if (paWatchdog.LooksDead && !paDeadStreamReported)
+                        {
+                            paDeadStreamReported = true;
+                            paChunks.Writer.TryComplete(new MicrophonePermissionException(
+                                "Mikrofondan yalnızca sessizlik geliyor. Büyük olasılıkla mikrofon izni " +
+                                "verilmemiş. Sistem ayarlarından mikrofon iznini kontrol edin ve tekrar deneyin."));
+                            return PortAudioSharp.StreamCallbackResult.Complete;
+                        }
+
+                        foreach (var chunk in paBuffer.Append(samples))
+                            paChunks.Writer.TryWrite(chunk);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    paChunks.Writer.TryComplete(ex);
+                    return PortAudioSharp.StreamCallbackResult.Abort;
+                }
+                return PortAudioSharp.StreamCallbackResult.Continue;
+            };
+
+            try
+            {
+                PortAudioSharp.PortAudio.Initialize();
+                try
+                {
+                    var inputParameters = new PortAudioSharp.StreamParameters();
+                    inputParameters.device = PortAudioSharp.PortAudio.DefaultInputDevice;
+                    if (inputParameters.device == -1)
+                    {
+                        throw new InvalidOperationException("Varsayılan ses giriş cihazı (mikrofon) bulunamadı.");
+                    }
+
+                    inputParameters.channelCount = 1;
+                    inputParameters.sampleFormat = PortAudioSharp.SampleFormat.Float32;
+
+                    var deviceInfo = PortAudioSharp.PortAudio.GetDeviceInfo(inputParameters.device);
+                    inputParameters.suggestedLatency = deviceInfo.defaultLowInputLatency;
+                    inputParameters.hostApiSpecificStreamInfo = IntPtr.Zero;
+
+                    _paStream = new PortAudioSharp.Stream(
+                        inputParameters,
+                        null,
+                        TargetRate,
+                        0,
+                        PortAudioSharp.StreamFlags.NoFlag,
+                        _paCallback,
+                        null
+                    );
+
+                    _paStream.Start();
+                }
+                catch
+                {
+                    StopPaStream();
+                    PortAudioSharp.PortAudio.Terminate();
+                    throw;
+                }
+
+                var paEnumerator = paChunks.Reader.ReadAllAsync(ct).GetAsyncEnumerator(ct);
+                try
+                {
+                    while (true)
+                    {
+                        AudioChunk? paCurrent = null;
+                        bool paHasCurrent = false, paCancelled = false;
+                        try
+                        {
+                            if (await paEnumerator.MoveNextAsync().ConfigureAwait(false))
+                            {
+                                paCurrent = paEnumerator.Current;
+                                paHasCurrent = true;
+                            }
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            paCancelled = true;
+                        }
+
+                        if (paCancelled)
+                        {
+                            while (paChunks.Reader.TryRead(out var pending))
+                                yield return pending;
+                            break;
+                        }
+
+                        if (!paHasCurrent) break;
+
+                        yield return paCurrent!;
+                    }
+                }
+                finally
+                {
+                    await paEnumerator.DisposeAsync().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                StopPaStream();
+                try { PortAudioSharp.PortAudio.Terminate(); } catch { }
+            }
+
+            var paTail = paBuffer.Flush();
+            if (paTail is not null)
+                yield return paTail;
+
+            yield break;
+        }
+
         if (!OperatingSystem.IsMacOS())
             throw new PlatformNotSupportedException(
                 "Canlı mikrofon yakalama şu an yalnızca macOS'ta destekleniyor. " +
-                "Windows (WASAPI) implementasyonu sonraki turda; dosya analizi her platformda çalışır.");
+                "Windows ve Linux için PortAudio desteği bu sınıfa dahil edilmiştir.");
 
         // Yeniden giriş koruması: aynı örnek üzerinde bir kuyruk zaten canlıyken ikinci bir
         // CaptureAsync çağrısı, ilk kuyruğun tek GC kökü olan handle'ı çalar (aşağıdaki
@@ -244,11 +385,28 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
         _queue = IntPtr.Zero;
     }
 
+    private void StopPaStream()
+    {
+        if (_paStream != null)
+        {
+            try { _paStream.Stop(); } catch { }
+            try { _paStream.Close(); } catch { }
+            try { _paStream.Dispose(); } catch { }
+            _paStream = null;
+        }
+        _paCallback = null;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         StopQueue();
+        StopPaStream();
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux())
+        {
+            try { PortAudioSharp.PortAudio.Terminate(); } catch { }
+        }
         if (_callbackHandle.IsAllocated) _callbackHandle.Free();
         _callback = null;
     }

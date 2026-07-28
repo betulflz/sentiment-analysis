@@ -37,9 +37,14 @@ public static class CompositionRoot
         // Dosya seçimi (08c): kullanıcı bir ses dosyası seçer, ISelectedAudio bunu Live/PipelineAnalysisRunner
         // arasında paylaşır. Kaynak fabrikası seçili dosyayı gerçek IAudioCaptureSource'a çevirir (afconvert).
         services.AddSingleton<ISelectedAudio, SelectedAudio>();
+        services.AddSingleton<IRuntimePlatform, RuntimePlatform>();
+        services.AddSingleton<IAudioToolResolver, AudioToolResolver>();
+        services.AddSingleton<IExternalProcessRunner, ExternalProcessRunner>();
+        services.AddSingleton<CrossPlatformAudioConverter>();
         services.AddSingleton<IAudioSourceFactory, AfconvertAudioSourceFactory>();
         services.AddSingleton<IAudioFilePicker>(_ => new AvaloniaAudioFilePicker(() => MainWindowAccessor.Current));
         services.AddSingleton<ICaptureModeState, CaptureModeState>();
+        services.AddSingleton<ILiveRecordingSession>(sp => new LiveRecordingSession(new MicrophoneCaptureSource()));
         services.AddSingleton<Func<IAudioCaptureSource?>>(sp =>
         {
             var selected = sp.GetRequiredService<ISelectedAudio>();
