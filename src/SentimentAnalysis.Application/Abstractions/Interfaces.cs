@@ -62,6 +62,63 @@ public interface ISessionStore
     Task PurgeExpiredAudioAsync(CancellationToken ct);
 }
 
+/// <summary>Arka plan konuşmacı geçişinin ihtiyaç duyduğu dar depolama yüzeyi (Alt-proje 10b).
+/// <see cref="ISessionStore"/>'dan ayrı tutulur: geçiş yalnızca "sesi oku" ve "konuşmacıları yaz"
+/// yeteneklerini görmelidir.</summary>
+public interface IDiarizationStore
+{
+    /// <summary>Oturumun saklanmış sesi (16 kHz mono). Ses yoksa <c>null</c> — bu bir hata
+    /// değildir (oturum konuşmacı ayrımı kapalıyken kaydedilmiş olabilir).</summary>
+    Task<float[]?> GetSessionAudioAsync(Guid sessionId, CancellationToken ct);
+
+    Task SaveSpeakerSegmentsAsync(Guid sessionId, IReadOnlyList<SpeakerSegment> segments, CancellationToken ct);
+}
+
+/// <summary>Konuşmacı ayrımının ÇALIŞMA ANI durumu (Alt-proje 10b). <see cref="AppConfig"/>
+/// immutable bir singleton olduğundan, Ayarlar'dan yapılan açma/kapama onun üzerinden
+/// yürüyemez; bu küçük değiştirilebilir servis (mevcut <c>ICaptureModeState</c> deseninin
+/// aynısı) başlangıç değerini config'ten alır ve kullanıcı değiştirdiğinde günceller.</summary>
+public interface IDiarizationState
+{
+    bool Enabled { get; set; }
+}
+
+/// <inheritdoc cref="IDiarizationState"/>
+public sealed class DiarizationState : IDiarizationState
+{
+    public DiarizationState(Configuration.AppConfig config) => Enabled = config.Diarization.Enabled;
+    public bool Enabled { get; set; }
+}
+
+/// <summary>Raporun konuşmacı etiketli transkripti kurabilmesi için gereken OKUMA yüzeyi
+/// (Alt-proje 10b). <see cref="IDiarizationStore"/>'dan ayrıdır: geçiş yazar, rapor okur.</summary>
+public interface ISpeakerDataReader
+{
+    Task<IReadOnlyList<TranscriptSegment>> GetTranscriptSegmentsAsync(Guid sessionId, CancellationToken ct);
+    Task<IReadOnlyList<SpeakerSegment>> GetSpeakerSegmentsAsync(Guid sessionId, CancellationToken ct);
+}
+
+/// <summary>Tüm kaydı görüp konuşmacı bölgeleri üretir (Alt-proje 10b; sherpa-onnx offline
+/// diarization). Canlı hatta ÇAĞRILMAZ — oturum bittikten sonra arka planda bir kez çalışır
+/// (spec 10 S2: sherpa'nın diarization'ı yalnızca offline'dır ve 10a ölçümünde RTF ~0,44
+/// olduğundan canlı akışa giremez).</summary>
+public interface IDiarizer
+{
+    /// <param name="mono16k">16 kHz mono, oturumun tamamı.</param>
+    Task<IReadOnlyList<SpeakerSegment>> DiarizeAsync(float[] mono16k, CancellationToken ct);
+}
+
+/// <summary>Oturumun ham sesini saklar — arka plan konuşmacı ayrımının (Alt-proje 10b) girdisi.
+/// <see cref="ISessionStore"/>'dan ayrı tutulur: canlı koşu yalnızca "sesi yaz" yeteneğine
+/// ihtiyaç duyar, oturum sorgulama/temizlik yüzeyine değil.
+/// <para>Yalnızca <c>DiarizationConfig.Enabled</c> iken çağrılır — kullanıcı konuşmacı ayrımını
+/// istemediyse sesi diske yazmayız (master §12.5, gizlilik varsayılan).</para></summary>
+public interface ISessionAudioSink
+{
+    /// <param name="pcm16">16 kHz mono, 16-bit little-endian PCM.</param>
+    Task SaveSessionAudioAsync(Guid sessionId, byte[] pcm16, CancellationToken ct);
+}
+
 /// <summary>Toplantı-düzeyi agregasyon (baskın duygu, trend, oynaklık, tepe
 /// anlar, ortalama congruence + Türkçe özet). Saf, deterministik (Alt-proje 02).</summary>
 public interface IMeetingAggregator

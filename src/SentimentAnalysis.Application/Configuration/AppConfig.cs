@@ -57,6 +57,17 @@ public sealed record VadConfig(
 public sealed record PipelineConfig(
     int ChannelCapacity = 32);   // bounded kanal kapasitesi; taşarsa en eski chunk düşer
 
+/// <summary>Konuşmacı ayrımı (diarization) ayarları — spec 10.
+/// Değerler 10a spike'ında GERÇEK DONANIMDA ÖLÇÜLDÜ; keyfi varsayılan değildir
+/// (bkz. <c>10a-diarization-spike-olcumu.md</c>).</summary>
+public sealed record DiarizationConfig(
+    bool Enabled = false,                 // opt-in: kapalıyken davranış 10b öncesiyle aynı
+                                          // (ses de saklanmaz — gizlilik varsayılanı, master §12.5)
+    double ClusteringThreshold = 0.8,     // 10a ölçümü: sherpa'nın tipik 0,5'i iki kişilik
+                                          // kayıtta ALTI konuşmacı buluyordu; 0,8'de tam 2
+    double MinOverlapRatio = 0.5,         // SpeakerAligner kapısı: altında kalan → Bilinmeyen
+    int MaxRecordedMinutes = 90);         // ses biriktirme üst sınırı (16 kHz PCM16 ≈ 115 MB/saat)
+
 /// <summary>Uygulama genel konfigürasyonu (stajyerin config.py karşılığı).</summary>
 public sealed record AppConfig(
     FusionConfig Fusion,
@@ -66,6 +77,10 @@ public sealed record AppConfig(
     VadConfig Vad,
     PipelineConfig Pipeline)
 {
+    /// <summary>Konuşmacı ayrımı (spec 10). Additive: varsayılanlı olduğundan mevcut
+    /// <c>AppConfig</c> kurucu çağrılarının hiçbiri değişmez.</summary>
+    public DiarizationConfig Diarization { get; init; } = new();
+
     public static AppConfig Default => new(
         Fusion: new FusionConfig(),
         Storage: new StorageConfig(),

@@ -31,5 +31,6 @@
     <ProjectReference Include="..\SentimentAnalysis.Infrastructure.Vad\SentimentAnalysis.Infrastructure.Vad.csproj" />
     <ProjectReference Include="..\SentimentAnalysis.Infrastructure.Audio\SentimentAnalysis.Infrastructure.Audio.csproj" />
     <ProjectReference Include="..\SentimentAnalysis.Infrastructure.Storage\SentimentAnalysis.Infrastructure.Storage.csproj" />
+    <ProjectReference Include="..\SentimentAnalysis.Infrastructure.Diarization\SentimentAnalysis.Infrastructure.Diarization.csproj" />
   </ItemGroup>
 </Project>

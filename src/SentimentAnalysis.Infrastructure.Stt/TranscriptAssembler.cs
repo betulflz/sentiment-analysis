@@ -16,15 +16,19 @@ public static class TranscriptAssembler
         if (segments.Count == 0)
             return new Transcript(string.Empty, forced ?? DetectedLanguage.Other, EmptyAvgLogProb);
 
-        var text = string.Join(" ", segments
-            .Select(s => s.Text.Trim())
-            .Where(t => t.Length > 0));
+        // Metin ve segmentler AYNI süzgeçten geçer: boş metinli segment ikisinde de yer almaz.
+        // (Ayrı süzülselerdi transkript ile segment listesi sessizce çelişebilirdi.)
+        var kept = segments
+            .Select(s => new TranscriptSegment(s.Text.Trim(), s.Start, s.End))
+            .Where(s => s.Text.Length > 0)
+            .ToList();
 
+        var text = string.Join(" ", kept.Select(s => s.Text));
         var language = forced ?? DominantLanguage(segments);
         var avgProb = WeightedAverageProbability(segments);
         var avgLogProb = Math.Log(Math.Clamp(avgProb, MinProbability, 1.0));
 
-        return new Transcript(text, language, avgLogProb);
+        return new Transcript(text, language, avgLogProb, kept);
     }
 
     /// <summary>En uzun (süreye göre) segmentin dili baskın kabul edilir.</summary>

@@ -38,6 +38,29 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Konuşmacı ayrımı (10b). Durum şeridi, özellik hiç denenmediyse (boş metin)
+                     görünmez; denendiyse sonucu DÜRÜSTÇE söyler — başarısızlık sessizce
+                     gizlenmez (08e dersi: kullanıcı ne gördüğünü bilmeli). -->
+                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16"
+                        IsVisible="{Binding DiarizationStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Konuşmacılar" FontWeight="SemiBold" FontSize="16" />
+                        <TextBlock Text="{Binding DiarizationStatus}" TextWrapping="Wrap" FontStyle="Italic" Opacity="0.8" />
+
+                        <ItemsControl ItemsSource="{Binding SpeakerLines}" IsVisible="{Binding HasSpeakers}" Margin="0,8,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="110,120,*" Margin="0,4">
+                                        <TextBlock Grid.Column="0" Text="{Binding TimeRange}" Opacity="0.7" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Label}" FontWeight="SemiBold" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
                 <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16">
                     <StackPanel Spacing="6">
                         <TextBlock Text="Tepe Anlar" FontWeight="SemiBold" FontSize="16" />

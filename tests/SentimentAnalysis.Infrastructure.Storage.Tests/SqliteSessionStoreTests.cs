@@ -29,6 +29,127 @@ public class SqliteSessionStoreTests
                 TextConfidence: 0.8, ProsodyConfidence: 0.7),
             transcript);
 
+    // --- 10b: konuşmacı ayrımı için zaman damgalı transkript + konuşmacı bölgeleri ---
+
+    private static ChunkResult ResultWithSegments(double start, string transcript,
+        params TranscriptSegment[] segments) =>
+        Result(start, transcript) with { Segments = segments };
+
+    [Fact]
+    public async Task SaveChunk_TranskriptSegmentleriniSaklar_VeSirayaGoreOkur()
+    {
+        var (store, _, _) = NewStore();
+        var id = Guid.NewGuid();
+
+        await store.SaveChunkAsync(id, ResultWithSegments(30, "Merhaba dünya",
+            new TranscriptSegment("Merhaba", TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(32)),
+            new TranscriptSegment("dünya", TimeSpan.FromSeconds(32), TimeSpan.FromSeconds(34))),
+            CancellationToken.None);
+        await store.SaveChunkAsync(id, ResultWithSegments(40, "iyiyim",
+            new TranscriptSegment("iyiyim", TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(42))),
+            CancellationToken.None);
+
+        var segs = await store.GetTranscriptSegmentsAsync(id, CancellationToken.None);
+
+        Assert.Equal(3, segs.Count);
+        Assert.Equal("Merhaba", segs[0].Text);
+        Assert.Equal(TimeSpan.FromSeconds(30), segs[0].Start);
+        Assert.Equal(TimeSpan.FromSeconds(34), segs[1].End);
+        Assert.Equal("iyiyim", segs[2].Text);          // chunk'lar arası sıra korunur
+    }
+
+    [Fact]
+    public async Task GetTranscriptSegments_SegmentsizOturum_BosDondurur()
+    {
+        var (store, _, _) = NewStore();
+        var id = Guid.NewGuid();
+        await store.SaveChunkAsync(id, Result(0, "metin"), CancellationToken.None);
+
+        Assert.Empty(await store.GetTranscriptSegmentsAsync(id, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetTranscriptSegments_BilinmeyenOturum_BosDondurur()
+    {
+        var (store, _, _) = NewStore();
+        Assert.Empty(await store.GetTranscriptSegmentsAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SaveSpeakerSegments_RoundTrip()
+    {
+        var (store, _, _) = NewStore();
+        var id = Guid.NewGuid();
+
+        await store.SaveSpeakerSegmentsAsync(id,
+        [
+            new SpeakerSegment(new SpeakerId(0), TimeSpan.Zero, TimeSpan.FromSeconds(15)),
+            new SpeakerSegment(new SpeakerId(1), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(30)),
+        ], CancellationToken.None);
+
+        var segs = await store.GetSpeakerSegmentsAsync(id, CancellationToken.None);
+
+        Assert.Equal(2, segs.Count);
+        Assert.Equal(new SpeakerId(0), segs[0].Speaker);
+        Assert.Equal(TimeSpan.FromSeconds(15), segs[0].End);
+        Assert.Equal(new SpeakerId(1), segs[1].Speaker);
+    }
+
+    [Fact]
+    public async Task SaveSpeakerSegments_TekrarCalistirma_CiftKayitYapmaz()
+    {
+        // Arka plan geçişi yeniden çalıştırılabilir olmalı (kullanıcı raporu tekrar açtı vb.).
+        var (store, _, _) = NewStore();
+        var id = Guid.NewGuid();
+        SpeakerSegment[] first = [new(new SpeakerId(0), TimeSpan.Zero, TimeSpan.FromSeconds(10))];
+        SpeakerSegment[] second =
+        [
+            new(new SpeakerId(0), TimeSpan.Zero, TimeSpan.FromSeconds(5)),
+            new(new SpeakerId(1), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10)),
+        ];
+
+        await store.SaveSpeakerSegmentsAsync(id, first, CancellationToken.None);
+        await store.SaveSpeakerSegmentsAsync(id, second, CancellationToken.None);
+
+        var segs = await store.GetSpeakerSegmentsAsync(id, CancellationToken.None);
+        Assert.Equal(2, segs.Count);                    // eskisi silindi, yenisi yazıldı
+        Assert.Equal(new SpeakerId(1), segs[1].Speaker);
+    }
+
+    [Fact]
+    public async Task SaveSpeakerSegments_BilinmeyenKonusmaci_EksiBirOlarakKorunur()
+    {
+        var (store, _, _) = NewStore();
+        var id = Guid.NewGuid();
+
+        await store.SaveSpeakerSegmentsAsync(id,
+            [new SpeakerSegment(SpeakerId.Unknown, TimeSpan.Zero, TimeSpan.FromSeconds(3))],
+            CancellationToken.None);
+
+        var segs = await store.GetSpeakerSegmentsAsync(id, CancellationToken.None);
+        Assert.Equal(SpeakerId.Unknown, segs[0].Speaker);
+    }
+
+    [Fact]
+    public async Task GetSession_ChunklaraSegmentDagitmaz_OturumDuzeyindeOkunur()
+    {
+        // Segmentler OTURUM düzeyinde saklanır, chunk'a değil: örtüşmeli pencerelerde bir
+        // segment iki chunk'a birden düşerdi ve "hangi chunk'ın?" sorusunun doğru cevabı yok.
+        // Konuşmacı hizalaması zaten oturum düzeyinde çalışır (GetTranscriptSegmentsAsync).
+        var (store, _, _) = NewStore();
+        var id = Guid.NewGuid();
+        await store.SaveChunkAsync(id, ResultWithSegments(0, "merhaba",
+            new TranscriptSegment("merhaba", TimeSpan.Zero, TimeSpan.FromSeconds(2))),
+            CancellationToken.None);
+
+        var session = await store.GetSessionAsync(id, CancellationToken.None);
+        Assert.Empty(session!.Chunks[0].Segments);      // chunk'a geri yazılmaz
+
+        var segs = await store.GetTranscriptSegmentsAsync(id, CancellationToken.None);
+        Assert.Single(segs);                            // ama kaybolmaz
+        Assert.Equal("merhaba", segs[0].Text);
+    }
+
     [Fact]
     public async Task SaveChunk_GetSession_RoundTripsMetricsAndTranscript()
     {

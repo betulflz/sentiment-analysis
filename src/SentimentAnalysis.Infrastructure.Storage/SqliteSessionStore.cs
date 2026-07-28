@@ -9,8 +9,41 @@ namespace SentimentAnalysis.Infrastructure.Storage;
 /// (<see cref="EncryptedAudioStore"/>). Retention dolunca ses silinir, metrik korunur. Bağlantı-başına-işlem
 /// (SQLite dosya kilidi ile serileşir). Metadata sınırı: StartedAt = ilk kayıt (enjekte saat), Language = Other
 /// (ChunkResult taşımaz; toplantı metadata'sı 06 pipeline'da).</summary>
-public sealed class SqliteSessionStore : ISessionStore
+public sealed class SqliteSessionStore : ISessionStore, ISessionAudioSink, IDiarizationStore, ISpeakerDataReader
 {
+    /// <summary>Oturumun saklanmış (şifreli) sesini 16 kHz mono float PCM olarak okur.
+    /// Ses yoksa <c>null</c> — hata değil, "bu oturumda ses saklanmamış" demektir (10b).
+    /// <para>Yazma tarafıyla simetriktir: <c>RecordingCaptureSource.GetPcm16</c> 16-bit
+    /// little-endian üretir, burada aynı biçim geri çözülür.</para></summary>
+    public async Task<float[]?> GetSessionAudioAsync(Guid sessionId, CancellationToken ct)
+    {
+        string? path;
+        await using (var conn = new SqliteConnection(_connectionString))
+        {
+            await conn.OpenAsync(ct).ConfigureAwait(false);
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT audio_path FROM sessions WHERE id = $id";
+            cmd.Parameters.AddWithValue("$id", sessionId.ToString("N"));
+            var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+            path = result as string;
+        }
+
+        // audio_path null olabilir: hiç ses saklanmadı ya da retention temizliği sildi.
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+
+        var pcm16 = _audio.Read(path);
+        var samples = new float[pcm16.Length / 2];
+        for (int i = 0; i < samples.Length; i++)
+            samples[i] = BitConverter.ToInt16(pcm16, i * 2) / 32768f;
+        return samples;
+    }
+
+    /// <summary><see cref="ISessionAudioSink"/> uyarlaması (10b): canlı koşunun tek ihtiyacı
+    /// olan "sesi yaz" yeteneğini, mevcut <see cref="SaveAudioAsync"/> (şifreleme + retention)
+    /// üzerinden sunar. Ayrı bir yol değil, aynı yolun dar bir kapısıdır.</summary>
+    public async Task SaveSessionAudioAsync(Guid sessionId, byte[] pcm16, CancellationToken ct)
+        => await SaveAudioAsync(sessionId, pcm16, ct).ConfigureAwait(false);
+
     private readonly string _connectionString;
     private readonly int _retentionDays;
     private readonly EncryptedAudioStore _audio;
@@ -106,6 +139,101 @@ public sealed class SqliteSessionStore : ISessionStore
         cmd.Parameters.AddWithValue("$tc", f.TextConfidence);
         cmd.Parameters.AddWithValue("$ac", f.ProsodyConfidence);
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+        // Zaman damgalı transkript segmentleri (10b): konuşmacı hizalamasının hammaddesi.
+        // Chunk'ın kendi transkripti `chunks.transcript`'te kalır; bu tablo ona ek, ondan
+        // türetilebilir olmayan zaman bilgisini taşır.
+        foreach (var seg in r.Segments)
+        {
+            await using var s = conn.CreateCommand();
+            s.CommandText = """
+                INSERT INTO transcript_segments (session_id, seq, start_ms, end_ms, text)
+                VALUES ($sid,
+                    (SELECT COALESCE(MAX(seq), -1) + 1 FROM transcript_segments WHERE session_id = $sid),
+                    $st, $en, $tx)
+                """;
+            s.Parameters.AddWithValue("$sid", sessionId.ToString("N"));
+            s.Parameters.AddWithValue("$st", (long)seg.Start.TotalMilliseconds);
+            s.Parameters.AddWithValue("$en", (long)seg.End.TotalMilliseconds);
+            s.Parameters.AddWithValue("$tx", seg.Text);
+            await s.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Oturumun zaman damgalı transkript segmentleri (yazılma sırasına göre).
+    /// <para><b>Neden oturum düzeyinde?</b> Segmentler chunk'a geri dağıtılmaz: yakalama
+    /// pencereleri örtüşebildiğinden (<c>CaptureOptions.Overlap</c>) bir segment iki chunk'ın
+    /// sınırları içine birden düşebilir ve "hangi chunk'ın?" sorusunun doğru bir cevabı yoktur.
+    /// Konuşmacı hizalaması zaten tüm oturumu tek zaman ekseninde işler; bu yüzden
+    /// <c>GetSessionAsync</c> ile dönen <c>ChunkResult</c>'ların <c>Segments</c>'i BOŞTUR —
+    /// veri kaybı değil, bilinçli bir sınır (bkz. testler).</para>
+    /// ISessionStore dışı ek yetenek (10b).</summary>
+    public async Task<IReadOnlyList<TranscriptSegment>> GetTranscriptSegmentsAsync(Guid sessionId, CancellationToken ct)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT start_ms, end_ms, text FROM transcript_segments WHERE session_id = $id ORDER BY seq";
+        cmd.Parameters.AddWithValue("$id", sessionId.ToString("N"));
+
+        var list = new List<TranscriptSegment>();
+        await using var rd = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await rd.ReadAsync(ct).ConfigureAwait(false))
+            list.Add(new TranscriptSegment(
+                rd.GetString(2),
+                TimeSpan.FromMilliseconds(rd.GetInt64(0)),
+                TimeSpan.FromMilliseconds(rd.GetInt64(1))));
+        return list;
+    }
+
+    /// <summary>Arka plan diarization geçişinin sonucunu saklar. Aynı oturum için önce siler:
+    /// geçiş yeniden çalıştırılabilir olmalıdır (kullanıcı raporu tekrar açtığında çift kayıt
+    /// birikmesin). ISessionStore dışı ek yetenek (10b).</summary>
+    public async Task SaveSpeakerSegmentsAsync(Guid sessionId, IReadOnlyList<SpeakerSegment> segments, CancellationToken ct)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+
+        await using (var del = conn.CreateCommand())
+        {
+            del.CommandText = "DELETE FROM speaker_segments WHERE session_id = $id";
+            del.Parameters.AddWithValue("$id", sessionId.ToString("N"));
+            await del.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+
+        for (int i = 0; i < segments.Count; i++)
+        {
+            await using var s = conn.CreateCommand();
+            s.CommandText = """
+                INSERT INTO speaker_segments (session_id, seq, start_ms, end_ms, speaker_index)
+                VALUES ($sid, $seq, $st, $en, $spk)
+                """;
+            s.Parameters.AddWithValue("$sid", sessionId.ToString("N"));
+            s.Parameters.AddWithValue("$seq", i);
+            s.Parameters.AddWithValue("$st", (long)segments[i].Start.TotalMilliseconds);
+            s.Parameters.AddWithValue("$en", (long)segments[i].End.TotalMilliseconds);
+            s.Parameters.AddWithValue("$spk", segments[i].Speaker.Index);
+            await s.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Saklanmış konuşmacı bölgeleri (sıralı). ISessionStore dışı ek yetenek (10b).</summary>
+    public async Task<IReadOnlyList<SpeakerSegment>> GetSpeakerSegmentsAsync(Guid sessionId, CancellationToken ct)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT start_ms, end_ms, speaker_index FROM speaker_segments WHERE session_id = $id ORDER BY seq";
+        cmd.Parameters.AddWithValue("$id", sessionId.ToString("N"));
+
+        var list = new List<SpeakerSegment>();
+        await using var rd = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await rd.ReadAsync(ct).ConfigureAwait(false))
+            list.Add(new SpeakerSegment(
+                new SpeakerId(rd.GetInt32(2)),
+                TimeSpan.FromMilliseconds(rd.GetInt64(0)),
+                TimeSpan.FromMilliseconds(rd.GetInt64(1))));
+        return list;
     }
 
     /// <summary>Ham sesi şifreleyip saklar ve oturuma bağlar (retention'a tabi). ISessionStore dışı ek yetenek.</summary>

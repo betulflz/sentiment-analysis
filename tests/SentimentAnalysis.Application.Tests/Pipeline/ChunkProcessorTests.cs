@@ -60,4 +60,61 @@ public class ChunkProcessorTests
         Assert.Equal(2, fusion.Q!.TranscriptWordCount); // quality doğru kuruldu
         Assert.Equal(TimeSpan.FromSeconds(2), fusion.Q.Duration);
     }
+
+    // --- 10b: konuşmacı hizalaması mutlak zaman ister ---
+
+    [Fact]
+    public async Task ProcessAsync_SegmentZamanlariniMutlakaCevirir()
+    {
+        // Chunk 30. saniyede başlıyor; STT segmentleri CHUNK'A GÖRELİ (0 ve 2 sn).
+        var chunk = new AudioChunk(new float[16000], 16000,
+            TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(40));
+        var tx = new Transcript("Merhaba dünya", DetectedLanguage.Turkish, -0.2,
+            new[]
+            {
+                new TranscriptSegment("Merhaba", TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(2)),
+                new TranscriptSegment("dünya",   TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4)),
+            });
+        var sut = new ChunkProcessor(new FakeVad(true), new FakeStt(tx), new FakeProsody(Pr),
+            new FakeText(Te), new FakeFusion(Fr));
+
+        var r = await sut.ProcessAsync(chunk, CancellationToken.None);
+
+        Assert.NotNull(r);
+        Assert.Equal(2, r!.Segments.Count);
+        Assert.Equal(TimeSpan.FromSeconds(30), r.Segments[0].Start);   // 30 + 0
+        Assert.Equal(TimeSpan.FromSeconds(32), r.Segments[0].End);     // 30 + 2
+        Assert.Equal(TimeSpan.FromSeconds(32), r.Segments[1].Start);
+        Assert.Equal(TimeSpan.FromSeconds(34), r.Segments[1].End);
+        Assert.Equal("Merhaba", r.Segments[0].Text);                   // metin değişmez
+        Assert.Equal("Merhaba dünya", r.Transcript);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_SegmentsizTranscript_BosSegmentListesi()
+    {
+        // 10b öncesi davranış: segment üretmeyen STT'lerde kırılma olmamalı.
+        var sut = new ChunkProcessor(new FakeVad(true), new FakeStt(Tx), new FakeProsody(Pr),
+            new FakeText(Te), new FakeFusion(Fr));
+
+        var r = await sut.ProcessAsync(Chunk(), CancellationToken.None);
+
+        Assert.NotNull(r);
+        Assert.Empty(r!.Segments);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ChunkSifirdanBasliyorsa_ZamanlarDegismez()
+    {
+        var chunk = new AudioChunk(new float[16000], 16000, TimeSpan.Zero, TimeSpan.FromSeconds(10));
+        var tx = new Transcript("x", DetectedLanguage.Turkish, -0.2,
+            new[] { new TranscriptSegment("x", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3)) });
+        var sut = new ChunkProcessor(new FakeVad(true), new FakeStt(tx), new FakeProsody(Pr),
+            new FakeText(Te), new FakeFusion(Fr));
+
+        var r = await sut.ProcessAsync(chunk, CancellationToken.None);
+
+        Assert.Equal(TimeSpan.FromSeconds(1), r!.Segments[0].Start);
+        Assert.Equal(TimeSpan.FromSeconds(3), r.Segments[0].End);
+    }
 }

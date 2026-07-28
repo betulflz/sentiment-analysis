@@ -13,4 +13,9 @@ public interface IAnalysisRunner
     /// <c>DrainSkippedCount</c>). Varsayılan uygulama 0 döner — bu, arayüze SONRADAN eklenen
     /// additive bir üye olduğundan mevcut sahte (fake) implementasyonların hiçbirini bozmaz.</summary>
     int SkippedChunkCount => 0;
+
+    /// <summary>Son koşuya ait oturum kimliği — arka plan konuşmacı geçişi (10b) bunu kullanır.
+    /// Additive üye: varsayılan <c>null</c> döndüğünden mevcut sahte implementasyonlar bozulmaz
+    /// (null = "bu koşunun kalıcı bir oturumu yok", konuşmacı ayrımı denenmez).</summary>
+    Guid? LastSessionId => null;
 }

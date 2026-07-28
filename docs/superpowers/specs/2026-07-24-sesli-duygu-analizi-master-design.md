@@ -59,7 +59,7 @@ kararını değiştirmek isteyen herkes önce buraya bakmalı.
 | D6 | STT modeli | **Whisper large-v3-turbo** (GGUF q5, varsayılan); large-v3 "derin geçiş" için opsiyonel | Yüksek doğruluk/hız dengesi; stajyerin `base`'i yetersizdi |
 | D7 | Duygu temsili | **Boyutsal çekirdek (valence-arousal)** + ayrık haritalama | SER'in etiket kısıtını aşar; Spotify-tarzı; iki modeli tamamlayıcı yapar |
 | D8 | Ayrık duygu çarkı | **8 duygu circumplex**: Coşkulu, Mutlu, Sakin, Sıkılmış, Üzgün, Gergin, Kızgın, Nötr | VA uzayını dengeli kaplar; toplantı için anlamlı; ne az ne fazla |
-| D9 | Konuşmacı ayrımı | V1 toplam-akış (oda), mimari konuşmacı-hazır (`SpeakerId` alanı) | Diarization ağır ve çoğu Python; borcu minimize et |
+| D9 | Konuşmacı ayrımı | ~~V1 toplam-akış (oda), mimari konuşmacı-hazır~~ → **REVİZE 2026-07-27:** konuşmacı ayrımı kapsama alındı (alt-proje 10) | Gerekçe değişti: sherpa-onnx C#'tan diarization sunuyor, "çoğu Python" artık geçerli değil. **Dürüst not:** eski satırdaki "mimari konuşmacı-hazır (`SpeakerId` alanı)" iddiası kodda hiç karşılığı olmayan bir varsayımdı — `SpeakerId` yazılmamıştı. Bkz. spec 10 |
 | D10 | Füzyon | Eksen-başına güvenilirlik-ağırlıklı: arousal←ses, valence←metin; kaliteyle dinamik | Arousal sesten güvenilir, valence metinden güvenilir; naif ortalamadan sağlam |
 | D11 | Uyumsuzluk | Prozodi-baskın + iki sinyali de göster + congruence skoru | Affect leakage: ses gerçeği söyler; ama dürüstçe her iki sinyali sun |
 | D12 | macOS capture | **ScreenCaptureKit** + küçük native Swift yardımcı süreç | Sıfır-kurulum, Teams sürecine kapsanabilir, profesyonel |
@@ -294,6 +294,7 @@ Her alt-proje kendi spec taşlağına sahiptir (`subprojects/`).
 | 7 | Depolama + gizlilik | 1 |
 | 8 | Avalonia UI | 1, 6, 7 |
 | 9 | Değerlendirme (eval) | 2, 3, 4 (paralel) |
+| 10 | Konuşmacı ayrımı (diarization) — 10a spike / 10b etiketli transkript / 10c konuşmacı-başına duygu | 1–8 (D9 revizyonu; bkz. `subprojects/10-konusmaci-ayrimi.md`) |
 
 **Önerilen ilk dikey dilim:** 1 → 2 → 3 → 4 (saf-C# çekirdek + füzyon önce; paketleme
 acısı yok, test yoğun). Ses yakalama (5) ve UI (8) sonraki dalga.
@@ -312,6 +313,7 @@ acısı yok, test yoğun). Ses yakalama (5) ve UI (8) sonraki dalga.
 | ~~large-v3-turbo 8GB'da çalışmaz~~ **(KAPANDI 2026-07-25)** | STT fizibilite | Ölçüldü: whisper.cpp/Metal ile turbo q5 M1 8GB'da ~779 MB tepe RAM, RTF 0.17. "Çalışmıyor" deneyimi PyTorch yoluydu. Bkz. spec 03 fizibilite ölçümü |
 | large-v3-turbo Türkçe doğruluğu yetersiz kalırsa | STT kalite | eval ile ölç; Türkçe fine-tuned aday veya large-v3 (q5 deep-pass 8GB'da fizibil: 1.91 GB tepe) |
 | Şifreleme anahtarı yönetimi (lokal) | Gizlilik | OS keychain/DPAPI ile anahtar; düz metin anahtar yok |
+| **(2026-07-27)** Diarization tek/uzak-alan mikrofonda zayıf kalabilir; sherpa-onnx native'i mevcut ONNX Runtime + Whisper.net ile çakışabilir | Alt-proje 10 fizibilitesi | Kod öncesi 10a spike'ı gerçek ortamda ÖLÇER; çakışma varsa saf-ONNX/sidecar escape-hatch (D3/D4). Bkz. spec 10 |
 
 ---
 

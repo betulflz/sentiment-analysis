@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using SentimentAnalysis.Application.Abstractions;
+using SentimentAnalysis.Application.Diarization;
 using SentimentAnalysis.Core;
 using SentimentAnalysis.Desktop;
 using Xunit;
@@ -44,5 +45,99 @@ public class ReportViewModelTests
         Assert.Contains(vm.TimeShare, s => s.Emotion == "Mutlu" && Math.Abs(s.Share - 0.6) < 1e-9);
         Assert.Single(vm.PeakMoments);
         Assert.Equal("merhaba", vm.PeakMoments[0].Transcript);
+    }
+
+    // --- 10b: konuşmacı etiketli transkript ---
+
+    private static TranscriptSegment T(string text, double s, double e) =>
+        new(text, TimeSpan.FromSeconds(s), TimeSpan.FromSeconds(e));
+
+    private static SpeakerSegment S(int spk, double s, double e) =>
+        new(new SpeakerId(spk), TimeSpan.FromSeconds(s), TimeSpan.FromSeconds(e));
+
+    [Fact]
+    public void ApplySpeakers_ArdisikAyniKonusmaci_TekSatirdaBirlesir()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+
+        vm.ApplySpeakers(
+            [T("Merhaba", 0, 2), T("nasılsın", 2, 4), T("iyiyim", 4, 6)],
+            [S(0, 0, 4), S(1, 4, 6)],
+            minOverlapRatio: 0.5);
+
+        Assert.Equal(2, vm.SpeakerLines.Count);
+        Assert.Equal("Konuşmacı A", vm.SpeakerLines[0].Label);
+        Assert.Equal("Merhaba nasılsın", vm.SpeakerLines[0].Text);
+        Assert.Equal("Konuşmacı B", vm.SpeakerLines[1].Label);
+        Assert.Equal("iyiyim", vm.SpeakerLines[1].Text);
+        Assert.True(vm.HasSpeakers);
+    }
+
+    [Fact]
+    public void ApplySpeakers_KonusmaciBolgesiYok_BilinmeyenEtiketi()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+
+        vm.ApplySpeakers([T("mırıltı", 0, 2)], [], minOverlapRatio: 0.5);
+
+        Assert.Single(vm.SpeakerLines);
+        Assert.Equal("Bilinmeyen", vm.SpeakerLines[0].Label);
+    }
+
+    [Fact]
+    public void SetDiarizationOutcome_Basarisiz_DurustcuBildirir_SatirUretmez()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+
+        vm.SetDiarizationOutcome(DiarizationOutcome.Failed);
+
+        Assert.Contains("başarısız", vm.DiarizationStatus, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(vm.SpeakerLines);          // uydurma etiket gösterme
+        Assert.False(vm.HasSpeakers);
+    }
+
+    [Fact]
+    public void SetDiarizationOutcome_SesYok_NedeniniSoyler()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+
+        vm.SetDiarizationOutcome(DiarizationOutcome.NoAudio);
+
+        Assert.False(string.IsNullOrWhiteSpace(vm.DiarizationStatus));
+        Assert.Contains("ses", vm.DiarizationStatus, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(vm.SpeakerLines);
+    }
+
+    [Fact]
+    public void SetDiarizationOutcome_Tamamlandi_AmaKonusmaciYok_AyirtEdilemediDer()
+    {
+        // "Çalıştı ama ayırt edemedi" ile "hiç çalışmadı" farklı şeylerdir (bkz. DiarizationJob).
+        var vm = new ReportViewModel(new FakeAggregator());
+
+        vm.ApplySpeakers([T("tek kişi", 0, 5)], [], minOverlapRatio: 0.5);
+        vm.SetDiarizationOutcome(DiarizationOutcome.Completed);
+
+        Assert.NotEqual(vm.DiarizationStatus, string.Empty);
+        Assert.DoesNotContain("başarısız", vm.DiarizationStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DiarizationStatus_Baslangicta_Bos_SeritGorunmez()
+    {
+        // Özellik kapalıyken kullanıcıya hiçbir şey gösterilmemeli (davranış değişmez).
+        var vm = new ReportViewModel(new FakeAggregator());
+
+        Assert.Equal(string.Empty, vm.DiarizationStatus);
+        Assert.False(vm.HasSpeakers);
+    }
+
+    [Fact]
+    public void SetDiarizationOutcome_Calisiyor_HesaplaniyorDer()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+
+        vm.SetDiarizationRunning();
+
+        Assert.Contains("hesaplanıyor", vm.DiarizationStatus, StringComparison.OrdinalIgnoreCase);
     }
 }

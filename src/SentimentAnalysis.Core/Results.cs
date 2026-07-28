@@ -26,12 +26,20 @@ public sealed record FusedResult(
     public bool Flagged => Incongruent || Pattern != IncongruencePattern.Yok;
 }
 
-/// <summary>Bir chunk'ın tam sonucu (zaman çizelgesi öğesi).</summary>
+/// <summary>Bir chunk'ın tam sonucu (zaman çizelgesi öğesi).
+/// <para><paramref name="Segments"/> MUTLAK zamanlıdır (chunk başlangıcı eklenmiş) — STT
+/// motoru segmentleri chunk'a göreli üretir, çevirmeyi <c>ChunkProcessor</c> yapar. Konuşmacı
+/// hizalaması (alt-proje 10b) bu mutlak zamanlara dayanır; göreli zaman sızarsa hizalama
+/// sessizce yanlış konuşmacıya metin atar. Additive: varsayılan boş liste.</para></summary>
 public sealed record ChunkResult(
     TimeSpan TimeStart,
     TimeSpan TimeEnd,
     FusedResult Fused,
-    string Transcript);
+    string Transcript,
+    IReadOnlyList<TranscriptSegment>? Segments = null)
+{
+    public IReadOnlyList<TranscriptSegment> Segments { get; init; } = Segments ?? Array.Empty<TranscriptSegment>();
+}
 
 /// <summary>Bir toplantı/oturum: chunk listesi + üst-veriler. Toplantı-düzeyi
 /// agregasyon (baskın duygu, trend, oynaklık, tepe anlar) Füzyon motorunda

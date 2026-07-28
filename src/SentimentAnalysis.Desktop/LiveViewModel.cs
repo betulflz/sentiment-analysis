@@ -24,6 +24,10 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     /// <summary>Koşu bittiğinde raised olur; sonucu (Rapor'a devretmek gibi) dinleyicilere iletir.</summary>
     public event Action<MeetingSummary>? Completed;
 
+    /// <summary>Son tamamlanan koşunun oturum kimliği (10b). <c>null</c> = koşu kalıcı bir
+    /// oturum üretmedi → konuşmacı ayrımı denenmez.</summary>
+    public Guid? LastSessionId { get; private set; }
+
     [ObservableProperty] private string _currentEmotion = "—";
     [ObservableProperty] private double _currentValence;
     [ObservableProperty] private double _currentArousal;
@@ -135,6 +139,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
             SkippedChunkCount = 0; // önceki koşudan kalan sayı sarkmasın
             var summary = await _runner.RunAsync(this, ct).ConfigureAwait(true);
             SkippedChunkCount = _runner.SkippedChunkCount;
+            LastSessionId = _runner.LastSessionId;   // 10b: arka plan konuşmacı geçişinin hedefi
             Completed?.Invoke(summary);
         }
         catch (OperationCanceledException) { /* Stop ile iptal — normal */ }

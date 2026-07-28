@@ -54,6 +54,51 @@ public class TranscriptAssemblerTests
         Assert.Equal(DetectedLanguage.Turkish, t.Language);
     }
 
+    // --- 10b: konuşmacı hizalaması için zaman damgaları korunmalı ---
+
+    [Fact]
+    public void Assemble_ZamanDamgalariniKorur_MetniDegistirmeden()
+    {
+        var t = TranscriptAssembler.Assemble(
+            new[] { Seg("Merhaba", 0, 2, 0.9), Seg("nasılsın", 2, 4, 0.8) }, forced: null);
+
+        Assert.Equal("Merhaba nasılsın", t.Text);          // mevcut davranış korunur
+        Assert.Equal(2, t.Segments.Count);
+        Assert.Equal("Merhaba", t.Segments[0].Text);
+        Assert.Equal(TimeSpan.FromSeconds(0), t.Segments[0].Start);
+        Assert.Equal(TimeSpan.FromSeconds(2), t.Segments[0].End);
+        Assert.Equal("nasılsın", t.Segments[1].Text);
+        Assert.Equal(TimeSpan.FromSeconds(4), t.Segments[1].End);
+    }
+
+    [Fact]
+    public void Assemble_BosSegmentListesi_BosSegmentDondurur()
+    {
+        var t = TranscriptAssembler.Assemble(Array.Empty<SttSegment>(), forced: null);
+
+        Assert.Empty(t.Segments);
+        Assert.Equal(string.Empty, t.Text);
+    }
+
+    [Fact]
+    public void Assemble_BosMetinliSegmentiAtar_MetindeDeSegmenttteDe()
+    {
+        var t = TranscriptAssembler.Assemble(
+            new[] { Seg("  ", 0, 1, 0.5), Seg("evet", 1, 2, 0.9) }, forced: null);
+
+        Assert.Equal("evet", t.Text);
+        Assert.Single(t.Segments);                          // boş metinli segment taşınmaz
+        Assert.Equal("evet", t.Segments[0].Text);
+    }
+
+    [Fact]
+    public void Assemble_SegmentMetniKirpilir_BastakiSondakiBosluklarGitmeli()
+    {
+        var t = TranscriptAssembler.Assemble(new[] { Seg("  merhaba  ", 0, 1, 0.9) }, forced: null);
+
+        Assert.Equal("merhaba", t.Segments[0].Text);
+    }
+
     [Theory]
     [InlineData("tr", DetectedLanguage.Turkish)]
     [InlineData("EN", DetectedLanguage.English)]

@@ -15,12 +15,17 @@ namespace SentimentAnalysis.Application.Tests.Pipeline;
 public class EmotionPipelineTests
 {
     // ---- fakes ----
-    private sealed class FakeSource(int count, Func<int, AudioChunk> make) : IAudioCaptureSource
+    /// <summary><paramref name="produced"/> verilirse, son chunk üretildikten sonra
+    /// işaretlenir. Overflow testi bunu bekler: "producer bitti" varsayımını zamanlamaya
+    /// bırakmak testi flaky yapar (yavaş makinede producer hâlâ üretirken tüketici
+    /// serbest kalır ve sınır aşılmış görünür).</summary>
+    private sealed class FakeSource(int count, Func<int, AudioChunk> make, TaskCompletionSource? produced = null) : IAudioCaptureSource
     {
         public async IAsyncEnumerable<AudioChunk> CaptureAsync(
             CaptureOptions options, [EnumeratorCancellation] CancellationToken ct)
         {
             for (int i = 0; i < count; i++) { ct.ThrowIfCancellationRequested(); yield return make(i); await Task.Yield(); }
+            produced?.SetResult();
         }
     }
 
@@ -157,13 +162,15 @@ public class EmotionPipelineTests
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var proc = new GatedProcessor(ResultFor, gate);       // consumer tüm chunk'larda bloklu
         var pipeline = new EmotionPipeline(proc, store, agg, Cfg(2)); // küçük kapasite
+        var produced = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var run = pipeline.RunAsync(new FakeSource(20, ChunkAt), Opts, Guid.NewGuid(), DateTimeOffset.UnixEpoch,
+        var run = pipeline.RunAsync(new FakeSource(20, ChunkAt, produced), Opts, Guid.NewGuid(), DateTimeOffset.UnixEpoch,
             DetectedLanguage.Turkish, null, CancellationToken.None);
 
         // Producer 20 chunk yazarken consumer bloklu → en eskiler düşer.
-        Assert.True(SpinWait.SpinUntil(() => pipeline.DroppedCount > 0, TimeSpan.FromSeconds(5)),
-            "overflow'da drop beklenir");
+        // Tüketiciyi ancak producer'ın 20'sini de yazdığı KESİNLEŞTİKTEN sonra serbest
+        // bırakıyoruz; yoksa kalan chunk'lar engelsiz akar ve sınır testi anlamsızlaşır.
+        await produced.Task.WaitAsync(TimeSpan.FromSeconds(30));
         gate.SetResult();
         await run;
 

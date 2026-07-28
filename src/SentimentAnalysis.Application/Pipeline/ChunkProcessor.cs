@@ -36,6 +36,13 @@ public sealed class ChunkProcessor : IChunkProcessor
         var quality = QualitySignalsBuilder.Build(chunk, transcript);
         var fused = _fusion.Fuse(text, prosody, quality);
 
-        return new ChunkResult(chunk.Start, chunk.End, fused, transcript.Text);
+        // STT segmentleri chunk'a GÖRELİ gelir; diarization (10b) mutlak zaman üretir.
+        // Kaydırmayı burada, kaynağa en yakın yerde yaparız — böylece Core'dan dışarı çıkan
+        // her ChunkResult tek bir zaman ekseninde konuşur.
+        var absolute = new List<TranscriptSegment>(transcript.Segments.Count);
+        foreach (var s in transcript.Segments)
+            absolute.Add(new TranscriptSegment(s.Text, chunk.Start + s.Start, chunk.Start + s.End));
+
+        return new ChunkResult(chunk.Start, chunk.End, fused, transcript.Text, absolute);
     }
 }

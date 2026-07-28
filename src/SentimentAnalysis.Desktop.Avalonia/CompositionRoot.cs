@@ -2,10 +2,12 @@ using Microsoft.Extensions.DependencyInjection;
 using SentimentAnalysis.Application;
 using SentimentAnalysis.Application.Abstractions;
 using SentimentAnalysis.Application.Configuration;
+using SentimentAnalysis.Application.Diarization;
 using SentimentAnalysis.Application.Fusion;
 using SentimentAnalysis.Application.Pipeline;
 using SentimentAnalysis.Desktop;
 using SentimentAnalysis.Infrastructure.Audio;
+using SentimentAnalysis.Infrastructure.Diarization;
 using SentimentAnalysis.Infrastructure.Emotion;
 using SentimentAnalysis.Infrastructure.Storage;
 using SentimentAnalysis.Infrastructure.Stt;
@@ -49,6 +51,13 @@ public static class CompositionRoot
         });
         services.AddSingleton<IAnalysisRunner, PipelineAnalysisRunner>();
 
+        // Konuşmacı ayrımı (10b): motor + arka plan geçişi + UI'nin dokunduğu servis.
+        // Model YÜKLENMEZ; ilk gerçek çağrıya kadar maliyeti sıfırdır (özellik kapalıysa hiç).
+        services.AddSingleton<IDiarizationState, DiarizationState>();
+        services.AddSherpaDiarization();
+        services.AddSingleton<DiarizationJob>();
+        services.AddSingleton<ISpeakerAnalysis, SpeakerAnalysisService>();
+
         services.AddSingleton<LiveViewModel>(sp => new LiveViewModel(
             sp.GetRequiredService<IAnalysisRunner>(),
             sp.GetRequiredService<IAudioFilePicker>(),
@@ -61,9 +70,21 @@ public static class CompositionRoot
         {
             var config = sp.GetRequiredService<AppConfig>();
             // Kalıcı ayar kaydı 08b'de; bu tur onSave no-op (yalnızca in-memory config nesnesini günceller).
-            return new SettingsViewModel(config, updated => System.Diagnostics.Debug.WriteLine($"Ayarlar kaydedildi (bu tur no-op): {updated}"));
+            return new SettingsViewModel(config,
+                updated => System.Diagnostics.Debug.WriteLine($"Ayarlar kaydedildi (bu tur no-op): {updated}"),
+                sp.GetRequiredService<IDiarizationState>());
         });
-        services.AddSingleton<MainViewModel>();
+        // MainViewModel'e UI-thread dağıtıcısı EXPLICIT geçilir: Desktop projesi Avalonia'sız
+        // (headless test edilebilir) kalmalı, ama arka plan konuşmacı geçişi bittiğinde rapor
+        // güncellemesi UI thread'inde olmalı (08e Fix 4'ün aynı dersi).
+        services.AddSingleton<MainViewModel>(sp => new MainViewModel(
+            sp.GetRequiredService<LiveViewModel>(),
+            sp.GetRequiredService<ReportViewModel>(),
+            sp.GetRequiredService<HistoryViewModel>(),
+            sp.GetRequiredService<SettingsViewModel>(),
+            sp.GetRequiredService<ISpeakerAnalysis>(),
+            sp.GetRequiredService<AppConfig>(),
+            action => global::Avalonia.Threading.Dispatcher.UIThread.Post(action)));
 
         return services.BuildServiceProvider();
     }

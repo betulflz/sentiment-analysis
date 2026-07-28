@@ -4,6 +4,7 @@ using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Application.Pipeline;
 using SentimentAnalysis.Core;
 using SentimentAnalysis.Desktop;
+using SentimentAnalysis.Infrastructure.Audio;
 
 namespace SentimentAnalysis.Desktop.Avalonia;
 
@@ -20,15 +21,29 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
     private readonly Func<IAudioCaptureSource?> _sourceFactory;
     private readonly AppConfig _config;
     private readonly ICaptureModeState? _captureMode;
+    private readonly ISessionAudioSink? _audioSink;
+    private readonly IDiarizationState? _diarization;
 
     public PipelineAnalysisRunner(EmotionPipeline pipeline, Func<IAudioCaptureSource?> sourceFactory,
-                                  AppConfig config, ICaptureModeState? captureMode = null)
+                                  AppConfig config, ICaptureModeState? captureMode = null,
+                                  ISessionAudioSink? audioSink = null,
+                                  IDiarizationState? diarization = null)
     {
+        _diarization = diarization;
         _pipeline = pipeline;
         _sourceFactory = sourceFactory;
         _config = config;
         _captureMode = captureMode;
+        _audioSink = audioSink;   // additive (10b): yoksa ses saklanmaz, davranış eskisi gibi
     }
+
+    /// <summary>Son koşuda ses biriktirme üst sınırına takılındı mı (bkz.
+    /// <see cref="RecordingCaptureSource.LimitReached"/>). Kullanıcıya bildirilmelidir:
+    /// konuşmacı ayrımı yalnızca biriken kısmı kapsar.</summary>
+    public bool AudioLimitReached { get; private set; }
+
+    /// <summary>Son koşunun oturum kimliği — arka plan konuşmacı geçişi (10b) bunu kullanır.</summary>
+    public Guid? LastSessionId { get; private set; }
 
     /// <summary>Son koşuda atlanan chunk sayısı (kanal taşması + drenaj sınırı/bütçesi) —
     /// bkz. <see cref="IAnalysisRunner.SkippedChunkCount"/> ve 08e düzeltme turu Fix 2.</summary>
@@ -66,8 +81,37 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
             // post ederek çözüyoruz — SentimentAnalysis.Desktop (LiveViewModel'in yaşadığı proje)
             // Avalonia'sız, headless test edilebilir kalmalı; oraya Dispatcher eklenmez.
             var uiThreadProgress = new UiThreadProgress<ChunkResult>(progress);
-            return await _pipeline.RunAsync(source, options, sessionId, startedAt, language, uiThreadProgress, ct)
+
+            // 10b: konuşmacı ayrımı açıksa oturum sesini biriktir (arka plan geçişinin girdisi).
+            // Kapalıyken kaynak SARILMAZ — kullanıcı istemediği hâlde sesini belleğe/diske
+            // almayız (master §12.5, gizlilik varsayılan).
+            RecordingCaptureSource? recording = null;
+            IAudioCaptureSource pipelineSource = source;
+            if (_diarization?.Enabled == true && _audioSink is not null)
+            {
+                recording = new RecordingCaptureSource(
+                    source, maxSamples: _config.Diarization.MaxRecordedMinutes * 60 * 16000);
+                pipelineSource = recording;
+            }
+
+            LastSessionId = sessionId;
+            AudioLimitReached = false;
+
+            var summary = await _pipeline.RunAsync(pipelineSource, options, sessionId, startedAt, language, uiThreadProgress, ct)
                 .ConfigureAwait(false);
+
+            // Ses, özet ÜRETİLDİKTEN SONRA saklanır: rapor bu yüzden gecikmez (spec 10 S2).
+            // İptal edilmiş ct ile yazamayız (anında iptal olurdu) — "Durdur" normal bir bitiştir.
+            if (recording is not null)
+            {
+                AudioLimitReached = recording.LimitReached;
+                var pcm = recording.GetPcm16();
+                if (pcm.Length > 0)
+                    await _audioSink!.SaveSessionAudioAsync(sessionId, pcm, CancellationToken.None)
+                        .ConfigureAwait(false);
+            }
+
+            return summary;
         }
         finally
         {
