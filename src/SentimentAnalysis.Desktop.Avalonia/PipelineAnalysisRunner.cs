@@ -23,13 +23,11 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
     private readonly ICaptureModeState? _captureMode;
     private readonly ISessionAudioSink? _audioSink;
     private readonly IDiarizationState? _diarization;
-    private readonly ILiveRecordingSession? _recordingSession;
 
     public PipelineAnalysisRunner(EmotionPipeline pipeline, Func<IAudioCaptureSource?> sourceFactory,
                                   AppConfig config, ICaptureModeState? captureMode = null,
                                   ISessionAudioSink? audioSink = null,
-                                  IDiarizationState? diarization = null,
-                                  ILiveRecordingSession? recordingSession = null)
+                                  IDiarizationState? diarization = null)
     {
         _diarization = diarization;
         _pipeline = pipeline;
@@ -37,7 +35,6 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
         _config = config;
         _captureMode = captureMode;
         _audioSink = audioSink;   // additive (10b): yoksa ses saklanmaz, davranış eskisi gibi
-        _recordingSession = recordingSession;
     }
 
     /// <summary>Son koşuda ses biriktirme üst sınırına takılındı mı (bkz.
@@ -54,132 +51,74 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
 
     public async Task<MeetingSummary> RunAsync(IProgress<ChunkResult> progress, CancellationToken ct)
     {
-        if (_captureMode?.Mode == CaptureMode.Mikrofon)
+        var source = _sourceFactory()
+            ?? throw new InvalidOperationException(
+                "Analiz için bir ses kaynağı seçilmedi. Dosya modunda bir ses dosyası seçin " +
+                "veya mikrofon modunu açın.");
+
+        try
         {
-            var session = _recordingSession ?? new LiveRecordingSession(new MicrophoneCaptureSource());
-            
-            // 1. Start live recording
-            await session.StartAsync(ct).ConfigureAwait(false);
-
-            // 2. Wait until recording is cancelled via Stop button (ct is cancelled)
-            try
-            {
-                var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                using var reg = ct.Register(() => tcs.TrySetResult());
-                await tcs.Task.ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) { }
-
-            // 3. Stop recording and finalize WAV file
-            var recordResult = await session.StopAsync(CancellationToken.None).ConfigureAwait(false);
-
-            // 4. Validate WAV file (duration and peak/silence)
-            // Minimum sample count check (16000 * 1 = 16000 samples -> 32000 bytes)
-            if (recordResult.SampleCount < 16000)
-            {
-                if (File.Exists(recordResult.WavPath))
-                {
-                    try { File.Delete(recordResult.WavPath); } catch { }
-                }
-                throw new InvalidOperationException("Analiz için en az 1 saniyelik ses kaydı gereklidir.");
-            }
-
-            if (recordResult.PeakAmplitude <= 0.001)
-            {
-                if (File.Exists(recordResult.WavPath))
-                {
-                    try { File.Delete(recordResult.WavPath); } catch { }
-                }
-                throw new InvalidOperationException("Kayıtta analiz edilebilecek bir ses algılanamadı.");
-            }
-
-            // 5. Run the existing file analysis pipeline on this WAV file
-            var fileSource = new FileCaptureSource(recordResult.WavPath);
-            var fileOptions = new CaptureOptions(ChunkLength: TimeSpan.FromSeconds(30), Overlap: TimeSpan.FromSeconds(5));
+            // Canlı mikrofonda kısa parça = hızlı geri bildirim; dosyada uzun parça = daha iyi bağlam.
+            var options = _captureMode?.Mode == CaptureMode.Mikrofon
+                ? new CaptureOptions(ChunkLength: TimeSpan.FromSeconds(10), Overlap: TimeSpan.FromSeconds(2))
+                : new CaptureOptions(ChunkLength: TimeSpan.FromSeconds(30), Overlap: TimeSpan.FromSeconds(5));
             var language = ParseLanguage(_config.Stt.Language);
             var sessionId = Guid.NewGuid();
             var startedAt = DateTimeOffset.Now;
 
+            // NOT: EmotionPipeline.RunAsync artık "Durdur" (ct iptali) sonrasında
+            // OperationCanceledException FIRLATMAZ — motor bunu kendi içinde normal bir bitiş
+            // sayıp kanalda kalan chunk'ları drene edip bir MeetingSummary ile döner (görev 5
+            // düzeltme turu 2). Bu yüzden burada artık ayrı bir catch(OperationCanceledException)
+            // + BuildSummary çağrısına gerek yok — önceki turda eklenen o yol artık ölü koddu,
+            // kaldırıldı (BuildSummary'nin kendisi EmotionPipeline içinde hâlâ kullanılıyor).
+            //
+            // NOT (08e düzeltme turu Fix 4): EmotionPipeline'ın her adımı ConfigureAwait(false)
+            // kullanır, bu yüzden progress.Report(...) çağrısı UI thread'inde DEĞİL, thread-pool
+            // iş parçacığında çalışır. progress, LiveViewModel'in KENDİSİ (IProgress<ChunkResult>
+            // implemente eder) — Report doğrudan bound bir ObservableCollection'a Add yapar. Bunu
+            // Avalonia zaten burada (Desktop.Avalonia) referanslandığından burada, Dispatcher.UIThread'e
+            // post ederek çözüyoruz — SentimentAnalysis.Desktop (LiveViewModel'in yaşadığı proje)
+            // Avalonia'sız, headless test edilebilir kalmalı; oraya Dispatcher eklenmez.
             var uiThreadProgress = new UiThreadProgress<ChunkResult>(progress);
+
+            // 10b: konuşmacı ayrımı açıksa oturum sesini biriktir (arka plan geçişinin girdisi).
+            // Kapalıyken kaynak SARILMAZ — kullanıcı istemediği hâlde sesini belleğe/diske
+            // almayız (master §12.5, gizlilik varsayılan).
+            RecordingCaptureSource? recording = null;
+            IAudioCaptureSource pipelineSource = source;
+            if (_diarization?.Enabled == true && _audioSink is not null)
+            {
+                recording = new RecordingCaptureSource(
+                    source, maxSamples: _config.Diarization.MaxRecordedMinutes * 60 * 16000);
+                pipelineSource = recording;
+            }
 
             LastSessionId = sessionId;
             AudioLimitReached = false;
 
-            try
-            {
-                // Run using CancellationToken.None so that the analysis itself is NOT cancelled by the Stop click
-                var summary = await _pipeline.RunAsync(fileSource, fileOptions, sessionId, startedAt, language, uiThreadProgress, CancellationToken.None)
-                    .ConfigureAwait(false);
+            var summary = await _pipeline.RunAsync(pipelineSource, options, sessionId, startedAt, language, uiThreadProgress, ct)
+                .ConfigureAwait(false);
 
-                // Additive audio sink logging if enabled
-                if (_diarization?.Enabled == true && _audioSink is not null)
-                {
-                    var pcm = File.ReadAllBytes(recordResult.WavPath);
-                    if (pcm.Length > 44)
-                    {
-                        var rawPcm = new byte[pcm.Length - 44];
-                        Array.Copy(pcm, 44, rawPcm, 0, rawPcm.Length);
-                        await _audioSink.SaveSessionAudioAsync(sessionId, rawPcm, CancellationToken.None).ConfigureAwait(false);
-                    }
-                }
-                
-                return summary;
-            }
-            finally
+            // Ses, özet ÜRETİLDİKTEN SONRA saklanır: rapor bu yüzden gecikmez (spec 10 S2).
+            // İptal edilmiş ct ile yazamayız (anında iptal olurdu) — "Durdur" normal bir bitiştir.
+            if (recording is not null)
             {
-                if (File.Exists(recordResult.WavPath))
-                {
-                    try { File.Delete(recordResult.WavPath); } catch { }
-                }
+                AudioLimitReached = recording.LimitReached;
+                var pcm = recording.GetPcm16();
+                if (pcm.Length > 0)
+                    await _audioSink!.SaveSessionAudioAsync(sessionId, pcm, CancellationToken.None)
+                        .ConfigureAwait(false);
             }
+
+            return summary;
         }
-        else
+        finally
         {
-            var source = _sourceFactory()
-                ?? throw new InvalidOperationException(
-                    "Analiz için bir ses kaynağı seçilmedi. Dosya modunda bir ses dosyası seçin " +
-                    "veya mikrofon modunu açın.");
-
-            try
-            {
-                // Canlı mikrofonda kısa parça = hızlı geri bildirim; dosyada uzun parça = daha iyi bağlam.
-                var options = new CaptureOptions(ChunkLength: TimeSpan.FromSeconds(30), Overlap: TimeSpan.FromSeconds(5));
-                var language = ParseLanguage(_config.Stt.Language);
-                var sessionId = Guid.NewGuid();
-                var startedAt = DateTimeOffset.Now;
-
-                var uiThreadProgress = new UiThreadProgress<ChunkResult>(progress);
-
-                RecordingCaptureSource? recording = null;
-                IAudioCaptureSource pipelineSource = source;
-                if (_diarization?.Enabled == true && _audioSink is not null)
-                {
-                    recording = new RecordingCaptureSource(
-                        source, maxSamples: _config.Diarization.MaxRecordedMinutes * 60 * 16000);
-                    pipelineSource = recording;
-                }
-
-                LastSessionId = sessionId;
-                AudioLimitReached = false;
-
-                var summary = await _pipeline.RunAsync(pipelineSource, options, sessionId, startedAt, language, uiThreadProgress, ct)
-                    .ConfigureAwait(false);
-
-                if (recording is not null)
-                {
-                    AudioLimitReached = recording.LimitReached;
-                    var pcm = recording.GetPcm16();
-                    if (pcm.Length > 0)
-                        await _audioSink!.SaveSessionAudioAsync(sessionId, pcm, CancellationToken.None)
-                            .ConfigureAwait(false);
-                }
-
-                return summary;
-            }
-            finally
-            {
-                (source as IDisposable)?.Dispose();
-            }
+            // EmotionPipeline kaynağı elden çıkarmaz (motor sınırının dışında kalır); mikrofon
+            // kaynağı yerel AudioQueue + pinlenmiş delegate tuttuğundan burada serbest bırakılmalı,
+            // aksi halde her başlat/durdur döngüsünde kaynak sızar.
+            (source as IDisposable)?.Dispose();
         }
     }
 

@@ -44,7 +44,11 @@ public static class CompositionRoot
         services.AddSingleton<IAudioSourceFactory, AfconvertAudioSourceFactory>();
         services.AddSingleton<IAudioFilePicker>(_ => new AvaloniaAudioFilePicker(() => MainWindowAccessor.Current));
         services.AddSingleton<ICaptureModeState, CaptureModeState>();
-        services.AddSingleton<ILiveRecordingSession>(sp => new LiveRecordingSession(new MicrophoneCaptureSource()));
+        // NOT: LiveRecordingSession / WavRecorder BİLEREK bağlanmıyor. Bunlar "önce WAV'a kaydet,
+        // Durdur'dan sonra dosyayı analiz et" yaklaşımına aittir; bu proje master §D2 gereği
+        // chunked near-real-time akış kullanır (konuşurken analiz). Sınıflar depoda kalıyor
+        // (CrossPlatformAudioConverter onları kullanıyor ve testlidirler), ama canlı analiz
+        // yolu MicrophoneCaptureSource → EmotionPipeline akışıdır.
         services.AddSingleton<Func<IAudioCaptureSource?>>(sp =>
         {
             var selected = sp.GetRequiredService<ISelectedAudio>();
