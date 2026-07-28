@@ -227,8 +227,14 @@ Backpressure'lı, **bounded** producer/consumer hattı (`System.Threading.Channe
   en yüksek getirili tek optimizasyon (hem CPU hem kalite).
 - **Model yaşam döngüsü:** açılışta bir kez yükle, sıcak tut (singleton).
 - **Quantization:** Whisper GGUF q5; duygu modelleri INT8 ONNX.
-- **Donanım:** macOS → whisper.cpp **Metal** + ONNX **CoreML EP**; Windows →
-  CUDA/DirectML.
+- **Donanım:** macOS → whisper.cpp **Metal**; Windows → CUDA/DirectML.
+  ~~ONNX CoreML EP~~ **(ÇÜRÜTÜLDÜ 2026-07-28 — ölçümle):** CoreML bu projenin duygu modelleri
+  için zararlı. Metin duygu (XLM-R, 1,1 GB): **coreml 36,6–44,4 sn vs cpu 2,5 sn** (~15x yavaş);
+  prozodi: 2,5–3,1 sn vs 1,4 sn. Çıktılar birebir aynı, yani doğruluk kazancı yok — yalnızca
+  model derleme maliyeti, ve bu maliyet süreçler arası önbelleklenmiyor (her açılışta yeniden).
+  Bir koşuda `I/O error` ile de patladı. Bu, canlı mikrofonda ilk chunk'ı 40+ sn'ye çıkarıp
+  "Durdur" drenaj bütçesini aşırdığı için ürünü **kullanılamaz** hâle getiriyordu.
+  Varsayılan artık `cpu` (bkz. `ExecutionProviderDefaultTests`).
 - **Bellek disiplini:** PCM tamponları `ArrayPool<float>`; GC baskısı düşer.
 - **Degradasyon:** hat geri kalırsa turbo'da kal + chunk birleştir; "derin
   large-v3 geçişi" toplantı bittikten sonra boşta yapılır.

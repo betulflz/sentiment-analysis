@@ -43,7 +43,16 @@ public sealed record SttConfig(
 public sealed record EmotionConfig(
     string ProsodyModelFile = "prosody-msp-dim.onnx", // audeering wav2vec2 boyutsal (model.onnx yeniden adlandırılır)
     string? ModelDirectory = null,                    // null → FileEmotionModelProvider varsayılanı
-    string ExecutionProvider = "coreml",              // "coreml" (macOS, CPU fallback) | "cpu"
+    // ÖLÇÜLDÜ (2026-07-28, M1 Air 8GB): CoreML bu iki model için ZARARLI.
+    //   metin duygu (XLM-R, 1.1 GB): coreml 36,6-44,4 sn  vs  cpu 2,5 sn   (~15x YAVAŞ)
+    //   prozodi (msp-dim):           coreml 2,5-3,1 sn    vs  cpu 1,4 sn
+    // Çıktılar birebir aynı (va=0.80/0.70) — CoreML doğruluk kazancı sağlamıyor, yalnızca
+    // model derleme maliyeti getiriyor ve bu maliyet SÜREÇLER ARASI ÖNBELLEKLENMİYOR
+    // (her açılışta yeniden ödeniyor). Bir koşuda CoreML derlemesi "I/O error" ile de patladı.
+    // Sonuç: canlı mikrofonda ilk chunk 40+ sn sürüyor, "Durdur" sonrası 30 sn'lik drenaj
+    // bütçesini aşıyor ve kullanıcı SIFIR sonuç görüyordu. Bkz. master §8 (CoreML varsayımı
+    // bu ölçümle çürütüldü) ve §12.4 (kararlar ölçülür).
+    string ExecutionProvider = "cpu",                 // "cpu" (ölçülmüş varsayılan) | "coreml"
     string TextModelFile = "text-emotion-xlmr.onnx",  // 04b — XLM-R 11-duygu ONNX
     string TokenizerFile = "sentencepiece.bpe.model"); // 04b — XLM-R-base SentencePiece (~5 MB)
 
