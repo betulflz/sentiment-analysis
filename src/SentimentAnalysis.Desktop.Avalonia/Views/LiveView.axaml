@@ -67,6 +67,10 @@
                 </Border>
             </StackPanel>
 
+            <TextBlock Text="{Binding DiarizationHint}" FontSize="11" TextWrapping="Wrap"
+                       IsVisible="{Binding DiarizationHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       Foreground="{DynamicResource SystemBaseMediumColor}" FontStyle="Italic" />
+
             <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
                 <ContentControl Grid.Column="0" Content="{Binding TextAnalysis}"
                                 ContentTemplate="{StaticResource SourcePanel}"

@@ -96,6 +96,10 @@ public interface ISpeakerDataReader
 {
     Task<IReadOnlyList<TranscriptSegment>> GetTranscriptSegmentsAsync(Guid sessionId, CancellationToken ct);
     Task<IReadOnlyList<SpeakerSegment>> GetSpeakerSegmentsAsync(Guid sessionId, CancellationToken ct);
+
+    /// <summary>Konuşmacı-başına duygu özeti (10c) için chunk-düzeyi füzyon sonuçları
+    /// (zaman aralığı + metin/ses/nihai VA). Oturum yoksa boş liste döner.</summary>
+    Task<IReadOnlyList<ChunkResult>> GetChunkResultsAsync(Guid sessionId, CancellationToken ct);
 }
 
 /// <summary>Tüm kaydı görüp konuşmacı bölgeleri üretir (Alt-proje 10b; sherpa-onnx offline

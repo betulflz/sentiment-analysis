@@ -7,10 +7,11 @@ namespace SentimentAnalysis.Infrastructure.Diarization;
 /// <summary>sherpa-onnx offline speaker diarization sarmalayıcısı (alt-proje 10b). Native tipler
 /// bu sınıfın içinde kalır (mimari kural: motor sınırı). Model ilk kullanımda yüklenir ve sıcak
 /// tutulur.
-/// <para><b>Ölçülmüş ayarlar (10a spike, tahmin değil):</b> <c>Threshold = 0.8</c> — sherpa'nın
-/// tipik varsayılanı 0,5, iki kişilik gerçek bir kayıtta ALTI konuşmacı buluyordu; 0,8'de tam 2
-/// bulundu ve konuşmanın %92,9'u doğru konuşmacıya atandı. <c>NumClusters = 0</c>: gerçek
-/// toplantıda kaç kişi olduğunu bilmeyiz, küme sayısı eşikle bulunur.</para>
+/// <para><b>Ölçülmüş ayarlar:</b> embedding modeli <c>wespeaker_en_voxceleb_resnet34_LM</c> ile
+/// <c>Threshold = 0.5</c> — iki kişilik gerçek bir kayıtta 0,3–0,5 aralığı tam 2 küme buluyor,
+/// 0,6 ve üstü tek kümeye çöküyor. (Önceki 3dspeaker/zh-cn embedding modeliyle ölçülen 0,8
+/// bu embedding uzayına taşınmaz — eşik, kullanılan embedding modeline özgüdür.)
+/// <c>NumClusters = 0</c>: gerçek toplantıda kaç kişi olduğunu bilmeyiz, küme sayısı eşikle bulunur.</para>
 /// <para><b>Hız:</b> 10a'da RTF ≈ 0,44 ölçüldü (120 sn ses → ~54 sn işlem). Bu yüzden canlı
 /// hatta değil, oturum sonrası arka plan geçişinde çalışır.</para></summary>
 public sealed class SherpaDiarizer : IDiarizer, IDisposable

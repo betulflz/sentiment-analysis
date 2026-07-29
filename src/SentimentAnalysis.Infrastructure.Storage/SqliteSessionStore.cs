@@ -236,6 +236,16 @@ public sealed class SqliteSessionStore : ISessionStore, ISessionAudioSink, IDiar
         return list;
     }
 
+    /// <summary>Konuşmacı-başına duygu özeti (10c) için chunk-düzeyi füzyon sonuçları.
+    /// Oturum yoksa boş liste döner — <see cref="GetSessionAsync"/> gibi <c>null</c> değil,
+    /// çağıran (aggregator) zaten boş girdiyle güvenle çalışır. ISessionStore dışı ek yetenek.</summary>
+    public async Task<IReadOnlyList<ChunkResult>> GetChunkResultsAsync(Guid sessionId, CancellationToken ct)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+        return await ReadChunksAsync(conn, sessionId, ct).ConfigureAwait(false);
+    }
+
     /// <summary>Ham sesi şifreleyip saklar ve oturuma bağlar (retention'a tabi). ISessionStore dışı ek yetenek.</summary>
     public async Task<string> SaveAudioAsync(Guid sessionId, byte[] rawAudio, CancellationToken ct)
     {

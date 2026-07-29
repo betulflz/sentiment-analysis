@@ -2,8 +2,25 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:desktop="clr-namespace:SentimentAnalysis.Desktop;assembly=SentimentAnalysis.Desktop"
              mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="500"
              x:Class="SentimentAnalysis.Desktop.Avalonia.Views.ReportView">
+
+    <UserControl.Resources>
+        <DataTemplate x:Key="SourcePanel" DataType="desktop:SourceAnalysisVm">
+            <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1"
+                    CornerRadius="6" Padding="12" Margin="2" MinWidth="160">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13"
+                               Foreground="{DynamicResource SystemBaseMediumColor}" />
+                    <TextBlock Text="{Binding Emotion}" FontSize="18" FontWeight="Bold" />
+                    <TextBlock FontSize="11" IsVisible="{Binding HasData}"
+                               Foreground="{DynamicResource SystemBaseMediumColor}"
+                               Text="{Binding AxisSummary}" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
 
     <Grid RowDefinitions="Auto,*">
         <TextBlock Grid.Row="0" Text="Rapor henüz yok. Bir oturum tamamlandığında veya Geçmiş'ten seçildiğinde burada görünür."
@@ -55,6 +72,28 @@
                                         <TextBlock Grid.Column="1" Text="{Binding Label}" FontWeight="SemiBold" />
                                         <TextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap" />
                                     </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Konuşmacı-başına duygu ortalaması (10c): her konuşmacı için metin/ses/nihai. -->
+                        <ItemsControl ItemsSource="{Binding SpeakerEmotions}" IsVisible="{Binding HasSpeakers}" Margin="0,12,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="desktop:SpeakerEmotionVm">
+                                    <StackPanel Spacing="4" Margin="0,0,0,12">
+                                        <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="14" />
+                                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
+                                            <ContentControl Grid.Column="0" Content="{Binding TextAnalysis}"
+                                                            ContentTemplate="{StaticResource SourcePanel}"
+                                                            HorizontalContentAlignment="Stretch" />
+                                            <ContentControl Grid.Column="1" Content="{Binding AudioAnalysis}"
+                                                            ContentTemplate="{StaticResource SourcePanel}"
+                                                            HorizontalContentAlignment="Stretch" />
+                                            <ContentControl Grid.Column="2" Content="{Binding CombinedAnalysis}"
+                                                            ContentTemplate="{StaticResource SourcePanel}"
+                                                            HorizontalContentAlignment="Stretch" />
+                                        </Grid>
+                                    </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

@@ -72,7 +72,8 @@ public static class CompositionRoot
             sp.GetRequiredService<IAudioFilePicker>(),
             sp.GetRequiredService<ISelectedAudio>(),
             sp.GetRequiredService<AppConfig>(),
-            sp.GetRequiredService<ICaptureModeState>()));
+            sp.GetRequiredService<ICaptureModeState>(),
+            sp.GetRequiredService<IDiarizationState>()));
         services.AddSingleton<ReportViewModel>();
         services.AddSingleton<HistoryViewModel>();
         services.AddSingleton<SettingsViewModel>(sp =>

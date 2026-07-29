@@ -26,14 +26,14 @@ public class EmotionFusionTests
     }
 
     [Fact]
-    public void Valence_LeansOnText_WhenCongruent()
+    public void Valence_LeansOnAudio_WhenCongruent()
     {
-        // metin olumlu (0.8), ses hafif olumlu (0.2), uyumlu → sonuç metne yakın (>0.5)
+        // metin olumlu (0.8), ses hafif olumlu (0.2), uyumlu → sonuç tamamen tona yaslanır (~0.2)
         var text = new TextEmotion(new ValenceArousal(0.8, 0.5), ModelConfidence: 0.8);
         var prosody = new ProsodyEmotion(new ValenceArousal(0.2, 0.5), ModelConfidence: 0.8);
         var r = Fusion.Fuse(text, prosody, Clean());
         Assert.False(r.Incongruent);
-        Assert.True(r.Combined.Valence > 0.5, $"valence metne yaslanmalı, gelen {r.Combined.Valence}");
+        Assert.Equal(0.2, r.Combined.Valence, precision: 10);
     }
 
     [Fact]
@@ -51,18 +51,17 @@ public class EmotionFusionTests
     }
 
     [Fact]
-    public void Incongruent_ZeroAudioReliability_ValenceFallsBackToText()
+    public void Incongruent_ZeroAudioReliability_ValenceFallsBackToNeutral()
     {
-        // Uyumsuz ama ses çöp (rAudio≈0), metin güvenilir: valence güvenilmez prozodiye
-        // değil metne yaslanmalı (master §5). Metin +0.6, ses −0.6.
+        // Ses tamamen tona dayalı olduğundan, ses çöpse (rAudio≈0) güvenilir bir ton sinyali
+        // yok demektir; metne kaymak yerine nötre düşer (master §5 — tamamen ton tabanlı tasarım).
         var q = new QualitySignals(AudioSnr: 0, SpeechRatio: 0, Duration: TimeSpan.Zero,
             TranscriptWordCount: 20, TranscriptAvgLogProb: 0.0); // rAudio=0, rText=1
         var text = new TextEmotion(new ValenceArousal(0.6, 0.5), ModelConfidence: 0.8);
         var prosody = new ProsodyEmotion(new ValenceArousal(-0.6, 0.6), ModelConfidence: 0.8);
         var r = Fusion.Fuse(text, prosody, q);
         Assert.True(r.Incongruent);
-        Assert.True(r.Combined.Valence > 0,
-            $"ses güvenilmezken valence metne (pozitif) yaslanmalı, gelen {r.Combined.Valence}");
+        Assert.Equal(0.0, r.Combined.Valence, precision: 10);
     }
 
     [Fact]

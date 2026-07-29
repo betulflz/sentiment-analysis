@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using SentimentAnalysis.Application.Abstractions;
 using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Core;
 
@@ -16,6 +17,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     private readonly ISelectedAudio? _selected;
     private readonly double _temperature;
     private readonly ICaptureModeState? _captureMode;
+    private readonly IDiarizationState? _diarization;
     private CancellationTokenSource? _cts;
     private Task? _run;
 
@@ -65,6 +67,12 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     /// çöker, sessiz kalır) — sıfır değilse kısa bir not (alarm değil, dipnot niteliğinde).</summary>
     [ObservableProperty] private string _skippedChunksNotice = string.Empty;
 
+    /// <summary>"Başlat"a basıldığı ANDA konuşmacı ayrımının bu oturum için açık olup olmadığını
+    /// dürüstçe söyler (10c) — sessizce mi çalışıyor bilinmezliği kalmasın. Toggle daha SONRA
+    /// açılırsa bu oturumu etkilemez (ses o ana kadar zaten kaydedilmemiştir); bu yüzden anlık
+    /// okuma "Kaydet"e bastıktan sonra yeni bir koşu başlatılmasını gerektirir.</summary>
+    [ObservableProperty] private string _diarizationHint = string.Empty;
+
     partial void OnIsFinishingChanged(bool value) =>
         CaptureStatusText = value ? "Analiz tamamlanıyor…" : "Dinleniyor";
 
@@ -75,13 +83,14 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
     public LiveViewModel(IAnalysisRunner runner, IAudioFilePicker? picker = null,
                          ISelectedAudio? selected = null, AppConfig? config = null,
-                         ICaptureModeState? captureMode = null)
+                         ICaptureModeState? captureMode = null, IDiarizationState? diarization = null)
     {
         _runner = runner;
         _picker = picker;
         _selected = selected;
         _temperature = (config ?? AppConfig.Default).Fusion.DistributionTemperature;
         _captureMode = captureMode;
+        _diarization = diarization;
     }
 
     partial void OnUseMicrophoneChanged(bool value)
@@ -123,6 +132,9 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     {
         if (IsCapturing) return;
         IsCapturing = true;
+        DiarizationHint = _diarization?.Enabled == true
+            ? "Konuşmacı ayrımı bu oturum için AÇIK — ses geçici olarak saklanacak, konuşmacılar Durdur sonrası Rapor'da görünür."
+            : "Konuşmacı ayrımı KAPALI (Ayarlar'dan açıp Kaydet'e basarak bir sonraki oturumda etkinleştirebilirsiniz).";
         StartCommand.NotifyCanExecuteChanged();
         _cts = new CancellationTokenSource();
         _run = RunAsync(_cts.Token);
