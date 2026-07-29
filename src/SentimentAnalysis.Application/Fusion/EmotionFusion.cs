@@ -49,9 +49,12 @@ public sealed class EmotionFusion : IEmotionFusion
                 fallback: 0.0);
 
         var combined = ValenceArousal.Clamp(valenceFinal, arousalFinal);
-        var (primary, secondary) = EmotionWheel.MapWithSecondary(combined);
+        var (primary, secondary) = EmotionWheel.MapWithSecondary(combined, _cfg.NeutralRadius);
 
-        bool agreement = EmotionWheel.Map(text.Va) == EmotionWheel.Map(prosody.Va);
+        // Uyuşma da AYNI kuralla ölçülür: iki kanalı klasik kuralla, sonucu yarıçap kuralıyla
+        // etiketlemek "iki model aynı diyor ama sonuç başka" gibi sessiz tutarsızlıklar üretir.
+        bool agreement = EmotionWheel.Map(text.Va, _cfg.NeutralRadius)
+                      == EmotionWheel.Map(prosody.Va, _cfg.NeutralRadius);
         var confidence = ResolveConfidence(text, prosody, agreement, incongruent, vt, va, rAudio * rText);
 
         return new FusedResult(
@@ -66,7 +69,9 @@ public sealed class EmotionFusion : IEmotionFusion
             TextVa: text.Va,
             ProsodyVa: prosody.Va,
             TextConfidence: text.ModelConfidence,
-            ProsodyConfidence: prosody.ModelConfidence);
+            ProsodyConfidence: prosody.ModelConfidence,
+            AudioReliability: rAudio,
+            TextReliability: rText);
     }
 
     /// <summary>Ağırlıklı ortalama; toplam ağırlık ~0 ise fallback döner (sıfıra bölmeyi önler).</summary>

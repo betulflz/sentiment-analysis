@@ -84,4 +84,49 @@ public class EmotionDistributionTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => EmotionWheel.Distribute(new ValenceArousal(0.0, 0.5), t));
     }
+
+    // --- Nötr yarıçapı ---
+    // Dağılım UI'ın ana sütunlarını besler; yarıçap kuralı buraya bağlanmazsa etiket
+    // iyileştirmesi ekranda GÖRÜNMEZ ve "Map başka der, sütun başka gösterir" çelişkisi doğar.
+
+    [Theory]
+    [InlineData(0.3, 0.5)]
+    [InlineData(0.0, 0.95)]
+    [InlineData(0.05, 0.52)]
+    [InlineData(-0.25, 0.45)]
+    public void Distribute_YaricapliEnYuksekPay_MapIleAynidir(double v, double a)
+    {
+        var va = new ValenceArousal(v, a);
+        Assert.Equal(
+            EmotionWheel.Map(va, neutralRadius: 0.2),
+            EmotionWheel.Distribute(va, T, neutralRadius: 0.2)[0].Emotion);
+    }
+
+    [Fact]
+    public void Distribute_YaricapDisinda_NotrPayiSifirdir()
+    {
+        var shares = EmotionWheel.Distribute(new ValenceArousal(0.3, 0.5), T, neutralRadius: 0.2);
+        var notr = shares.Single(s => s.Emotion == Emotion.Notr);
+        Assert.Equal(0.0, notr.Share, precision: 9);
+        Assert.Equal(1.0, shares.Sum(s => s.Share), precision: 9);
+    }
+
+    [Fact]
+    public void Distribute_YaricapIcinde_NotrBaskindir()
+    {
+        var shares = EmotionWheel.Distribute(new ValenceArousal(0.05, 0.52), T, neutralRadius: 0.2);
+        Assert.Equal(Emotion.Notr, shares[0].Emotion);
+        Assert.Equal(1.0, shares.Sum(s => s.Share), precision: 9);
+    }
+
+    [Fact]
+    public void Distribute_YaricapVerilmezse_KlasikDavranisKorunur()
+    {
+        var va = new ValenceArousal(0.2, 0.55);
+        var classic = EmotionWheel.Distribute(va, T);
+        var explicitNull = EmotionWheel.Distribute(va, T, neutralRadius: null);
+        Assert.Equal(
+            classic.Select(s => (s.Emotion, Math.Round(s.Share, 9))),
+            explicitNull.Select(s => (s.Emotion, Math.Round(s.Share, 9))));
+    }
 }

@@ -65,4 +65,70 @@ public class ProsodyMathTests
         Assert.InRange(p.Va.Valence, -1.0, 1.0);
         Assert.InRange(p.ModelConfidence, 0.0, 1.0);
     }
+
+    // --- Kazanç (gain) ---
+    // audeering msp-dim ham valence'ı pratikte 0,35–0,65 bandında üretir; ×2−1 sonrası
+    // −0,3…+0,3 çıkar ve bu aralık EmotionWheel'in nötr havzasının TAMAMEN içindedir.
+    // Kazanç, nötr merkez (0, 0.5) etrafında doğrusal genişletmedir — model çıktısının
+    // İŞARETİNİ değil, YAYILIMINI düzeltir.
+
+    [Fact]
+    public void Map_ValenceGain_NotrMerkezEtrafindaGenisletir()
+    {
+        // ham 0,65 → kazançsız +0,30; kazanç 2,0 ile +0,60
+        var p = ProsodyOutputMapper.Map(
+            new float[] { 0.5f, 0.5f, 0.65f }, valenceGain: 2.0, arousalGain: 1.0);
+        Assert.Equal(0.6, p.Va.Valence, precision: 5);
+    }
+
+    [Fact]
+    public void Map_ArousalGain_YarimEtrafindaGenisletir()
+    {
+        // ham 0,65 → kazançsız 0,65; kazanç 2,0 ile 0,5 + 2·0,15 = 0,80
+        var p = ProsodyOutputMapper.Map(
+            new float[] { 0.65f, 0.5f, 0.5f }, valenceGain: 1.0, arousalGain: 2.0);
+        Assert.Equal(0.8, p.Va.Arousal, precision: 5);
+    }
+
+    [Fact]
+    public void Map_Kazanc_NotrGirdiyiNotrBirakir()
+    {
+        // Kazanç merkez etrafında simetriktir: tam nötr girdi kazançla da nötr kalmalı,
+        // yoksa sessiz bir yanlılık (bias) enjekte etmiş oluruz.
+        var p = ProsodyOutputMapper.Map(
+            new float[] { 0.5f, 0.5f, 0.5f }, valenceGain: 2.5, arousalGain: 2.5);
+        Assert.Equal(0.0, p.Va.Valence, precision: 5);
+        Assert.Equal(0.5, p.Va.Arousal, precision: 5);
+    }
+
+    [Fact]
+    public void Map_Kazanc_AlanSinirlarinaKirpar()
+    {
+        var p = ProsodyOutputMapper.Map(
+            new float[] { 0.9f, 0.5f, 0.9f }, valenceGain: 3.0, arousalGain: 3.0);
+        Assert.Equal(1.0, p.Va.Valence, precision: 5);
+        Assert.Equal(1.0, p.Va.Arousal, precision: 5);
+    }
+
+    [Fact]
+    public void Map_KazancVarsayilani_BireBirdir()
+    {
+        // Kazanç POLİTİKASI EmotionConfig'te yaşar; saf matematik varsayılanı kimliktir.
+        var withDefault = ProsodyOutputMapper.Map(new float[] { 0.7f, 0.5f, 0.65f });
+        var explicitUnity = ProsodyOutputMapper.Map(
+            new float[] { 0.7f, 0.5f, 0.65f }, valenceGain: 1.0, arousalGain: 1.0);
+        Assert.Equal(explicitUnity.Va.Valence, withDefault.Va.Valence, precision: 9);
+        Assert.Equal(explicitUnity.Va.Arousal, withDefault.Va.Arousal, precision: 9);
+    }
+
+    [Fact]
+    public void Map_Kazanc_GuveniDeArtirir()
+    {
+        // Güven merkeze uzaklıktan türediği için genişletilmiş VA daha yüksek güven vermeli.
+        var flat = ProsodyOutputMapper.Map(new float[] { 0.6f, 0.5f, 0.6f });
+        var expanded = ProsodyOutputMapper.Map(
+            new float[] { 0.6f, 0.5f, 0.6f }, valenceGain: 2.0, arousalGain: 2.0);
+        Assert.True(expanded.ModelConfidence > flat.ModelConfidence,
+            $"genişletilmiş güven ({expanded.ModelConfidence}) > düz ({flat.ModelConfidence}) olmalı");
+    }
 }

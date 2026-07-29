@@ -31,4 +31,16 @@ public class ExecutionProviderDefaultTests
         // EmotionConfig'in kendi varsayılanı ile AppConfig.Default sessizce ayrışmasın.
         Assert.Equal(new EmotionConfig().ExecutionProvider, AppConfig.Default.Emotion.ExecutionProvider);
     }
+
+    /// <summary>Prozodi kazancı varsayılanı 1,0 OLAMAZ: kazançsız msp-dim çıktısı nötr
+    /// havzasının içinde kalır ve ses kanalı etiketi hiçbir zaman değiştiremez. Bu değer
+    /// KALİBRE EDİLMEMİŞ bir başlangıçtır (eval-09) ama kimlik olmadığı testle sabittir.</summary>
+    [Fact]
+    public void ProzodiKazanci_VarsayilanKimlikDegil()
+    {
+        Assert.True(AppConfig.Default.Emotion.ProsodyValenceGain > 1.0,
+            "kazançsız prozodi nötr havzasından çıkamaz");
+        Assert.True(AppConfig.Default.Emotion.ProsodyArousalGain > 1.0,
+            "kazançsız prozodi nötr havzasından çıkamaz");
+    }
 }

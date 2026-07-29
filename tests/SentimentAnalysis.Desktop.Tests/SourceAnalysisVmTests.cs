@@ -75,4 +75,25 @@ public class SourceAnalysisVmTests
 
         Assert.Equal(string.Empty, vm.AxisSummary);
     }
+
+    [Fact]
+    public void Ctor_NotrYaricapi_SutunEtiketiniDegistirir()
+    {
+        // Kullanıcının gördüğü sütun başlığı yarıçap kuralına UYMALI; yoksa zaman çizelgesi
+        // "Sakin" derken sütun "Nötr" der ve iyileştirme ekranda görünmez.
+        var va = new ValenceArousal(0.3, 0.5);
+
+        Assert.Equal("Nötr", new SourceAnalysisVm("Nihai Karar", va, T).Emotion);
+        Assert.Equal("Sakin", new SourceAnalysisVm("Nihai Karar", va, T, neutralRadius: 0.2).Emotion);
+    }
+
+    [Fact]
+    public void Ctor_NotrYaricapi_PaylarHalaYuzdeYuz()
+    {
+        var vm = new SourceAnalysisVm("Nihai Karar", new ValenceArousal(0.3, 0.5), T, neutralRadius: 0.2);
+
+        Assert.Equal(8, vm.Shares.Count);
+        Assert.Equal(100, vm.Shares.Sum(s => s.Percent));
+        Assert.Equal(0, vm.Shares.Single(s => s.Emotion == "Nötr").Percent);
+    }
 }

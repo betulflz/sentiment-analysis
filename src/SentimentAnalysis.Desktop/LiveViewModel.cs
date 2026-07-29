@@ -15,6 +15,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     private readonly IAudioFilePicker? _picker;
     private readonly ISelectedAudio? _selected;
     private readonly double _temperature;
+    private readonly double? _neutralRadius;
     private readonly ICaptureModeState? _captureMode;
     private CancellationTokenSource? _cts;
     private Task? _run;
@@ -80,7 +81,9 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         _runner = runner;
         _picker = picker;
         _selected = selected;
-        _temperature = (config ?? AppConfig.Default).Fusion.DistributionTemperature;
+        var fusion = (config ?? AppConfig.Default).Fusion;
+        _temperature = fusion.DistributionTemperature;
+        _neutralRadius = fusion.NeutralRadius;
         _captureMode = captureMode;
     }
 
@@ -102,9 +105,9 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
         // Üç kaynak ayrı ayrı — söz-ton uyumsuzluğu böylece ekranda görünür hale gelir.
         CurrentConfidence = EmotionLocalizer.Confidence(r.Fused.Confidence);
-        TextAnalysis  = new SourceAnalysisVm("Metin Analizi", r.Fused.TextVa, _temperature);
-        AudioAnalysis = new SourceAnalysisVm("Ses Analizi", r.Fused.ProsodyVa, _temperature);
-        FinalAnalysis = new SourceAnalysisVm("Nihai Karar", r.Fused.Combined, _temperature);
+        TextAnalysis  = new SourceAnalysisVm("Metin Analizi", r.Fused.TextVa, _temperature, _neutralRadius);
+        AudioAnalysis = new SourceAnalysisVm("Ses Analizi", r.Fused.ProsodyVa, _temperature, _neutralRadius);
+        FinalAnalysis = new SourceAnalysisVm("Nihai Karar", r.Fused.Combined, _temperature, _neutralRadius);
     }
 
     [RelayCommand]

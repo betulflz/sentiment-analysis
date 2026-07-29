@@ -123,9 +123,19 @@
                                            VerticalAlignment="Center" />
                                 <TextBlock Grid.Column="1" Text="{Binding Emotion}" FontWeight="SemiBold"
                                            VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="2" Text="{Binding AxisSummary}" FontSize="11"
-                                           Foreground="{DynamicResource SystemBaseMediumColor}"
-                                           VerticalAlignment="Center" TextWrapping="Wrap" />
+                                <!-- Eksen özeti + girdi kalitesi: "neden bu sonuç?" sorusunun ilk durağı. -->
+                                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Text="{Binding AxisSummary}" FontSize="11"
+                                               Foreground="{DynamicResource SystemBaseMediumColor}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding QualityNote}" FontSize="10"
+                                               Foreground="{DynamicResource SystemBaseMediumColor}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Text="Girdi zayıf — bu satır temkinli okunmalı."
+                                               IsVisible="{Binding WeakInput}" FontSize="10"
+                                               Foreground="{DynamicResource SystemAccentColor}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
                                 <Border Grid.Column="3" IsVisible="{Binding Flagged}"
                                         Background="{DynamicResource SystemAccentColor}" CornerRadius="4"
                                         Padding="6,2" VerticalAlignment="Center">

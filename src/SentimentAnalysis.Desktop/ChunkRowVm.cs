@@ -17,6 +17,16 @@ public sealed class ChunkRowVm
     /// ile aynı üretici metotları kullanır — iki yüzey asla ayrışmasın diye.</summary>
     public string AxisSummary { get; }
 
+    /// <summary>Girdi kalitesinin iki kanal için yüzde özeti. Model güveni DEĞİLDİR: "ses/metin
+    /// ne kadar analiz edilebilirdi" sorusunun cevabıdır. Sonuç beklenmedik biçimde nötr
+    /// çıktığında bakılacak ilk yer burasıdır (düşük değer → kayıt kısa, sessiz veya gürültülü).</summary>
+    public string QualityNote { get; }
+
+    /// <summary>Girdi kanallarından biri zayıf (&lt; %30) — UI bu satıra temkinli yaklaşmalı.</summary>
+    public bool WeakInput { get; }
+
+    private const double WeakInputThreshold = 0.3;
+
     public ChunkRowVm(ChunkResult r)
     {
         Time = r.TimeStart;
@@ -27,5 +37,12 @@ public sealed class ChunkRowVm
         Badge = r.Fused.Flagged ? EmotionLocalizer.Pattern(r.Fused.Pattern) : string.Empty;
         Transcript = r.Transcript;
         AxisSummary = $"{EmotionLocalizer.ValenceText(Valence)} · {EmotionLocalizer.ArousalText(Arousal)}";
+        QualityNote =
+            $"Ses girdisi %{Percent(r.Fused.AudioReliability)} · Metin girdisi %{Percent(r.Fused.TextReliability)}";
+        WeakInput = r.Fused.AudioReliability < WeakInputThreshold
+                 || r.Fused.TextReliability < WeakInputThreshold;
     }
+
+    private static int Percent(double reliability) =>
+        (int)Math.Round(Math.Clamp(reliability, 0.0, 1.0) * 100, MidpointRounding.AwayFromZero);
 }

@@ -44,6 +44,32 @@ gergin ve düz çıkıyorsa, sistem bunu ortalamayla örtmez — işaretler ve s
 Nihai valence-arousal noktası 8 duygudan oluşan bir circumplex çarkına haritalanır:
 **Coşkulu · Mutlu · Sakin · Sıkılmış · Üzgün · Gergin · Kızgın · Nötr**
 
+### Nötr neden bir merkez değil, bir disk?
+
+Klasik "en yakın merkez" kuralında Nötr çarkın tam ortasında, diğer yedi duygu ise
+kenarında oturur. Bu geometri Nötr'e orantısız büyük bir havza verir: arousal 0,5'te
+valence −0,33…+0,40 arasındaki *her* nokta Nötr'dür ve valence sıfıra yakınken ses ne
+kadar heyecanlı olursa olsun etiket Nötr'den çıkamaz. Sonuç: aynı cümleyi mutlu ya da
+üzgün tonla söylemek çıktıyı değiştirmez.
+
+Bunun iki ayrı sebebi vardır ve ikisi de düzeltilmiştir:
+
+- **Prozodi kazancı** (`EmotionConfig.ProsodyValenceGain/ProsodyArousalGain`) — msp-dim'in
+  ham çıktısı nötr merkez çevresinde sıkışıktır (valence pratikte −0,3…+0,3). Kazanç,
+  merkez etrafında simetrik doğrusal genişletmedir: işareti değil yayılımı düzeltir,
+  nötr girdiyi nötr bırakır.
+- **Nötr yarıçapı** (`FusionConfig.NeutralRadius`) — Nötr artık uzaklık yarışına girmez.
+  Nokta merkez çevresindeki küçük diskin içindeyse Nötr, dışındaysa gerçek yedi duygunun
+  en yakınıdır. Aynı kural etiket, ikincil duygu ve yüzde dağılımının tamamında geçerlidir.
+
+Her iki değer de **kalibre edilmemiş başlangıçlardır** (Alt-Proje 09 Türkçe etiketli
+veriyle ölçecek); `null`/`1.0` verilerek klasik davranışa dönülebilir.
+
+Ayrıca her chunk, girdi kalitesini iki kanal için ayrı ayrı raporlar
+(`FusedResult.AudioReliability` / `TextReliability`) ve bunlar zaman çizelgesinde
+görünür — beklenmedik bir sonucun sebebi çoğu zaman ağırlıklarda değil girdi
+kalitesindedir (kısa, sessiz veya gürültülü kayıt).
+
 ## Mimari
 
 Bağımlılıklar içe doğru akar. `Core` hiçbir şeye bağlı değildir; her altyapı dilimi

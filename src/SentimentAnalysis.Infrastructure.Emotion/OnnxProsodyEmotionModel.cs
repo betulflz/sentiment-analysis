@@ -45,7 +45,7 @@ public sealed class OnnxProsodyEmotionModel : IProsodyEmotionModel, IDisposable
             var inputs = new[] { NamedOnnxValue.CreateFromTensor(InputName, input) };
             using var results = session.Run(inputs);
             var logits = results.First(r => r.Name == OutputName).AsTensor<float>().ToArray();
-            return ProsodyOutputMapper.Map(logits);
+            return ProsodyOutputMapper.Map(logits, _cfg.ProsodyValenceGain, _cfg.ProsodyArousalGain);
         }
         finally
         {

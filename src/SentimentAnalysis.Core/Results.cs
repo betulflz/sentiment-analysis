@@ -16,7 +16,13 @@ public sealed record FusedResult(
     ValenceArousal TextVa,
     ValenceArousal ProsodyVa,
     double TextConfidence,
-    double ProsodyConfidence)
+    double ProsodyConfidence,
+    // Girdi KALİTESİNDEN türeyen 0..1 güvenilirlikler (füzyon ağırlıklarını modüle edenler).
+    // Model güveninden (TextConfidence/ProsodyConfidence) farklıdır: onlar "model ne kadar
+    // emin", bunlar "girdi ne kadar analiz edilebilir". "Neden Nötr çıktı?" sorusunun cevabı
+    // çoğu zaman burada olduğu için sonuçla birlikte dışarı taşınır. Additive: varsayılan 1,0.
+    double AudioReliability = 1.0,
+    double TextReliability = 1.0)
 {
     /// <summary>Bu chunk "işaretli/şüpheli" mi? Söz-ton uyumsuzluğu eşiği aşıldıysa
     /// (<see cref="Incongruent"/>) VEYA adı konmuş bir örüntü varsa (<see cref="Pattern"/> ≠ Yok,

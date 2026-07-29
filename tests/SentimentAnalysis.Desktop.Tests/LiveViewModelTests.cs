@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Core;
 using SentimentAnalysis.Desktop;
 using Xunit;
@@ -245,6 +246,27 @@ public class LiveViewModelTests
         Assert.Equal(0.80, vm.TextAnalysis.Valence, precision: 6);
         Assert.Equal(-0.50, vm.AudioAnalysis.Valence, precision: 6);
     }
+
+    [Fact]
+    public void Report_NotrYaricapi_ConfigtenPanellereUlasir()
+    {
+        // Yarıçap config'te durup panellere ulaşmazsa kullanıcı hâlâ "Nötr" görür.
+        var va = new ValenceArousal(0.30, 0.50);
+        var chunk = SplitChunk(text: va, prosody: va, combined: va);
+
+        var withRadius = new LiveViewModel(new FakeRunner(), config: WithNeutralRadius(0.2));
+        var classic = new LiveViewModel(new FakeRunner(), config: WithNeutralRadius(null));
+        withRadius.Report(chunk);
+        classic.Report(chunk);
+
+        Assert.Equal("Nötr", classic.FinalAnalysis.Emotion);
+        Assert.Equal("Sakin", withRadius.FinalAnalysis.Emotion);
+        Assert.Equal("Sakin", withRadius.TextAnalysis.Emotion);
+        Assert.Equal("Sakin", withRadius.AudioAnalysis.Emotion);
+    }
+
+    private static AppConfig WithNeutralRadius(double? radius) =>
+        AppConfig.Default with { Fusion = AppConfig.Default.Fusion with { NeutralRadius = radius } };
 
     [Fact]
     public void Report_PanelsExposeFullDistribution()

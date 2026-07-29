@@ -21,7 +21,13 @@ public sealed record FusionConfig(
     double IronyAudioValenceCeiling = 0.25,    // ironi için ses net olumlu değil
     int PeakMomentCount = 3,                   // toplantı özetinde tepe an sayısı
     double MinReliabilityForHighConfidence = 0.5, // rAudio*rText bunun altındaysa "Yuksek" güven verilmez
-    double DistributionTemperature = 0.35);    // 8-duygu yakınlık payı keskinliği — KALİBRE EDİLMEMİŞ (eval-09)
+    double DistributionTemperature = 0.35,     // 8-duygu yakınlık payı keskinliği — KALİBRE EDİLMEMİŞ (eval-09)
+    // Nötr yarıçapı: Nötr artık "en yakın merkez" yarışına girmez; merkez (0, 0.5) çevresindeki
+    // bu yarıçaplı diskin dışındaki her nokta gerçek 7 duygudan birine düşer. Klasik kuralda
+    // Nötr merkezde, diğerleri kenarda olduğu için Nötr orantısız büyük bir havza kazanıyordu
+    // (a=0,5'te valence −0,33…+0,40 arası her şey Nötr). null → klasik kural.
+    // BAŞLANGIÇ DEĞERİ, KALİBRE EDİLMEMİŞ (eval-09).
+    double? NeutralRadius = 0.2);
 
 /// <summary>Depolama/gizlilik ayarları (master §D13).</summary>
 public sealed record StorageConfig(
@@ -54,7 +60,14 @@ public sealed record EmotionConfig(
     // bu ölçümle çürütüldü) ve §12.4 (kararlar ölçülür).
     string ExecutionProvider = "cpu",                 // "cpu" (ölçülmüş varsayılan) | "coreml"
     string TextModelFile = "text-emotion-xlmr.onnx",  // 04b — XLM-R 11-duygu ONNX
-    string TokenizerFile = "sentencepiece.bpe.model"); // 04b — XLM-R-base SentencePiece (~5 MB)
+    string TokenizerFile = "sentencepiece.bpe.model", // 04b — XLM-R-base SentencePiece (~5 MB)
+    // Prozodi kazancı: msp-dim ham valence'ı pratikte 0,35–0,65 bandında kalır → domain'de
+    // −0,3…+0,3. Bu aralık EmotionWheel'in nötr havzasının TAMAMEN içindedir; yani kazançsız
+    // ses kanalı, ton ne olursa olsun, etiketi Nötr'ün dışına taşıyamaz. Kazanç nötr merkez
+    // etrafında simetrik genişletmedir — işareti değil yayılımı düzeltir.
+    // BAŞLANGIÇ DEĞERİ, KALİBRE EDİLMEMİŞ (eval-09 Türkçe etiketli veriyle ölçecek).
+    double ProsodyValenceGain = 2.0,
+    double ProsodyArousalGain = 2.0);
 
 /// <summary>VAD (Silero) ayarları (spec 05). Eşik eval-09 kalibre eder.</summary>
 public sealed record VadConfig(

@@ -31,7 +31,9 @@ public sealed class SourceAnalysisVm
     /// Boş durumda boş dizedir.</summary>
     public string AxisSummary { get; }
 
-    public SourceAnalysisVm(string title, ValenceArousal va, double temperature)
+    /// <param name="neutralRadius">Nötr yarıçap kuralı (bkz. <see cref="EmotionWheel.Map"/>).
+    /// Etiket ve paylar bu kuralla üretilir; <c>null</c> klasik en-yakın-merkez kuralıdır.</param>
+    public SourceAnalysisVm(string title, ValenceArousal va, double temperature, double? neutralRadius = null)
     {
         Title = title;
         Valence = va.Valence;
@@ -39,7 +41,7 @@ public sealed class SourceAnalysisVm
         HasData = true;
         AxisSummary = $"{EmotionLocalizer.ValenceText(Valence)} · {EmotionLocalizer.ArousalText(Arousal)}";
 
-        var shares = EmotionWheel.Distribute(va, temperature);
+        var shares = EmotionWheel.Distribute(va, temperature, neutralRadius);
         Emotion = EmotionLocalizer.Emotion(shares[0].Emotion);
 
         var percents = PercentFormatter.ToPercents(shares.Select(s => s.Share).ToArray());

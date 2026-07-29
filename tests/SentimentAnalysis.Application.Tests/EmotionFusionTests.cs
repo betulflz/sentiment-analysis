@@ -147,4 +147,90 @@ public class EmotionFusionTests
         var r = Fusion.Fuse(text, prosody, q);
         Assert.NotEqual(Confidence.Yuksek, r.Confidence);
     }
+
+    // --- Nötr yarıçapı (EmotionWheel yarıçap kuralının füzyona bağlanması) ---
+
+    [Fact]
+    public void Etiket_NotrYaricapiniUygular()
+    {
+        // Birleşik nokta ~(0.29, 0.62): klasik en-yakın-merkez kuralında Nötr, yarıçap
+        // kuralında gerçek bir duygu. Aynı girdi, iki config → etiket ayrışmalı.
+        var text = new TextEmotion(new ValenceArousal(0.3, 0.5), ModelConfidence: 0.5);
+        var prosody = new ProsodyEmotion(new ValenceArousal(0.25, 0.65), ModelConfidence: 0.5);
+
+        var withRadius = new EmotionFusion(WithNeutralRadius(0.2)).Fuse(text, prosody, Clean());
+        var classic = new EmotionFusion(WithNeutralRadius(null)).Fuse(text, prosody, Clean());
+
+        Assert.Equal(Emotion.Notr, classic.PrimaryEmotion);
+        Assert.NotEqual(Emotion.Notr, withRadius.PrimaryEmotion);
+    }
+
+    [Fact]
+    public void Etiket_YaricapIcindeKalanNokta_HalaNotr()
+    {
+        // Yarıçap kuralı "Nötr'ü yok et" demek değildir: gerçekten nötr girdi Nötr kalmalı.
+        var text = new TextEmotion(new ValenceArousal(0.0, 0.5), ModelConfidence: 0.5);
+        var prosody = new ProsodyEmotion(new ValenceArousal(0.05, 0.52), ModelConfidence: 0.5);
+        var r = new EmotionFusion(WithNeutralRadius(0.2)).Fuse(text, prosody, Clean());
+        Assert.Equal(Emotion.Notr, r.PrimaryEmotion);
+    }
+
+    [Fact]
+    public void Varsayilan_NotrYaricapiAcik()
+    {
+        // Varsayılan config yarıçap kuralını KULLANMALI — yoksa iyileştirme kullanıcıya ulaşmaz.
+        Assert.NotNull(AppConfig.Default.Fusion.NeutralRadius);
+        Assert.InRange(AppConfig.Default.Fusion.NeutralRadius!.Value, 0.01, 0.5);
+    }
+
+    // --- Teşhis: kalite güvenilirlikleri sonuçta taşınır ---
+    // "Neden Nötr çıktı?" sorusunun cevabı çoğu zaman ağırlıklarda değil, GİRDİ KALİTESİNDEdir
+    // (rAudio·rText). Bu sayılar füzyonun içinde hesaplanıp atılırsa kullanıcı da biz de
+    // körüz — sonuçla birlikte dışarı çıkmalılar.
+
+    [Fact]
+    public void Sonuc_KaliteGuvenilirliklerinToplar()
+    {
+        var r = Fusion.Fuse(
+            new TextEmotion(new ValenceArousal(0.5, 0.5), 0.8),
+            new ProsodyEmotion(new ValenceArousal(0.5, 0.5), 0.8),
+            Clean());
+
+        Assert.Equal(1.0, r.AudioReliability, precision: 6);
+        Assert.Equal(1.0, r.TextReliability, precision: 6);
+    }
+
+    [Fact]
+    public void Sonuc_CopSesi_DusukSesGuvenilirligiOlarakRaporlar()
+    {
+        // rAudio=0 (sessiz/kısa), rText=1 (uzun ve net transkript)
+        var q = new QualitySignals(AudioSnr: 0, SpeechRatio: 0, Duration: TimeSpan.Zero,
+            TranscriptWordCount: 20, TranscriptAvgLogProb: 0.0);
+
+        var r = Fusion.Fuse(
+            new TextEmotion(new ValenceArousal(0.5, 0.5), 0.8),
+            new ProsodyEmotion(new ValenceArousal(0.5, 0.5), 0.8),
+            q);
+
+        Assert.Equal(0.0, r.AudioReliability, precision: 6);
+        Assert.Equal(1.0, r.TextReliability, precision: 6);
+    }
+
+    [Fact]
+    public void Sonuc_KisaTranskript_DusukMetinGuvenilirligiOlarakRaporlar()
+    {
+        // 1 kelime → wordF = 1/3; logprob temiz → rText ≈ 0,333
+        var q = new QualitySignals(AudioSnr: 20, SpeechRatio: 1.0, Duration: TimeSpan.FromSeconds(10),
+            TranscriptWordCount: 1, TranscriptAvgLogProb: 0.0);
+
+        var r = Fusion.Fuse(
+            new TextEmotion(new ValenceArousal(0.5, 0.5), 0.8),
+            new ProsodyEmotion(new ValenceArousal(0.5, 0.5), 0.8),
+            q);
+
+        Assert.Equal(1.0 / 3.0, r.TextReliability, precision: 6);
+    }
+
+    private static AppConfig WithNeutralRadius(double? radius) =>
+        AppConfig.Default with { Fusion = AppConfig.Default.Fusion with { NeutralRadius = radius } };
 }
