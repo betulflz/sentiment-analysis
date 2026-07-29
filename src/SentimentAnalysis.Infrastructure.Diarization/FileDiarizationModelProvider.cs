@@ -26,7 +26,7 @@ public sealed class FileDiarizationModelProvider : IDiarizationModelProvider
         EmbeddingFile,
         "konuşmacı embedding modeli",
         "github.com/k2-fsa/sherpa-onnx → releases/speaker-recongition-models/" +
-        "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx " +
+        "wespeaker_en_voxceleb_resnet34_LM.onnx " +
         $"(indirip {EmbeddingFile} adıyla models/ altına koyun)");
 
     private string Resolve(string relative, string what, string howToGet)

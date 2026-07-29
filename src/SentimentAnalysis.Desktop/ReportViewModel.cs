@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SentimentAnalysis.Application.Abstractions;
+using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Application.Diarization;
 using SentimentAnalysis.Core;
 
@@ -32,10 +33,30 @@ public sealed class SpeakerLineVm
     }
 }
 
+/// <summary>Konuşmacı-başına duygu özeti (10c): metin/ses/nihai üç sütun, "Metin Analizi" /
+/// "Ses Analizi" / "Nihai Karar" panelleriyle aynı görünüm modeli (<see cref="SourceAnalysisVm"/>)
+/// yeniden kullanılır — canlı ekranla rapor asla ayrışmasın diye.</summary>
+public sealed class SpeakerEmotionVm
+{
+    public string Label { get; }
+    public SourceAnalysisVm TextAnalysis { get; }
+    public SourceAnalysisVm AudioAnalysis { get; }
+    public SourceAnalysisVm CombinedAnalysis { get; }
+
+    public SpeakerEmotionVm(SpeakerEmotionSummary s, double temperature, string? userGivenName = null)
+    {
+        Label = userGivenName ?? s.Speaker.DefaultLabel;
+        TextAnalysis = new SourceAnalysisVm("Metin Analizi", s.Text, temperature);
+        AudioAnalysis = new SourceAnalysisVm("Ses Analizi", s.Audio, temperature);
+        CombinedAnalysis = new SourceAnalysisVm("Nihai Karar", s.Combined, temperature);
+    }
+}
+
 /// <summary>Toplantı-sonu rapor VM'i: bir oturumu <see cref="IMeetingAggregator"/> ile özetler, lokalize sunar.</summary>
 public sealed partial class ReportViewModel : ObservableObject
 {
     private readonly IMeetingAggregator _aggregator;
+    private readonly double _temperature;
 
     [ObservableProperty] private bool _hasReport;
     [ObservableProperty] private string _dominantEmotion = "—";
@@ -60,7 +81,15 @@ public sealed partial class ReportViewModel : ObservableObject
     /// uydurma etiket üretilmez (master §12.2).</summary>
     public IReadOnlyList<SpeakerLineVm> SpeakerLines { get; private set; } = System.Array.Empty<SpeakerLineVm>();
 
-    public ReportViewModel(IMeetingAggregator aggregator) => _aggregator = aggregator;
+    /// <summary>Konuşmacı-başına metin/ses/nihai duygu ortalaması (10c). Diarization çalışmadıysa
+    /// veya konuşmacı ayırt edilemediyse BOŞ kalır — uydurma özet üretilmez (master §12.2).</summary>
+    public IReadOnlyList<SpeakerEmotionVm> SpeakerEmotions { get; private set; } = System.Array.Empty<SpeakerEmotionVm>();
+
+    public ReportViewModel(IMeetingAggregator aggregator, AppConfig? config = null)
+    {
+        _aggregator = aggregator;
+        _temperature = (config ?? AppConfig.Default).Fusion.DistributionTemperature;
+    }
 
     /// <summary>Arka plan geçişi başladı.</summary>
     public void SetDiarizationRunning() => DiarizationStatus = "Konuşmacılar hesaplanıyor…";
@@ -84,6 +113,9 @@ public sealed partial class ReportViewModel : ObservableObject
             SpeakerLines = System.Array.Empty<SpeakerLineVm>();
             HasSpeakers = false;
             OnPropertyChanged(nameof(SpeakerLines));
+
+            SpeakerEmotions = System.Array.Empty<SpeakerEmotionVm>();
+            OnPropertyChanged(nameof(SpeakerEmotions));
         }
     }
 
@@ -99,6 +131,19 @@ public sealed partial class ReportViewModel : ObservableObject
         SpeakerLines = SpeakerLineBuilder.Build(aligned).Select(l => new SpeakerLineVm(l)).ToList();
         HasSpeakers = SpeakerLines.Count > 0;
         OnPropertyChanged(nameof(SpeakerLines));
+    }
+
+    /// <summary>Chunk-düzeyi füzyon sonuçlarını konuşmacı bölgeleriyle hizalayıp konuşmacı-başına
+    /// metin/ses/nihai duygu ortalamasına indirger (10c). Hizalama ve ortalama saf Application
+    /// koduna (test edilebilir) devredilir; burada yalnızca sunum yapılır.</summary>
+    public void ApplySpeakerEmotions(
+        IReadOnlyList<ChunkResult> chunks,
+        IReadOnlyList<SpeakerSegment> speakers,
+        double minOverlapRatio)
+    {
+        var summaries = SpeakerEmotionAggregator.Aggregate(chunks, speakers, minOverlapRatio);
+        SpeakerEmotions = summaries.Select(s => new SpeakerEmotionVm(s, _temperature)).ToList();
+        OnPropertyChanged(nameof(SpeakerEmotions));
     }
 
     public void Load(MeetingSession session)

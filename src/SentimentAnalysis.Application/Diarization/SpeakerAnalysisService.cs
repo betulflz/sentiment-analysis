@@ -7,8 +7,13 @@ namespace SentimentAnalysis.Application.Diarization;
 public sealed record SpeakerAnalysisResult(
     DiarizationOutcome Outcome,
     IReadOnlyList<TranscriptSegment> Transcript,
-    IReadOnlyList<SpeakerSegment> Speakers)
+    IReadOnlyList<SpeakerSegment> Speakers,
+    IReadOnlyList<ChunkResult>? Chunks = null)
 {
+    /// <summary>Konuşmacı-başına duygu özeti (10c) için. Additive: eski 3-parametreli çağrılar
+    /// boş listeyle çalışmaya devam eder (bkz. <c>ChunkResult.Segments</c>'in aynı deseni).</summary>
+    public IReadOnlyList<ChunkResult> Chunks { get; init; } = Chunks ?? Array.Empty<ChunkResult>();
+
     public static SpeakerAnalysisResult Disabled { get; } =
         new(DiarizationOutcome.NoAudio, Array.Empty<TranscriptSegment>(), Array.Empty<SpeakerSegment>());
 }
@@ -49,6 +54,7 @@ public sealed class SpeakerAnalysisService : ISpeakerAnalysis
 
         var transcript = await _reader.GetTranscriptSegmentsAsync(sessionId, ct).ConfigureAwait(false);
         var speakers = await _reader.GetSpeakerSegmentsAsync(sessionId, ct).ConfigureAwait(false);
-        return new SpeakerAnalysisResult(outcome, transcript, speakers);
+        var chunks = await _reader.GetChunkResultsAsync(sessionId, ct).ConfigureAwait(false);
+        return new SpeakerAnalysisResult(outcome, transcript, speakers, chunks);
     }
 }

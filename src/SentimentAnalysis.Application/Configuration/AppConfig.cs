@@ -3,14 +3,14 @@ namespace SentimentAnalysis.Application.Configuration;
 /// <summary>Füzyon başlangıç ağırlıkları ve eşikleri. Nihai değerler
 /// Alt-proje 09 (eval) ile kalibre edilip buraya yansıtılır — keyfi sabit değil.</summary>
 public sealed record FusionConfig(
-    double AudioArousalWeight = 0.75,
-    double TextArousalWeight  = 0.25,
-    double TextValenceWeight  = 0.70,
-    double AudioValenceWeight = 0.30,
+    double AudioArousalWeight = 1.0,
+    double TextArousalWeight  = 0.0,
+    double TextValenceWeight  = 0.0,
+    double AudioValenceWeight = 1.0,
     double IncongruenceThreshold = 0.8,       // |valence_text − valence_audio| eşiği
     double LowConfidenceThreshold = 0.35,     // altı "düşük güven"
     double HighConfidenceThreshold = 0.65,    // üstü "yüksek güven"
-    double IncongruentValenceProsodyWeight = 0.75, // uyumsuzda valence prozodiye yaslanma payı
+    double IncongruentValenceProsodyWeight = 1.0, // uyumsuzda valence prozodiye yaslanma payı
     double SnrLowDb = 0.0,                     // bu SNR'de ses güvenilirliği ~0
     double SnrHighDb = 15.0,                   // bu SNR'de ses güvenilirliği ~1
     double MinReliableSeconds = 3.0,           // altında süre kısa → ses güvenilirliği düşer
@@ -85,8 +85,11 @@ public sealed record PipelineConfig(
 public sealed record DiarizationConfig(
     bool Enabled = false,                 // opt-in: kapalıyken davranış 10b öncesiyle aynı
                                           // (ses de saklanmaz — gizlilik varsayılanı, master §12.5)
-    double ClusteringThreshold = 0.8,     // 10a ölçümü: sherpa'nın tipik 0,5'i iki kişilik
-                                          // kayıtta ALTI konuşmacı buluyordu; 0,8'de tam 2
+    double ClusteringThreshold = 0.5,     // wespeaker_en_voxceleb_resnet34_LM ile ölçüldü: iki
+                                          // konuşmacılı gerçek seste 0,3–0,5 aralığı tam 2 küme
+                                          // buluyor, 0,6+ tek kümeye çöküyor (embedding modeli
+                                          // 3dspeaker'dan wespeaker'a değişince eşik de değişti —
+                                          // önceki 0,8, farklı bir embedding uzayı için ölçülmüştü)
     double MinOverlapRatio = 0.5,         // SpeakerAligner kapısı: altında kalan → Bilinmeyen
     int MaxRecordedMinutes = 90);         // ses biriktirme üst sınırı (16 kHz PCM16 ≈ 115 MB/saat)
 

@@ -77,8 +77,11 @@ public sealed partial class MainViewModel : ObservableObject
         _dispatch(() =>
         {
             if (result.Outcome == DiarizationOutcome.Completed)
-                Report.ApplySpeakers(result.Transcript, result.Speakers,
-                    _config?.Diarization.MinOverlapRatio ?? 0.5);
+            {
+                var minOverlap = _config?.Diarization.MinOverlapRatio ?? 0.5;
+                Report.ApplySpeakers(result.Transcript, result.Speakers, minOverlap);
+                Report.ApplySpeakerEmotions(result.Chunks, result.Speakers, minOverlap);
+            }
 
             // Sonuç DAİMA bildirilir — ApplySpeakers'tan SONRA çağrılır, çünkü durum metni
             // satır üretilip üretilmediğine bakar ("ayırt edilemedi" ile "hazır" ayrımı).

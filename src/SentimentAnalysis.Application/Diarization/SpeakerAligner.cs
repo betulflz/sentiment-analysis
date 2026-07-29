@@ -23,28 +23,45 @@ public static class SpeakerAligner
         double minOverlapRatio)
     {
         var result = new List<(TranscriptSegment, SpeakerId)>(transcript.Count);
-
         foreach (var seg in transcript)
+            result.Add((seg, BestSpeaker(seg.Start, seg.End, speakers, minOverlapRatio)));
+        return result;
+    }
+
+    /// <summary>Aynı örtüşme mantığıyla chunk'ları (duygu sonucu taşıyan zaman aralıkları)
+    /// konuşmacılara atar — rapor bunu konuşmacı-başına duygu özetine indirger (10c).</summary>
+    public static IReadOnlyList<(ChunkResult Chunk, SpeakerId Speaker)> AlignChunks(
+        IReadOnlyList<ChunkResult> chunks,
+        IReadOnlyList<SpeakerSegment> speakers,
+        double minOverlapRatio)
+    {
+        var result = new List<(ChunkResult, SpeakerId)>(chunks.Count);
+        foreach (var chunk in chunks)
+            result.Add((chunk, BestSpeaker(chunk.TimeStart, chunk.TimeEnd, speakers, minOverlapRatio)));
+        return result;
+    }
+
+    /// <summary>En çok örtüşen konuşmacıyı bulur; örtüşme oranı eşiğin altındaysa
+    /// <see cref="SpeakerId.Unknown"/> döner. Beraberlikte İLK bölge kazanır (kesin ">"
+    /// karşılaştırması) — davranış deterministik olsun diye; sıraya güvenmeyiz ama sonucun
+    /// koşudan koşuya değişmemesi şarttır.</summary>
+    private static SpeakerId BestSpeaker(
+        TimeSpan start, TimeSpan end, IReadOnlyList<SpeakerSegment> speakers, double minOverlapRatio)
+    {
+        double duration = (end - start).TotalSeconds;
+        if (duration <= 0) return SpeakerId.Unknown;
+
+        SpeakerId best = SpeakerId.Unknown;
+        double bestOverlap = 0;
+
+        foreach (var sp in speakers)
         {
-            double duration = (seg.End - seg.Start).TotalSeconds;
-            if (duration <= 0) { result.Add((seg, SpeakerId.Unknown)); continue; }
-
-            SpeakerId best = SpeakerId.Unknown;
-            double bestOverlap = 0;
-
-            // Beraberlikte İLK bölge kazanır (kesin ">" karşılaştırması) — davranış deterministik
-            // olsun diye; sıraya güvenmeyiz ama sonucun koşudan koşuya değişmemesi şarttır.
-            foreach (var sp in speakers)
-            {
-                double overlap =
-                    Math.Min(seg.End.TotalSeconds, sp.End.TotalSeconds) -
-                    Math.Max(seg.Start.TotalSeconds, sp.Start.TotalSeconds);
-                if (overlap > bestOverlap) { bestOverlap = overlap; best = sp.Speaker; }
-            }
-
-            result.Add(bestOverlap / duration >= minOverlapRatio ? (seg, best) : (seg, SpeakerId.Unknown));
+            double overlap =
+                Math.Min(end.TotalSeconds, sp.End.TotalSeconds) -
+                Math.Max(start.TotalSeconds, sp.Start.TotalSeconds);
+            if (overlap > bestOverlap) { bestOverlap = overlap; best = sp.Speaker; }
         }
 
-        return result;
+        return bestOverlap / duration >= minOverlapRatio ? best : SpeakerId.Unknown;
     }
 }
