@@ -105,7 +105,11 @@ public sealed record DiarizationConfig(
                                           // eşik de değişti — önceki 0,8, farklı bir embedding
                                           // uzayı için ölçülmüştü ve bu uzaya taşınmaz. TEK KAYDA
                                           // dayalı ölçüm; 0,4 civarındaki aralığın sınırları bilinmiyor)
-    double MinOverlapRatio = 0.5,         // SpeakerAligner kapısı: altında kalan → Bilinmeyen
+    double MinOverlapRatio = 0.5,         // SpeakerAligner eşiği: örtüşme >= bu oran → kesin atama;
+                                          // 0 < örtüşme < bu oran → yine en iyi adaya atanır ama
+                                          // Uncertain=true işaretlenir; hiç örtüşme (aday) yoksa
+                                          // Bilinmeyen döner. Amaç dürüst belirsizlik — bilgiyi
+                                          // çöpe atmadan, uydurma atama da yapmadan (master §12.2)
     int MaxRecordedMinutes = 90);         // ses biriktirme üst sınırı (16 kHz PCM16 ≈ 115 MB/saat)
 
 /// <summary>Uygulama genel konfigürasyonu (stajyerin config.py karşılığı).</summary>
