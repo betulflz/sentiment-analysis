@@ -95,11 +95,16 @@ public sealed record PipelineConfig(
 public sealed record DiarizationConfig(
     bool Enabled = false,                 // opt-in: kapalıyken davranış 10b öncesiyle aynı
                                           // (ses de saklanmaz — gizlilik varsayılanı, master §12.5)
-    double ClusteringThreshold = 0.5,     // wespeaker_en_voxceleb_resnet34_LM ile ölçüldü: iki
-                                          // konuşmacılı gerçek seste 0,3–0,5 aralığı tam 2 küme
-                                          // buluyor, 0,6+ tek kümeye çöküyor (embedding modeli
-                                          // 3dspeaker'dan wespeaker'a değişince eşik de değişti —
-                                          // önceki 0,8, farklı bir embedding uzayı için ölçülmüştü)
+    double ClusteringThreshold = 0.4,     // ÖLÇÜLDÜ (2026-07-30): wespeaker_en_voxceleb_resnet34_LM
+                                          // embedding modeli + scratchpad/diar-spike/toplanti.wav
+                                          // (16 kHz mono, 120,6 sn, bilinen gerçek: 2 konuşmacı).
+                                          // Taranan {0,3; 0,4; 0,5; 0,6} eşiklerinden yalnızca 0,4
+                                          // tam 2 küme verdi (0,3→3 küme, 0,5 ve 0,6→1 küme).
+                                          // Detay: scratchpad/diar-threshold-2026-07-30.md
+                                          // (embedding modeli 3dspeaker'dan wespeaker'a değişince
+                                          // eşik de değişti — önceki 0,8, farklı bir embedding
+                                          // uzayı için ölçülmüştü ve bu uzaya taşınmaz. TEK KAYDA
+                                          // dayalı ölçüm; 0,4 civarındaki aralığın sınırları bilinmiyor)
     double MinOverlapRatio = 0.5,         // SpeakerAligner kapısı: altında kalan → Bilinmeyen
     int MaxRecordedMinutes = 90);         // ses biriktirme üst sınırı (16 kHz PCM16 ≈ 115 MB/saat)
 

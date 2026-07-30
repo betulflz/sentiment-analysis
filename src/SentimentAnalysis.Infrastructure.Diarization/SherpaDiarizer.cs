@@ -7,10 +7,13 @@ namespace SentimentAnalysis.Infrastructure.Diarization;
 /// <summary>sherpa-onnx offline speaker diarization sarmalayıcısı (alt-proje 10b). Native tipler
 /// bu sınıfın içinde kalır (mimari kural: motor sınırı). Model ilk kullanımda yüklenir ve sıcak
 /// tutulur.
-/// <para><b>Ölçülmüş ayarlar:</b> embedding modeli <c>wespeaker_en_voxceleb_resnet34_LM</c> ile
-/// <c>Threshold = 0.5</c> — iki kişilik gerçek bir kayıtta 0,3–0,5 aralığı tam 2 küme buluyor,
-/// 0,6 ve üstü tek kümeye çöküyor. (Önceki 3dspeaker/zh-cn embedding modeliyle ölçülen 0,8
-/// bu embedding uzayına taşınmaz — eşik, kullanılan embedding modeline özgüdür.)
+/// <para><b>Ölçülmüş ayarlar (2026-07-30):</b> embedding modeli <c>wespeaker_en_voxceleb_resnet34_LM</c>
+/// ile <c>scratchpad/diar-spike/toplanti.wav</c> (16 kHz mono, 120,6 sn, bilinen gerçek: 2
+/// konuşmacı) üzerinde {0,3; 0,4; 0,5; 0,6} eşikleri tarandı: 0,3 → 3 küme, 0,4 → 2 küme (tam
+/// doğru), 0,5 → 1 küme, 0,6 → 1 küme. Bu yüzden <c>Threshold = 0.4</c> seçildi — ayrıntı ve
+/// tek-kayıt sınırlaması için <c>scratchpad/diar-threshold-2026-07-30.md</c>. (Önceki
+/// 3dspeaker/zh-cn embedding modeliyle ölçülen 0,8 bu embedding uzayına taşınmaz — eşik,
+/// kullanılan embedding modeline özgüdür.)
 /// <c>NumClusters = 0</c>: gerçek toplantıda kaç kişi olduğunu bilmeyiz, küme sayısı eşikle bulunur.</para>
 /// <para><b>Hız:</b> 10a'da RTF ≈ 0,44 ölçüldü (120 sn ses → ~54 sn işlem). Bu yüzden canlı
 /// hatta değil, oturum sonrası arka plan geçişinde çalışır.</para></summary>
