@@ -88,4 +88,54 @@ public class SpeakerEmotionVmTests
         // Chunk-hizalamalı değer korunur — sessizce sıfırlanmaz veya nötrleştirilmez.
         Assert.Equal("Sıkılmış", vm.AudioAnalysis.Emotion);
     }
+
+    [Fact]
+    public void ProzodiOlcumuVarsa_AciklayiciNot_OlcumunKacSaniyeyeDayandiginiSoyler()
+    {
+        // Final inceleme / bulgu 2: "ölçüldü" ile "ölçülemedi" panelde AYIRT EDİLEBİLİR olmalı.
+        var s = Summary(ValenceArousal.Neutral, ValenceArousal.Neutral, ValenceArousal.Neutral);
+        var prosody = new SpeakerProsodySummary(
+            // 12,4 → "12": yuvarlama modundan bağımsız tek bir doğru cevabı olan bir değer seçildi.
+            new SpeakerId(0), new ValenceArousal(0.8, 0.5), AnalyzedSeconds: 12.4, RegionCount: 2);
+
+        var vm = new SpeakerEmotionVm(s, Temperature, neutralRadius: 0.2, prosody);
+
+        Assert.Equal("Ses ölçümü 12 sn konuşmaya dayanıyor", vm.AudioMeasurementNote);
+    }
+
+    [Fact]
+    public void ProzodiOlcumuYoksa_AciklayiciNot_YeterliSesOlmadiginiSoyler()
+    {
+        // Eskiden bu satır GİZLENİYORDU: kullanıcı için "ölçüldü" ve "ölçülemedi" tıpatıp aynı
+        // görünüyordu. Artık her iki durumda da bir not gösterilir.
+        var s = Summary(ValenceArousal.Neutral, ValenceArousal.Neutral, ValenceArousal.Neutral);
+
+        var vm = new SpeakerEmotionVm(s, Temperature, neutralRadius: 0.2, prosody: null);
+
+        Assert.Equal("Yeterli ses yok — chunk ortalamasına dayanıyor", vm.AudioMeasurementNote);
+    }
+
+    [Fact]
+    public void BelirsizChunkVarsa_VmBunuGorunurKilar()
+    {
+        // Final inceleme / bulgu 3: eşik-altı atamalar ortalamaya giriyor; sayısı gösterilmeli.
+        var s = new SpeakerEmotionSummary(
+            new SpeakerId(0), ValenceArousal.Neutral, ValenceArousal.Neutral, ValenceArousal.Neutral,
+            ChunkCount: 5, UncertainChunkCount: 2);
+
+        var vm = new SpeakerEmotionVm(s, Temperature, neutralRadius: 0.2);
+
+        Assert.True(vm.HasUncertainChunks);
+        Assert.Equal("2 ölçüm belirsiz atamaya dayanıyor", vm.UncertainChunkNote);
+    }
+
+    [Fact]
+    public void BelirsizChunkYoksa_UyariGosterilmez()
+    {
+        var s = Summary(ValenceArousal.Neutral, ValenceArousal.Neutral, ValenceArousal.Neutral);
+
+        var vm = new SpeakerEmotionVm(s, Temperature, neutralRadius: 0.2);
+
+        Assert.False(vm.HasUncertainChunks);
+    }
 }

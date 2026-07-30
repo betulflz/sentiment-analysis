@@ -66,6 +66,24 @@ public sealed class SpeakerEmotionVm
     /// "sayı > 0" karşılaştırması yapılamaz).</summary>
     public bool HasAudioMeasurement => AnalyzedSeconds > 0;
 
+    /// <summary>"Ses Analizi" panelinin altındaki açıklama satırı — HER İKİ durumda da doludur.
+    /// <para><b>Neden gizlenmiyor:</b> ölçüm yokken panel sessizce eski chunk-ortalaması değerine
+    /// düşüyor ve açıklama satırı gizleniyordu; kullanıcı için "kişinin kendi sesinden ölçüldü"
+    /// ile "ölçülemedi, tahmine düşüldü" tıpatıp aynı görünüyordu. Tasarım §3 bunu açıkça
+    /// "rapor bunu 'yeterli ses yok' olarak gösterir" diye şart koşar.</para></summary>
+    public string AudioMeasurementNote { get; }
+
+    /// <summary>Ortalamaya giren chunk'lardan kaçının konuşmacı ataması belirsiz (eşik-altı
+    /// örtüşme) olduğu — 0 ise UI hiçbir şey göstermez.</summary>
+    public int UncertainChunkCount { get; }
+
+    /// <summary>Gösterilecek belirsizlik uyarısı var mı? (XAML'de "sayı > 0" yapılamaz.)</summary>
+    public bool HasUncertainChunks => UncertainChunkCount > 0;
+
+    /// <summary>Belirsiz atamaya dayanan ölçüm sayısını kullanıcıya bildiren satır. Yalnızca
+    /// <see cref="HasUncertainChunks"/> true iken gösterilir.</summary>
+    public string UncertainChunkNote { get; }
+
     public SpeakerEmotionVm(
         SpeakerEmotionSummary s, double temperature, double? neutralRadius,
         SpeakerProsodySummary? prosody = null, string? userGivenName = null)
@@ -73,6 +91,11 @@ public sealed class SpeakerEmotionVm
         Label = userGivenName ?? s.Speaker.DefaultLabel;
         var audioVa = prosody?.Va ?? s.Audio;
         AnalyzedSeconds = prosody?.AnalyzedSeconds ?? 0;
+        AudioMeasurementNote = prosody is not null
+            ? $"Ses ölçümü {prosody.AnalyzedSeconds:F0} sn konuşmaya dayanıyor"
+            : "Yeterli ses yok — chunk ortalamasına dayanıyor";
+        UncertainChunkCount = s.UncertainChunkCount;
+        UncertainChunkNote = $"{s.UncertainChunkCount} ölçüm belirsiz atamaya dayanıyor";
         TextAnalysis = new SourceAnalysisVm("Metin Analizi", s.Text, temperature, neutralRadius);
         AudioAnalysis = new SourceAnalysisVm("Ses Analizi", audioVa, temperature, neutralRadius);
         // Bulgu 1: Nihai Karar füzyon sonucunu (s.Combined) gösterir, ham prozodiyi değil —

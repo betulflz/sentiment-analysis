@@ -90,10 +90,19 @@
                                 <DataTemplate DataType="desktop:SpeakerEmotionVm">
                                     <StackPanel Spacing="4" Margin="0,0,0,12">
                                         <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="14" />
+                                        <!-- Ölçüm VARSA kaç saniyeye dayandığını, YOKSA "yeterli ses yok"u
+                                             söyler; satır hiçbir durumda gizlenmez — aksi halde iki durum
+                                             kullanıcı için tıpatıp aynı görünürdü. -->
                                         <TextBlock FontSize="10" FontStyle="Italic"
                                                    Foreground="{DynamicResource SystemBaseMediumColor}"
-                                                   Text="{Binding AnalyzedSeconds, StringFormat='Ses ölçümü {0:F0} sn konuşmaya dayanıyor'}"
-                                                   IsVisible="{Binding HasAudioMeasurement}" />
+                                                   TextWrapping="Wrap"
+                                                   Text="{Binding AudioMeasurementNote}" />
+                                        <!-- Belirsiz atamalar ortalamaya girdi; yalnızca varsa bildirilir. -->
+                                        <TextBlock FontSize="10" FontStyle="Italic"
+                                                   Foreground="{DynamicResource SystemBaseMediumColor}"
+                                                   TextWrapping="Wrap"
+                                                   Text="{Binding UncertainChunkNote}"
+                                                   IsVisible="{Binding HasUncertainChunks}" />
                                         <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
                                             <ContentControl Grid.Column="0" Content="{Binding TextAnalysis}"
                                                             ContentTemplate="{StaticResource SourcePanel}"

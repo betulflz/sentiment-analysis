@@ -68,6 +68,49 @@ public class SpeakerProsodyAnalyzerTests
     }
 
     [Fact]
+    public void RegionSelector_ButceyiAsanTekBolge_KirpilirAtilmaz()
+    {
+        // Final inceleme / bulgu 1: eskiden "sığmayan bölgeyi atla" kuralı, tek bölgesi bütçeden
+        // uzun olan konuşmacıyı TAMAMEN ölçümsüz bırakıyordu — en çok konuşan kişi en çok sese
+        // sahipken hiç prozodi üretilmiyordu. Artık kalan bütçe kadar önek alınır.
+        var regions = new[] { Seg(0, 0, 90) };
+
+        var selected = SpeakerRegionSelector.Select(regions, minSeconds: 1.0, budgetSeconds: 60);
+
+        Assert.Single(selected);
+        Assert.Equal(TimeSpan.Zero, selected[0].Start);
+        Assert.Equal(60, (selected[0].End - selected[0].Start).TotalSeconds, precision: 6);
+    }
+
+    [Fact]
+    public void RegionSelector_KalanButceKadarOnekAlirVeDurur()
+    {
+        // 50 sn alındıktan sonra 20 sn'lik bölgeden yalnızca 10 sn'lik önek alınır; seçim durur,
+        // arkadan gelen kısa bölgeler bütçeyi doldurmaya çalışmaz (kural: kırpma sonrası DUR).
+        var regions = new[] { Seg(0, 0, 50), Seg(0, 60, 80), Seg(0, 100, 105) };
+
+        var selected = SpeakerRegionSelector.Select(regions, minSeconds: 1.0, budgetSeconds: 60);
+
+        Assert.Equal(2, selected.Count);
+        Assert.Equal(50, (selected[0].End - selected[0].Start).TotalSeconds, precision: 6);
+        Assert.Equal(TimeSpan.FromSeconds(60), selected[1].Start);
+        Assert.Equal(TimeSpan.FromSeconds(70), selected[1].End);   // 10 sn'lik önek
+        Assert.Equal(60, selected.Sum(s => (s.End - s.Start).TotalSeconds), precision: 6);
+    }
+
+    [Fact]
+    public void RegionSelector_KalanButceMinSecondsAltindaysa_OnekAlinmaz()
+    {
+        // Kalan bütçe 0,5 sn: bu kadar kısa bir önekten güvenilir prozodi çıkmaz → alınmaz.
+        var regions = new[] { Seg(0, 0, 59.5), Seg(0, 60, 80) };
+
+        var selected = SpeakerRegionSelector.Select(regions, minSeconds: 1.0, budgetSeconds: 60);
+
+        Assert.Single(selected);
+        Assert.Equal(59.5, (selected[0].End - selected[0].Start).TotalSeconds, precision: 6);
+    }
+
+    [Fact]
     public void RegionSelector_Deterministiktir()
     {
         var regions = new[] { Seg(0, 5, 10), Seg(0, 0, 5), Seg(0, 20, 25) };
@@ -76,6 +119,19 @@ public class SpeakerProsodyAnalyzerTests
         var b = SpeakerRegionSelector.Select(regions, 1.0, 60).Select(s => s.Start);
 
         Assert.Equal(a, b);
+    }
+
+    [Fact]
+    public void RegionSelector_KirpmaliDurumdaDaDeterministiktir()
+    {
+        // Kırpma devreye girdiğinde de sonuç koşudan koşuya aynı olmalı (saf karar mantığı).
+        var regions = new[] { Seg(0, 0, 40), Seg(0, 50, 90), Seg(0, 100, 130) };
+
+        var a = SpeakerRegionSelector.Select(regions, 1.0, 60).Select(s => (s.Start, s.End)).ToList();
+        var b = SpeakerRegionSelector.Select(regions, 1.0, 60).Select(s => (s.Start, s.End)).ToList();
+
+        Assert.Equal(a, b);
+        Assert.Equal(60, a.Sum(s => (s.End - s.Start).TotalSeconds), precision: 6);
     }
 
     [Fact]

@@ -4,13 +4,21 @@ namespace SentimentAnalysis.Application.Diarization;
 
 /// <summary>Bir konuşmacıya atanan chunk'ların duygu ortalaması: metin, ses ve nihai (10c).
 /// <paramref name="ChunkCount"/> saydamlık için taşınır — az chunk'lı bir ortalamaya aşırı
-/// güvenilmemeli.</summary>
+/// güvenilmemeli.
+/// <para><paramref name="UncertainChunkCount"/>: bu ortalamaya giren chunk'lardan kaçının
+/// konuşmacı ataması eşik-altı örtüşmeye dayandığı (<see cref="AlignedChunk.Uncertain"/>).
+/// <b>Neden ayrı sayılır:</b> hizalama artık eşik-altı chunk'ları elemek yerine en iyi adaya
+/// atıyor; bu sayı taşınmazsa eskiden düşen chunk'lar ortalamaya hiçbir iz bırakmadan girer ve
+/// kullanıcı ortalamanın ne kadarının tahmine dayandığını göremezdi (master §12.2 — sistem
+/// emin olmadığı yerde emin gibi davranmaz). <paramref name="ChunkCount"/> semantiği değişmez:
+/// o hâlâ TÜM chunk'ların sayısıdır, belirsizler onun bir alt kümesidir.</para></summary>
 public sealed record SpeakerEmotionSummary(
     SpeakerId Speaker,
     ValenceArousal Text,
     ValenceArousal Audio,
     ValenceArousal Combined,
-    int ChunkCount);
+    int ChunkCount,
+    int UncertainChunkCount = 0);
 
 /// <summary>Chunk-düzeyi füzyon sonuçlarını konuşmacı bölgeleriyle hizalayıp konuşmacı-başına
 /// ortalama duyguya indirger. Saf ve deterministik.</summary>
@@ -33,7 +41,10 @@ public static class SpeakerEmotionAggregator
                 Average(g.Select(x => x.Chunk.Fused.TextVa)),
                 Average(g.Select(x => x.Chunk.Fused.ProsodyVa)),
                 Average(g.Select(x => x.Chunk.Fused.Combined)),
-                g.Count()))
+                g.Count(),
+                // Belirsiz atamalar ortalamaya KATILIR (veri kaybı olmaz), ama sayıları
+                // ayrıca taşınır ki rapor "bu ortalamanın N ölçümü tahmine dayanıyor" diyebilsin.
+                g.Count(x => x.Uncertain)))
             .OrderBy(s => s.Speaker.Index < 0 ? int.MaxValue : s.Speaker.Index)
             .ToList();
     }

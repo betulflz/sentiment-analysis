@@ -11,9 +11,21 @@ public sealed record SpeakerProsodySummary(
     SpeakerId Speaker, ValenceArousal Va, double AnalyzedSeconds, int RegionCount);
 
 /// <summary>Bir konuşmacının hangi konuşma bölgelerinin analiz edileceğini seçer. Saf ve
-/// deterministik: uzun bölgeler önce (daha çok bağlam), süre bütçesi dolunca durulur.</summary>
+/// deterministik: uzun bölgeler önce (daha çok bağlam), süre bütçesi dolunca durulur.
+/// <para><b>Neden bütçeye sığmayan bölge atılmaz, KIRPILIR:</b> eski kural "sığmıyorsa atla"
+/// idi. Tek konuşma bölgesi bütçeden uzun olan bir konuşmacıda (ör. 90 sn'lik tek bölge, 60 sn
+/// bütçe) bu kural bölgeyi eler, başka bölge de olmadığı için o konuşmacı için HİÇ prozodi
+/// üretilmezdi — yani en çok konuşan, dolayısıyla en çok sese sahip kişi ölçümsüz kalırdı.
+/// Tasarım "60 saniyeyi aşmayacak şekilde durulur" der; "sığmayanı tamamen at" demez.</para></summary>
 public static class SpeakerRegionSelector
 {
+    /// <summary>Bölgeleri uzundan kısaya (eşitlikte erken başlayan önce) tarar. Kalan bütçeye
+    /// tam sığan bölge olduğu gibi, sığmayan bölge ise kalan bütçe kadar KIRPILMIŞ bir önek
+    /// olarak (bölgenin başından itibaren) alınır ve seçim orada DURUR — kırpma zaten bütçeyi
+    /// doldurmuştur. Kırpılmış önek <paramref name="minSeconds"/>'tan kısa kalıyorsa alınmaz
+    /// (o kadar kısa sesten güvenilir prozodi çıkmaz) ve seçim yine durur.</summary>
+    /// <returns>Kırpma, döndürülen <see cref="SpeakerSegment"/>'in <c>End</c> değerine yansır:
+    /// bildirilen süre ile gerçekten analiz edilen ses aynı olur.</returns>
     public static IReadOnlyList<SpeakerSegment> Select(
         IEnumerable<SpeakerSegment> regions, double minSeconds, double budgetSeconds)
     {
@@ -27,9 +39,20 @@ public static class SpeakerRegionSelector
             .ThenBy(r => r.Start))
         {
             double length = (r.End - r.Start).TotalSeconds;
-            if (used + length > budgetSeconds) continue;   // sığmayan bölgeyi atla, aramayı sürdür
-            selected.Add(r);
-            used += length;
+
+            if (used + length <= budgetSeconds)
+            {
+                selected.Add(r);
+                used += length;
+                continue;
+            }
+
+            // Sığmıyor: kalan bütçe kadar önek al ve DUR.
+            double remaining = budgetSeconds - used;
+            if (remaining >= minSeconds)
+                selected.Add(r with { End = r.Start + TimeSpan.FromSeconds(remaining) });
+
+            break;
         }
 
         return selected;
