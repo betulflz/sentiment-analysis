@@ -14,6 +14,11 @@ public sealed record SpeakerAnalysisResult(
     /// boş listeyle çalışmaya devam eder (bkz. <c>ChunkResult.Segments</c>'in aynı deseni).</summary>
     public IReadOnlyList<ChunkResult> Chunks { get; init; } = Chunks ?? Array.Empty<ChunkResult>();
 
+    /// <summary>Konuşmacının KENDİ sesinden ölçülmüş prozodi duygusu (10d). Additive:
+    /// varsayılan boş liste, eski çağrılar etkilenmez.</summary>
+    public IReadOnlyList<SpeakerProsodySummary> SpeakerProsody { get; init; } =
+        Array.Empty<SpeakerProsodySummary>();
+
     public static SpeakerAnalysisResult Disabled { get; } =
         new(DiarizationOutcome.NoAudio, Array.Empty<TranscriptSegment>(), Array.Empty<SpeakerSegment>());
 }
@@ -34,10 +39,15 @@ public sealed class SpeakerAnalysisService : ISpeakerAnalysis
     private readonly DiarizationJob _job;
     private readonly ISpeakerDataReader _reader;
     private readonly IDiarizationState _state;
+    private readonly SpeakerProsodyAnalyzer _prosody;
+    private readonly IDiarizationStore _store;
 
-    public SpeakerAnalysisService(DiarizationJob job, ISpeakerDataReader reader, IDiarizationState state)
+    public SpeakerAnalysisService(
+        DiarizationJob job, ISpeakerDataReader reader, IDiarizationState state,
+        SpeakerProsodyAnalyzer prosody, IDiarizationStore store)
     {
         _job = job; _reader = reader; _state = state;
+        _prosody = prosody; _store = store;
     }
 
     // Çalışma anında okunur: kullanıcı Ayarlar'dan açtığında uygulama yeniden başlatılmadan
@@ -55,6 +65,14 @@ public sealed class SpeakerAnalysisService : ISpeakerAnalysis
         var transcript = await _reader.GetTranscriptSegmentsAsync(sessionId, ct).ConfigureAwait(false);
         var speakers = await _reader.GetSpeakerSegmentsAsync(sessionId, ct).ConfigureAwait(false);
         var chunks = await _reader.GetChunkResultsAsync(sessionId, ct).ConfigureAwait(false);
-        return new SpeakerAnalysisResult(outcome, transcript, speakers, chunks);
+
+        // Konuşmacı duygusu, kişinin KENDİ sesinden ölçülür (10d). Ses zaten diarization için
+        // saklanmıştı; ek kayıt maliyeti yoktur.
+        var audio = await _store.GetSessionAudioAsync(sessionId, ct).ConfigureAwait(false);
+        var prosody = audio is null || audio.Length == 0
+            ? Array.Empty<SpeakerProsodySummary>()
+            : await _prosody.AnalyzeAsync(audio, speakers, ct).ConfigureAwait(false);
+
+        return new SpeakerAnalysisResult(outcome, transcript, speakers, chunks) { SpeakerProsody = prosody };
     }
 }

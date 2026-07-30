@@ -76,6 +76,7 @@ public static class CompositionRoot
         services.AddSingleton<IDiarizationState, DiarizationState>();
         services.AddSherpaDiarization();
         services.AddSingleton<DiarizationJob>();
+        services.AddSingleton<SpeakerProsodyAnalyzer>();
         services.AddSingleton<ISpeakerAnalysis, SpeakerAnalysisService>();
 
         services.AddSingleton<LiveViewModel>(sp => new LiveViewModel(

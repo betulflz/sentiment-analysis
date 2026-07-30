@@ -80,7 +80,7 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 var minOverlap = _config?.Diarization.MinOverlapRatio ?? 0.5;
                 Report.ApplySpeakers(result.Transcript, result.Speakers, minOverlap);
-                Report.ApplySpeakerEmotions(result.Chunks, result.Speakers, minOverlap);
+                Report.ApplySpeakerEmotions(result.Chunks, result.Speakers, minOverlap, result.SpeakerProsody);
             }
 
             // Sonuç DAİMA bildirilir — ApplySpeakers'tan SONRA çağrılır, çünkü durum metni

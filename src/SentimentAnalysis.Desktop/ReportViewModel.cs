@@ -48,12 +48,24 @@ public sealed class SpeakerEmotionVm
     public SourceAnalysisVm AudioAnalysis { get; }
     public SourceAnalysisVm CombinedAnalysis { get; }
 
-    public SpeakerEmotionVm(SpeakerEmotionSummary s, double temperature, string? userGivenName = null)
+    /// <summary>Ses ölçümünün kaç saniyelik konuşmaya dayandığı (10d). 0 = konuşmacının
+    /// prozodi için yeterli sesi yoktu; UI bunu göstermelidir.</summary>
+    public double AnalyzedSeconds { get; }
+
+    /// <summary>Ses ölçümü gerçekten yapıldı mı? UI bu bayrağa bağlanır (XAML'de
+    /// "sayı > 0" karşılaştırması yapılamaz).</summary>
+    public bool HasAudioMeasurement => AnalyzedSeconds > 0;
+
+    public SpeakerEmotionVm(
+        SpeakerEmotionSummary s, double temperature, double? neutralRadius,
+        SpeakerProsodySummary? prosody = null, string? userGivenName = null)
     {
         Label = userGivenName ?? s.Speaker.DefaultLabel;
-        TextAnalysis = new SourceAnalysisVm("Metin Analizi", s.Text, temperature);
-        AudioAnalysis = new SourceAnalysisVm("Ses Analizi", s.Audio, temperature);
-        CombinedAnalysis = new SourceAnalysisVm("Nihai Karar", s.Combined, temperature);
+        var audioVa = prosody?.Va ?? s.Audio;
+        AnalyzedSeconds = prosody?.AnalyzedSeconds ?? 0;
+        TextAnalysis = new SourceAnalysisVm("Metin Analizi", s.Text, temperature, neutralRadius);
+        AudioAnalysis = new SourceAnalysisVm("Ses Analizi", audioVa, temperature, neutralRadius);
+        CombinedAnalysis = new SourceAnalysisVm("Nihai Karar", audioVa, temperature, neutralRadius);
     }
 }
 
@@ -62,6 +74,7 @@ public sealed partial class ReportViewModel : ObservableObject
 {
     private readonly IMeetingAggregator _aggregator;
     private readonly double _temperature;
+    private readonly double? _neutralRadius;
 
     [ObservableProperty] private bool _hasReport;
     [ObservableProperty] private string _dominantEmotion = "—";
@@ -93,7 +106,11 @@ public sealed partial class ReportViewModel : ObservableObject
     public ReportViewModel(IMeetingAggregator aggregator, AppConfig? config = null)
     {
         _aggregator = aggregator;
-        _temperature = (config ?? AppConfig.Default).Fusion.DistributionTemperature;
+        var cfg = config ?? AppConfig.Default;
+        _temperature = cfg.Fusion.DistributionTemperature;
+        // Nötr yarıçapı canlı ekrandan geçirilir; buradan da geçmezsek rapor ile canlı ekran
+        // farklı duygu etiketi gösterir (aynı VA'ya farklı yorum).
+        _neutralRadius = cfg.Fusion.NeutralRadius;
     }
 
     /// <summary>Arka plan geçişi başladı.</summary>
@@ -144,10 +161,16 @@ public sealed partial class ReportViewModel : ObservableObject
     public void ApplySpeakerEmotions(
         IReadOnlyList<ChunkResult> chunks,
         IReadOnlyList<SpeakerSegment> speakers,
-        double minOverlapRatio)
+        double minOverlapRatio,
+        IReadOnlyList<SpeakerProsodySummary> speakerProsody)
     {
+        var bySpeaker = speakerProsody.ToDictionary(p => p.Speaker);
         var summaries = SpeakerEmotionAggregator.Aggregate(chunks, speakers, minOverlapRatio);
-        SpeakerEmotions = summaries.Select(s => new SpeakerEmotionVm(s, _temperature)).ToList();
+        SpeakerEmotions = summaries
+            .Select(s => new SpeakerEmotionVm(
+                s, _temperature, _neutralRadius,
+                bySpeaker.TryGetValue(s.Speaker, out var p) ? p : null))
+            .ToList();
         OnPropertyChanged(nameof(SpeakerEmotions));
     }
 
