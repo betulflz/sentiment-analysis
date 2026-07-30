@@ -110,7 +110,13 @@ public sealed record DiarizationConfig(
                                           // Uncertain=true işaretlenir; hiç örtüşme (aday) yoksa
                                           // Bilinmeyen döner. Amaç dürüst belirsizlik — bilgiyi
                                           // çöpe atmadan, uydurma atama da yapmadan (master §12.2)
-    int MaxRecordedMinutes = 90);         // ses biriktirme üst sınırı (16 kHz PCM16 ≈ 115 MB/saat)
+    int MaxRecordedMinutes = 90,          // ses biriktirme üst sınırı (16 kHz PCM16 ≈ 115 MB/saat)
+    // Konuşmacı prozodisi (10d): duygu, konuşmacının KENDİ sesinden ölçülür.
+    // 1 sn altı bölgeler prozodi için yetersiz bağlam taşır; 60 sn ise ortalama için fazlasıyla
+    // yeterlidir — tüm sesi işlemek doğruluk kazandırmadan süreyi katlar.
+    // BAŞLANGIÇ DEĞERLERİ, KALİBRE EDİLMEMİŞ (eval-09).
+    double SpeakerProsodyMinRegionSeconds = 1.0,
+    double SpeakerProsodyBudgetSeconds = 60.0);
 
 /// <summary>Uygulama genel konfigürasyonu (stajyerin config.py karşılığı).</summary>
 public sealed record AppConfig(
