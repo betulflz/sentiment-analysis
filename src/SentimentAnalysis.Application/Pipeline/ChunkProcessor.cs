@@ -45,4 +45,51 @@ public sealed class ChunkProcessor : IChunkProcessor
 
         return new ChunkResult(chunk.Start, chunk.End, fused, transcript.Text, absolute);
     }
+
+    public async Task WarmUpAsync(CancellationToken ct)
+    {
+        // 1. VAD (Silero)
+        try
+        {
+            var dummyChunk = new AudioChunk(new float[512], 16000, TimeSpan.Zero, TimeSpan.FromSeconds(0.032));
+            _vad.HasSpeech(dummyChunk);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new InvalidOperationException($"VAD (Silero) modeli yüklenemedi: {ex.Message}", ex);
+        }
+
+        // 2. Prosody (Wav2Vec2)
+        try
+        {
+            var dummyChunk = new AudioChunk(new float[1600], 16000, TimeSpan.Zero, TimeSpan.FromSeconds(0.1));
+            await _prosody.AnalyzeAsync(dummyChunk, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new InvalidOperationException($"Ses Prozodi (Wav2Vec2) modeli yüklenemedi: {ex.Message}", ex);
+        }
+
+        // 3. Speech-To-Text (Whisper)
+        try
+        {
+            var dummyChunk = new AudioChunk(new float[1600], 16000, TimeSpan.Zero, TimeSpan.FromSeconds(0.1));
+            await _stt.TranscribeAsync(dummyChunk, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new InvalidOperationException($"STT (Whisper) modeli yüklenemedi: {ex.Message}", ex);
+        }
+
+        // 4. Text Emotion (XLM-R)
+        try
+        {
+            var dummyTranscript = new Transcript(string.Empty, DetectedLanguage.Other, 0.0, new List<TranscriptSegment>());
+            await _text.AnalyzeAsync(dummyTranscript, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new InvalidOperationException($"Metin Duygu (XLM-R) modeli yüklenemedi: {ex.Message}", ex);
+        }
+    }
 }

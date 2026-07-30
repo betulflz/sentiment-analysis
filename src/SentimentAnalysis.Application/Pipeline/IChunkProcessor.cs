@@ -7,4 +7,5 @@ namespace SentimentAnalysis.Application.Pipeline;
 public interface IChunkProcessor
 {
     Task<ChunkResult?> ProcessAsync(AudioChunk chunk, CancellationToken ct);
+    Task WarmUpAsync(CancellationToken ct) => Task.CompletedTask;
 }

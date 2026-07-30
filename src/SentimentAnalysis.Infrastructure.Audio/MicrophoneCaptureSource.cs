@@ -63,6 +63,8 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
             var paBuffer = new StreamingChunkBuffer(TargetRate, options.ChunkLength, options.Overlap);
             var paWatchdog = new SilenceWatchdog(TargetRate, DeadStreamWindow);
             bool paDeadStreamReported = false;
+            long totalSamplesReceived = 0;
+            int chunksProduced = 0;
 
             _paCallback = (IntPtr input, IntPtr output, uint frameCount,
                 ref PortAudioSharp.StreamCallbackTimeInfo timeInfo,
@@ -75,6 +77,7 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
                     {
                         var samples = new float[frameCount];
                         Marshal.Copy(input, samples, 0, (int)frameCount);
+                        System.Threading.Interlocked.Add(ref totalSamplesReceived, frameCount);
 
                         paWatchdog.Observe(samples);
                         if (paWatchdog.LooksDead && !paDeadStreamReported)
@@ -87,11 +90,16 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
                         }
 
                         foreach (var chunk in paBuffer.Append(samples))
+                        {
+                            System.Threading.Interlocked.Increment(ref chunksProduced);
+                            System.Console.WriteLine($"[MIC] Chunk üretildi ve kanala yazıldı. Start: {chunk.Start.TotalSeconds}s, End: {chunk.End.TotalSeconds}s, Samples: {chunk.Samples.Length}");
                             paChunks.Writer.TryWrite(chunk);
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
+                    System.Console.WriteLine($"[MIC_ERROR] Callback hatası: {ex.Message}");
                     paChunks.Writer.TryComplete(ex);
                     return PortAudioSharp.StreamCallbackResult.Abort;
                 }
@@ -128,9 +136,11 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
                     );
 
                     _paStream.Start();
+                    System.Console.WriteLine($"[MIC] PortAudio başlatıldı. Cihaz ID: {inputParameters.device}, Ad: {deviceInfo.name}");
                 }
-                catch
+                catch (Exception ex)
                 {
+                    System.Console.WriteLine($"[MIC_ERROR] Stream başlatılamadı: {ex.Message}");
                     StopPaStream();
                     PortAudioSharp.PortAudio.Terminate();
                     throw;
@@ -158,6 +168,7 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
 
                         if (paCancelled)
                         {
+                            System.Console.WriteLine("[MIC] Okuma döngüsü iptal edildi. Kalan chunk'lar drene ediliyor.");
                             while (paChunks.Reader.TryRead(out var pending))
                                 yield return pending;
                             break;
@@ -177,11 +188,15 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
             {
                 StopPaStream();
                 try { PortAudioSharp.PortAudio.Terminate(); } catch { }
+                System.Console.WriteLine($"[MIC] PortAudio sonlandı. Alınan örnek: {totalSamplesReceived}, Üretilen chunk: {chunksProduced}");
             }
 
             var paTail = paBuffer.Flush();
-            if (paTail is not null)
+            if (paTail is not null && paTail.Samples.Length >= 8000)
+            {
+                System.Console.WriteLine($"[MIC] Tail chunk üretildi ve kanala yazılıyor. Start: {paTail.Start.TotalSeconds}s, End: {paTail.End.TotalSeconds}s, Samples: {paTail.Samples.Length}");
                 yield return paTail;
+            }
 
             yield break;
         }
@@ -330,7 +345,7 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
         // henüz tam bir chunk'a ulaşmamış ama gerçek konuşma içeren bir artık varsa (ör. 10
         // saniyelik chunk uzunluğunda 6 saniyede "Durdur"a basılması) bunu kaybetmeden ver.
         var tail = buffer.Flush();
-        if (tail is not null)
+        if (tail is not null && tail.Samples.Length >= 8000)
             yield return tail;
     }
 

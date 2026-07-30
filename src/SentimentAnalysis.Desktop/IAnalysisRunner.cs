@@ -18,4 +18,8 @@ public interface IAnalysisRunner
     /// Additive üye: varsayılan <c>null</c> döndüğünden mevcut sahte implementasyonlar bozulmaz
     /// (null = "bu koşunun kalıcı bir oturumu yok", konuşmacı ayrımı denenmez).</summary>
     Guid? LastSessionId => null;
+
+    /// <summary>Modelleri asenkron olarak warm-up eder ve ilk çıkarım gecikmesini önler.
+    /// Additive üye: varsayılan olarak no-op döner, sahte implementasyonları bozmaz.</summary>
+    Task WarmUpAsync(CancellationToken ct) => Task.CompletedTask;
 }

@@ -1,4 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 using System.Threading.Channels;
+using System.Threading.Tasks;
 using SentimentAnalysis.Application.Abstractions;
 using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Core;
@@ -21,21 +26,8 @@ public sealed class EmotionPipeline
     private int _droppedCount;
     private int _drainSkippedCount;
 
-    /// <summary>"Durdur" sonrası kanalda kalan chunk'ları drene ederken en fazla kaç tanesi işlenir —
-    /// SINIRSIZ değil: kanal 32 kapasiteli ve mikrofon modunda chunk başına 10 sn'lik ses taşıyabilir;
-    /// Whisper+ONNX chunk başına 8 sn'den yavaşsa (M1 Air 8GB'da olası) kanal sürekli dolu kalır ve
-    /// sınırsız drenaj "Durdur"u dakikalarca donuk bırakır (bkz. 08e düzeltme turu Fix 1). 8 seçildi:
-    /// en YENİ ~80 sn'lik konuşmayı (kullanıcının demin söylediği, önemsediği kısmı) kapsar ve en kötü
-    /// durumda bile aşağıdaki <see cref="DrainTimeBudget"/> içinde kalma ihtimali yüksektir.
-    /// Kapasitenin (32) tamamını değil bunu seçmemizin nedeni: geri kalanı zaten DroppedCount'a değil
-    /// (kanal taşması değil bu), <see cref="DrainSkippedCount"/>'a sayılır — sessizce kaybolmaz.</summary>
     private const int MaxDrainedChunksAfterStop = 8;
-
-    /// <summary>Drenajın toplam zaman bütçesi. Bu süre dolarsa drenaj bir HATA sayılmaz — elde ne
-    /// varsa onunla bir <see cref="MeetingSummary"/> üretilir (dürüstlük ilkesi: işlenemeyen kalan
-    /// chunk'lar <see cref="DrainSkippedCount"/> ile ayrıca raporlanır, sessizce yutulmaz). 30 sn:
-    /// kullanıcının "Durdur" sonrası makul bir bekleme toleransı + "asla sonsuza dek donmama" garantisi.</summary>
-    private static readonly TimeSpan DrainTimeBudget = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan DrainTimeBudget = TimeSpan.FromSeconds(90);
 
     public EmotionPipeline(IChunkProcessor processor, ISessionStore store, IMeetingAggregator aggregator, AppConfig config)
     {
@@ -47,12 +39,11 @@ public sealed class EmotionPipeline
 
     public IReadOnlyList<ChunkResult> Timeline => _timeline;
     public int DroppedCount => Volatile.Read(ref _droppedCount);
-
-    /// <summary>"Durdur" sonrası drenaj sınırı (<see cref="MaxDrainedChunksAfterStop"/>) veya zaman
-    /// bütçesi (<see cref="DrainTimeBudget"/>) yüzünden işlenemeden atlanan chunk sayısı.
-    /// <see cref="DroppedCount"/>'tan AYRI tutulur (o yalnızca kanal taşmasını sayar) ama ikisi de
-    /// kullanıcıya "yetişilemeyen ses" olarak BİRLİKTE gösterilmelidir (bkz. LiveViewModel).</summary>
     public int DrainSkippedCount => Volatile.Read(ref _drainSkippedCount);
+
+    /// <summary>Modelleri asenkron olarak warm-up eder ve ilk çıkarım gecikmesini önler.
+    /// Yüklenemeyen modelin hatasını açıklayıcı bir şekilde fırlatır.</summary>
+    public Task WarmUpAsync(CancellationToken ct) => _processor.WarmUpAsync(ct);
 
     public async Task<MeetingSummary> RunAsync(
         IAudioCaptureSource source, CaptureOptions options, Guid sessionId,
@@ -72,38 +63,23 @@ public sealed class EmotionPipeline
             },
             itemDropped: _ => Interlocked.Increment(ref _droppedCount));
 
-        // NOT: Task.Run'un KENDİSİ artık ct ile iptal edilmez (ikinci argüman yok) — üretici,
-        // "Durdur" sonrası kanalı temiz biçimde tamamlayabilmek için ct zaten iptalliyken bile
-        // HER ZAMAN çalışmaya başlamalı. Gerçek iptal-farkındalığı CaptureAsync(options, ct)'in
-        // kendi işi (bkz. MicrophoneCaptureSource: iptali artık kendisi yutup tamponun artığını
-        // vererek normal biter — bu üretici katmanındaki catch(OperationCanceledException) yalnızca
-        // ct zaten iptalliyken kaynağın hiç başlayamadığı ekstrem bir uç durum içindir).
+        // Üretici: Mikrofon yakalamayı durdurma (ct) token'ı ile yönetir.
         var producer = Task.Run(async () =>
         {
             Exception? producerError = null;
             try
             {
                 await foreach (var chunk in source.CaptureAsync(options, ct).ConfigureAwait(false))
-                    // DropOldest modunda WriteAsync asla bloklanmaz/beklemez (TryWrite hızlı
-                    // yolu her zaman başarılı olur) — bu yüzden burada iptal edilmiş ct ile
-                    // çağırmak güvenli DEĞİL: gereksiz yere bir istisna riski almamak için
-                    // CancellationToken.None kullanıyoruz (iptalden sonra da üretilen chunk'lar
-                    // kanala güvenle yazılabilsin).
+                {
                     await channel.Writer.WriteAsync(chunk, CancellationToken.None).ConfigureAwait(false);
+                }
             }
             catch (OperationCanceledException)
             {
-                // "Durdur": canlı mikrofon oturumunda bu artık normal bir bitiştir, hata değil
-                // (kullanıcı talebi: Durdur bir RAPOR üretmeli). Kaynak bunu genelde kendisi
-                // yutar (bkz. MicrophoneCaptureSource); buraya yalnızca ct daha CaptureAsync
-                // hiç başlamadan iptal olduysa düşülür. Kanalı hatasız tamamlıyoruz.
+                // Durdurma tetiklendi
             }
             catch (Exception ex)
             {
-                // Kaynağın gerçek hatası (ör. MicrophonePermissionException): kanalı BU
-                // hatayla tamamla ki tüketicinin ReadAllAsync'i onu fırlatsın. Aksi halde
-                // kanal sessizce normal biter ve çalışma boş bir özete düşer — spec bunu
-                // yasaklıyor (bkz. sub-project 08e planı).
                 producerError = ex;
             }
             finally
@@ -112,68 +88,34 @@ public sealed class EmotionPipeline
             }
         });
 
-        bool cancelledMidRun = false;
+        // Tüketici için 90 saniye güvenlik bütçeli bağımsız token
+        using var processingCts = new CancellationTokenSource(DrainTimeBudget);
+
         try
         {
-            await foreach (var chunk in channel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
-                await ProcessOneAsync(chunk, sessionId, progress, ct).ConfigureAwait(false);
+            // ct iptal olsa bile kanal writer tamamlanana ( Complete ) kadar tüm chunk'ları tüketiriz
+            await foreach (var chunk in channel.Reader.ReadAllAsync(processingCts.Token).ConfigureAwait(false))
+            {
+                await ProcessOneAsync(chunk, sessionId, progress, processingCts.Token).ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException)
         {
-            // "Durdur": kanal okuması ct iptal olduğu AN fırlar — kanalda o sırada zaten
-            // kuyruğa alınmış ama henüz okunmamış chunk'lar olsa bile (bu, gerçek dünyada
-            // gözlemlenen kök neden: kullanıcı konuştu, chunk üretildi, ama "Durdur"a basılır
-            // basılmaz okuma iptal olup kanaldaki veri hiç işlenmeden düşüyordu). Bunu normal
-            // bitiş sayıp aşağıda kalanları drene ediyoruz — hata olarak yukarı atmıyoruz.
-            cancelledMidRun = true;
-        }
-        finally
-        {
-            // Üretici, kaynağını (mikrofon kuyruğunu) HER durumda (iptal dahil) durdurup
-            // kanalı tamamlar — bunu burada gözlüyoruz ki drene etmeden önce üretici KESİN
-            // bitmiş olsun (aksi halde aşağıdaki TryRead döngüsü verilerin hâlâ yazılmakta
-            // olduğu bir kanalı erken/eksik drene edebilir).
-            try { await producer.ConfigureAwait(false); } catch { /* iptal/üretici hatası yutulur; asıl akış yukarı gider */ }
-        }
-
-        if (cancelledMidRun)
-        {
-            // Üretici artık kesin bitti (yukarıda beklendi) — kanalda kalan (henüz işlenmemiş)
-            // chunk'ları kaybetmeden TryRead ile topla (TryRead asla bloklamaz — hang riski yok,
-            // kanal boşalınca döngü kendiliğinden biter). Kanal kapasitesi zaten sınırlı (varsayılan
-            // 32) olduğundan bu liste sınırsız büyümez.
+            // Zaman bütçesi doldu: elimizdeki kalan işlenemeyenler atlanmış sayılır
             var pendingChunks = new List<AudioChunk>();
             while (channel.Reader.TryRead(out var pending))
                 pendingChunks.Add(pending);
 
-            // Yalnızca en YENİ MaxDrainedChunksAfterStop chunk'ı işleriz (kullanıcının demin
-            // konuştuğu, önemsediği ses) — kapasitenin tamamını sınırsız drene etmek "Durdur"u
-            // dakikalarca donuk bırakabilir (bkz. Fix 1). Kapak öncesi (en eski, en az önemli)
-            // olanlar sessizce değil, SAYILARAK atlanır.
-            int skippedByCap = Math.Max(0, pendingChunks.Count - MaxDrainedChunksAfterStop);
-            if (skippedByCap > 0)
-                Interlocked.Add(ref _drainSkippedCount, skippedByCap);
-
-            // Zaman bütçesi: model çağrıları iptal edilmiş ct İLE YAPILAMAZ (anında iptal olurdu) —
-            // bu yüzden drene ederken taze bir CancellationTokenSource (timeout) kullanılır.
-            // Bütçe dolması bir HATA değildir (aşağıdaki catch), yalnızca drenajı erken keser.
-            using var drainCts = new CancellationTokenSource(DrainTimeBudget);
-            int i = skippedByCap;
-            try
-            {
-                for (; i < pendingChunks.Count; i++)
-                    await ProcessOneAsync(pendingChunks[i], sessionId, progress, drainCts.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                // Zaman bütçesi doldu: elimizdeki kadarıyla devam ederiz (dürüstlük ilkesi —
-                // sessizce yutma yok), kalan işlenemeyenler de atlanmış sayılır.
-                int remaining = pendingChunks.Count - i;
-                if (remaining > 0) Interlocked.Add(ref _drainSkippedCount, remaining);
-            }
+            if (pendingChunks.Count > 0)
+                Interlocked.Add(ref _drainSkippedCount, pendingChunks.Count);
+        }
+        finally
+        {
+            try { await producer.ConfigureAwait(false); } catch { }
         }
 
-        return BuildSummary(sessionId, startedAt, language);
+        var outcome = _timeline.Count > 0 ? AnalysisOutcome.Success : AnalysisOutcome.NoResult;
+        return BuildSummary(sessionId, startedAt, language, outcome);
     }
 
     /// <summary>Tek bir chunk'ı işleyip (VAD sessizse atlanır) zaman çizelgesine/depoya yazar.
@@ -183,18 +125,27 @@ public sealed class EmotionPipeline
     private async Task ProcessOneAsync(
         AudioChunk chunk, Guid sessionId, IProgress<ChunkResult>? progress, CancellationToken ct)
     {
-        ChunkResult? result;
+        ChunkResult? result = null;
         try
         {
+            var rms = Math.Sqrt(chunk.Samples.Select(s => (double)s * s).Average());
+            var peak = chunk.Samples.Max(Math.Abs);
+            System.Console.WriteLine($"[PIPELINE] Chunk işleme başladı: Start={chunk.Start.TotalSeconds}s, End={chunk.End.TotalSeconds}s, Samples={chunk.Samples.Length}, RMS={rms:F4}, Peak={peak:F4}, Canceled={ct.IsCancellationRequested}");
+            
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             result = await _processor.ProcessAsync(chunk, ct).ConfigureAwait(false);
+            sw.Stop();
+            
+            System.Console.WriteLine($"[PIPELINE] Chunk işleme bitti: Süre={sw.ElapsedMilliseconds}ms, VAD={(result != null ? "Konuşma var" : "Sessizlik")}");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
+            System.Console.WriteLine($"[PIPELINE_ERROR] Chunk işlemi iptal edildi (OperationCanceledException): {ex.Message}");
             throw;
         }
-        catch
+        catch (Exception ex)
         {
-            // Bir chunk'ın hatası hattı çökertmez (spec: degradasyon, çökme yok).
+            System.Console.WriteLine($"[PIPELINE_ERROR] Chunk işleminde beklenmedik hata yutuldu: {ex.GetType().Name} - {ex.Message}\n{ex.StackTrace}");
             return;
         }
 
@@ -209,9 +160,10 @@ public sealed class EmotionPipeline
     /// akışın sonuna ulaştığında bunu kullanır; çağıran taraf (ör. canlı mikrofonda "Durdur" ile gelen
     /// iptal) bunu kendi normal-bitiş kararı için de kullanabilir (bkz. <c>PipelineAnalysisRunner</c>).
     /// Boş zaman çizelgesinde <see cref="IMeetingAggregator"/> geçerli, boş-ama-çökmeyen bir özet döner.</summary>
-    public MeetingSummary BuildSummary(Guid sessionId, DateTimeOffset startedAt, DetectedLanguage language)
+    public MeetingSummary BuildSummary(Guid sessionId, DateTimeOffset startedAt, DetectedLanguage language, AnalysisOutcome outcome = AnalysisOutcome.Success)
     {
         var session = new MeetingSession(sessionId, startedAt, language, _timeline.ToList());
-        return _aggregator.Aggregate(session);
+        var summary = _aggregator.Aggregate(session);
+        return summary with { Outcome = outcome };
     }
 }

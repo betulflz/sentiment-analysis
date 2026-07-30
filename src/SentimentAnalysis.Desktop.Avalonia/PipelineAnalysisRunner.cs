@@ -102,7 +102,8 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
 
             // Ses, özet ÜRETİLDİKTEN SONRA saklanır: rapor bu yüzden gecikmez (spec 10 S2).
             // İptal edilmiş ct ile yazamayız (anında iptal olurdu) — "Durdur" normal bir bitiştir.
-            if (recording is not null)
+            // Yalnızca analiz BAŞARILI ise ses kaydı ve oturum veritabanına saklanır (NoResult durumunda saklanmaz).
+            if (recording is not null && summary.Outcome == AnalysisOutcome.Success)
             {
                 AudioLimitReached = recording.LimitReached;
                 var pcm = recording.GetPcm16();
@@ -121,6 +122,8 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
             (source as IDisposable)?.Dispose();
         }
     }
+
+    public Task WarmUpAsync(CancellationToken ct) => _pipeline.WarmUpAsync(ct);
 
     private static DetectedLanguage ParseLanguage(string? code) => code switch
     {

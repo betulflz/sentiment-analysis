@@ -362,12 +362,9 @@ public class EmotionPipelineTests
 
         Assert.NotNull(summary);
         Assert.Equal("özet", summary.TurkishSummary);
-        // İlk (gate'teki) chunk + drenajda en fazla MaxDrainedChunksAfterStop (8) daha işlenmiş olabilir.
-        Assert.True(pipeline.Timeline.Count <= 9,
-            $"drenaj sayı sınırı (cap + ilk chunk) aşılmamalı: {pipeline.Timeline.Count}");
-        // Kapasiteyi (32) ve cap'i (8) aşan üretim atlanmış SAYILMALI (sessizce yutulmamalı).
-        Assert.True(pipeline.DrainSkippedCount > 0,
-            $"backlog cap'i aşıyor olmalı, atlanan sayılmalı: {pipeline.DrainSkippedCount}");
+        // Drenaj sınırlandırılması kaldırıldı, tüm backlog tüketilmeli
+        Assert.Equal(33, pipeline.Timeline.Count);
+        Assert.Equal(0, pipeline.DrainSkippedCount);
     }
 
     /// <summary>"Durdur" ilk chunk işlenmeden basılırsa (boş oturum) BuildSummary çökmemeli —

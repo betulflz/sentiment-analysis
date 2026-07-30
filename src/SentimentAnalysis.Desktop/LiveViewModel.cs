@@ -74,6 +74,17 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     /// okuma "Kaydet"e bastıktan sonra yeni bir koşu başlatılmasını gerektirir.</summary>
     [ObservableProperty] private string _diarizationHint = string.Empty;
 
+    /// <summary>Modeller hazırlanıyor mu (warm-up)?</summary>
+    [ObservableProperty] private bool _isPreparingModels;
+
+    partial void OnIsPreparingModelsChanged(bool value)
+    {
+        if (value)
+            CaptureStatusText = "Modeller hazırlanıyor...";
+        else
+            CaptureStatusText = IsFinishing ? "Analiz tamamlanıyor…" : "Dinleniyor";
+    }
+
     partial void OnIsFinishingChanged(bool value) =>
         CaptureStatusText = value ? "Analiz tamamlanıyor…" : "Dinleniyor";
 
@@ -133,17 +144,18 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     [RelayCommand(CanExecute = nameof(CanStart))]
     private void Start()
     {
-        if (IsCapturing) return;
+        if (IsCapturing || IsPreparingModels) return;
         IsCapturing = true;
         DiarizationHint = _diarization?.Enabled == true
             ? "Konuşmacı ayrımı bu oturum için AÇIK — ses geçici olarak saklanacak, konuşmacılar Durdur sonrası Rapor'da görünür."
             : "Konuşmacı ayrımı KAPALI (Ayarlar'dan açıp Kaydet'e basarak bir sonraki oturumda etkinleştirebilirsiniz).";
         StartCommand.NotifyCanExecuteChanged();
+        StopCommand.NotifyCanExecuteChanged();
         _cts = new CancellationTokenSource();
         _run = RunAsync(_cts.Token);
     }
 
-    private bool CanStart() => !IsCapturing && (UseMicrophone || _selected?.Path != null);
+    private bool CanStart() => !IsCapturing && !IsPreparingModels && (UseMicrophone || _selected?.Path != null);
 
     private async Task RunAsync(CancellationToken ct)
     {
@@ -152,24 +164,64 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
             CaptureError = string.Empty;
             CongruenceBadge = string.Empty; // önceki koşudan kalan rozet ("Maskeleme" vb.) sarkmasın
             SkippedChunkCount = 0; // önceki koşudan kalan sayı sarkmasın
+
+            // Modelleri asenkron olarak warm-up ediyoruz
+            IsPreparingModels = true;
+            StartCommand.NotifyCanExecuteChanged();
+            StopCommand.NotifyCanExecuteChanged();
+
+            await _runner.WarmUpAsync(ct).ConfigureAwait(true);
+
+            IsPreparingModels = false;
+            StartCommand.NotifyCanExecuteChanged();
+            StopCommand.NotifyCanExecuteChanged();
+
             var summary = await _runner.RunAsync(this, ct).ConfigureAwait(true);
             SkippedChunkCount = _runner.SkippedChunkCount;
             LastSessionId = _runner.LastSessionId;   // 10b: arka plan konuşmacı geçişinin hedefi
-            Completed?.Invoke(summary);
+            
+            if (summary.Outcome == AnalysisOutcome.Success)
+            {
+                Completed?.Invoke(summary);
+            }
+            else if (summary.Outcome == AnalysisOutcome.NoResult)
+            {
+                CaptureError = "Analiz sonucu üretilemedi (hiç konuşma/ses algılanmadı).";
+            }
+            else
+            {
+                CaptureError = "Analiz başarısız oldu.";
+            }
         }
         catch (OperationCanceledException) { /* Stop ile iptal — normal */ }
         // Sessiz yutma yok (08 deferred fix): hata uzun/açıklayıcı olabileceğinden (örn. mikrofon
-        // izni reddi) küçük rozete değil, tam metni gösterebilen CaptureError'a yazılır.
-        catch (Exception ex) { CaptureError = ex.Message; }
-        finally { IsCapturing = false; IsFinishing = false; StartCommand.NotifyCanExecuteChanged(); }
+        // izni reddi veya model yüklenememesi) tam metni gösterebilen CaptureError'a yazılır.
+        catch (Exception ex) 
+        { 
+            CaptureError = ex.Message; 
+        }
+        finally 
+        { 
+            IsCapturing = false; 
+            IsPreparingModels = false;
+            IsFinishing = false; 
+            StartCommand.NotifyCanExecuteChanged(); 
+            StopCommand.NotifyCanExecuteChanged();
+        }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanStop))]
     private void Stop()
     {
-        if (IsCapturing) IsFinishing = true; // motor kalan chunk'ları drene edip özet üretene dek
+        if (IsCapturing && !IsFinishing)
+        {
+            IsFinishing = true; 
+            StopCommand.NotifyCanExecuteChanged();
+        }
         _cts?.Cancel();
     }
+
+    private bool CanStop() => IsCapturing && !IsFinishing && !IsPreparingModels;
 
     /// <summary>Test yardımcısı: aktif koşu görevini bekler (yoksa hemen döner).</summary>
     public Task WaitForIdleAsync() => _run ?? Task.CompletedTask;
