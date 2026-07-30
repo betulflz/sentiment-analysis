@@ -140,4 +140,20 @@ public class ReportViewModelTests
 
         Assert.Contains("hesaplanıyor", vm.DiarizationStatus, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void ApplySpeakers_BelirsizAtama_SatiraYansir()
+    {
+        // Eşik-altı örtüşme: cümle en iyi adaya atanır ama UI'ın uyarabilmesi için
+        // belirsizlik satıra kadar taşınmalıdır.
+        var vm = new ReportViewModel(new FakeAggregator());
+        var transcript = new[] { new TranscriptSegment("merhaba", TimeSpan.Zero, TimeSpan.FromSeconds(10)) };
+        var speakers = new[] { new SpeakerSegment(new SpeakerId(0), TimeSpan.Zero, TimeSpan.FromSeconds(3)) };
+
+        vm.ApplySpeakers(transcript, speakers, minOverlapRatio: 0.5);
+
+        Assert.Single(vm.SpeakerLines);
+        Assert.Equal("Konuşmacı A", vm.SpeakerLines[0].Label);
+        Assert.True(vm.SpeakerLines[0].Uncertain);
+    }
 }

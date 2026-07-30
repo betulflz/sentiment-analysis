@@ -3,10 +3,12 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:desktop="clr-namespace:SentimentAnalysis.Desktop;assembly=SentimentAnalysis.Desktop"
+             xmlns:conv="using:SentimentAnalysis.Desktop.Avalonia.Converters"
              mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="500"
              x:Class="SentimentAnalysis.Desktop.Avalonia.Views.ReportView">
 
     <UserControl.Resources>
+        <conv:UncertainOpacityConverter x:Key="UncertainOpacityConverter" />
         <DataTemplate x:Key="SourcePanel" DataType="desktop:SourceAnalysisVm">
             <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1"
                     CornerRadius="6" Padding="12" Margin="2" MinWidth="160">
@@ -67,10 +69,16 @@
                         <ItemsControl ItemsSource="{Binding SpeakerLines}" IsVisible="{Binding HasSpeakers}" Margin="0,8,0,0">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid ColumnDefinitions="110,120,*" Margin="0,4">
+                                    <Grid ColumnDefinitions="110,120,*,20" Margin="0,4">
                                         <TextBlock Grid.Column="0" Text="{Binding TimeRange}" Opacity="0.7" />
                                         <TextBlock Grid.Column="1" Text="{Binding Label}" FontWeight="SemiBold" />
-                                        <TextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap"
+                                                   Opacity="{Binding Uncertain, Converter={StaticResource UncertainOpacityConverter}}" />
+                                        <TextBlock Grid.Column="3" Text="?" FontWeight="Bold" FontSize="12"
+                                                   IsVisible="{Binding Uncertain}"
+                                                   ToolTip.Tip="Bu satırın hangi konuşmacıya ait olduğu kesin değil."
+                                                   Foreground="{DynamicResource SystemAccentColor}"
+                                                   VerticalAlignment="Center" Margin="4,0,0,0" />
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -82,6 +90,10 @@
                                 <DataTemplate DataType="desktop:SpeakerEmotionVm">
                                     <StackPanel Spacing="4" Margin="0,0,0,12">
                                         <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="14" />
+                                        <TextBlock FontSize="10" FontStyle="Italic"
+                                                   Foreground="{DynamicResource SystemBaseMediumColor}"
+                                                   Text="{Binding AnalyzedSeconds, StringFormat='Ses ölçümü {0:F0} sn konuşmaya dayanıyor'}"
+                                                   IsVisible="{Binding HasAudioMeasurement}" />
                                         <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
                                             <ContentControl Grid.Column="0" Content="{Binding TextAnalysis}"
                                                             ContentTemplate="{StaticResource SourcePanel}"
