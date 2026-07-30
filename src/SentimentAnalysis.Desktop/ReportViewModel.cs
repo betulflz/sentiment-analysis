@@ -25,11 +25,16 @@ public sealed class SpeakerLineVm
     public string Text { get; }
     public string TimeRange { get; }
 
+    /// <summary>Atama eşik-altı örtüşmeye dayanıyor: UI bunu soluk renk + "?" rozetiyle
+    /// gösterir. Gizlenirse sistem emin olmadığı yerde emin görünür.</summary>
+    public bool Uncertain { get; }
+
     public SpeakerLineVm(SpeakerLine line, string? userGivenName = null)
     {
         Label = userGivenName ?? line.Speaker.DefaultLabel;
         Text = line.Text;
         TimeRange = $"{line.Start:mm\\:ss}–{line.End:mm\\:ss}";
+        Uncertain = line.Uncertain;
     }
 }
 
