@@ -2,6 +2,13 @@ using System.Collections.Generic;
 
 namespace SentimentAnalysis.Core;
 
+public enum AnalysisOutcome
+{
+    Success,
+    NoResult,
+    Failed
+}
+
 /// <summary>
 /// Toplantı-düzeyi agregasyon çıktısı (master §6). Chunk zaman çizelgesinden
 /// hesaplanır. Türkçe özet cümlesi Application katmanında üretilir; burada yalnızca
@@ -15,4 +22,17 @@ public sealed record MeetingSummary(
     IReadOnlyList<ChunkResult> PeakMoments, // en kritik anlar (yüksek arousal / düşük valence)
     ValenceArousal AverageVa,
     double AverageCongruence,     // ortalama söz-ton örtüşmesi (0..1)
-    string TurkishSummary);
+    string TurkishSummary,
+    AnalysisOutcome Outcome = AnalysisOutcome.Success)
+{
+    public static MeetingSummary CreateEmpty(AnalysisOutcome outcome, string summaryText = "") => new(
+        DominantEmotion: Emotion.Notr,
+        TimeShareByEmotion: new Dictionary<Emotion, double>(),
+        ValenceTrend: 0.0,
+        EmotionalVolatility: 0.0,
+        PeakMoments: new List<ChunkResult>(),
+        AverageVa: ValenceArousal.Neutral,
+        AverageCongruence: 1.0,
+        TurkishSummary: summaryText,
+        Outcome: outcome);
+}
