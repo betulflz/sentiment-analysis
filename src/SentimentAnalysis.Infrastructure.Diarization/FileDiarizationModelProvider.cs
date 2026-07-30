@@ -22,12 +22,34 @@ public sealed class FileDiarizationModelProvider : IDiarizationModelProvider
         "github.com/k2-fsa/sherpa-onnx → releases/speaker-segmentation-models/" +
         "sherpa-onnx-pyannote-segmentation-3-0.tar.bz2 (açıp models/ altına koyun)");
 
-    public string EmbeddingModelPath => Resolve(
-        EmbeddingFile,
-        "konuşmacı embedding modeli",
-        "github.com/k2-fsa/sherpa-onnx → releases/speaker-recongition-models/" +
-        "wespeaker_en_voxceleb_resnet34_LM.onnx " +
-        $"(indirip {EmbeddingFile} adıyla models/ altına koyun)");
+    // wespeaker_en_voxceleb_resnet34_LM.onnx ~26 MB'dır. Aralık geniş tutulur: amaç sürüm
+    // farkını reddetmek değil, YANLIŞ MODELİ yakalamaktır (eski 3dspeaker dosyası 39,5 MB).
+    private const long EmbeddingMinBytes = 15_000_000;
+    private const long EmbeddingMaxBytes = 35_000_000;
+
+    public string EmbeddingModelPath
+    {
+        get
+        {
+            var path = Resolve(
+                EmbeddingFile,
+                "konuşmacı embedding modeli",
+                "github.com/k2-fsa/sherpa-onnx → releases/speaker-recongition-models/" +
+                "wespeaker_en_voxceleb_resnet34_LM.onnx " +
+                $"(indirip {EmbeddingFile} adıyla models/ altına koyun)");
+
+            long size = new FileInfo(path).Length;
+            if (size < EmbeddingMinBytes || size > EmbeddingMaxBytes)
+                throw new InvalidDataException(
+                    $"Konuşmacı embedding modeli beklenen boyutta değil ({size} bayt; beklenen " +
+                    $"{EmbeddingMinBytes}-{EmbeddingMaxBytes} bayt). Kümeleme eşiği " +
+                    "wespeaker_en_voxceleb_resnet34_LM modeline göre ölçüldü; başka bir model " +
+                    "sessizce yanlış konuşmacı sayısı üretir. Doğru dosyayı indirip " +
+                    $"{EmbeddingFile} adıyla değiştirin: {path}");
+
+            return path;
+        }
+    }
 
     private string Resolve(string relative, string what, string howToGet)
     {
