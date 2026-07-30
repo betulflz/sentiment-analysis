@@ -24,7 +24,17 @@ public class SpeakerAnalysisServiceTests
     private sealed class FakeStore(float[]? audio, IReadOnlyList<SpeakerSegment> saved) : IDiarizationStore
     {
         public IReadOnlyList<SpeakerSegment> Saved { get; private set; } = saved;
-        public Task<float[]?> GetSessionAudioAsync(Guid sessionId, CancellationToken ct) => Task.FromResult(audio);
+
+        /// <summary>Kaç kez çağrıldığı (düzeltme turu 1 / bulgu 3): SqliteSessionStore'da her
+        /// çağrı yeniden şifre çözüp yeni bir tahsis yapar; servis sesi İKİ KEZ okumamalıdır.</summary>
+        public int GetSessionAudioCalls { get; private set; }
+
+        public Task<float[]?> GetSessionAudioAsync(Guid sessionId, CancellationToken ct)
+        {
+            GetSessionAudioCalls++;
+            return Task.FromResult(audio);
+        }
+
         public Task SaveSpeakerSegmentsAsync(Guid sessionId, IReadOnlyList<SpeakerSegment> segments, CancellationToken ct)
         {
             Saved = segments;
@@ -60,7 +70,7 @@ public class SpeakerAnalysisServiceTests
         var store = new FakeStore(audio, speakers);
         var job = new DiarizationJob(new FakeDiarizer(speakers), store, AppConfig.Default);
         var analyzer = new SpeakerProsodyAnalyzer(new FakeProsody(), AppConfig.Default);
-        var service = new SpeakerAnalysisService(job, new FakeReader(speakers), new FakeState(), analyzer, store);
+        var service = new SpeakerAnalysisService(job, new FakeReader(speakers), new FakeState(), analyzer);
 
         var result = await service.RunAsync(Guid.NewGuid(), CancellationToken.None);
 
@@ -70,12 +80,42 @@ public class SpeakerAnalysisServiceTests
     }
 
     [Fact]
-    public async Task RunAsync_SesYoksa_ProzodiListesiBosKalir()
+    public async Task RunAsync_Tamamlaninca_OturumSesiTekSeferOkunur()
     {
+        // Bulgu 3 (düzeltme turu 1): SqliteSessionStore her çağrıda dosyayı yeniden şifre çözüp
+        // yeni bir float[] ayırır; RunWithAudioAsync üzerinden TEK okuma yapılmalı — hem diarizer
+        // hem prozodi analizörü aynı örneği paylaşmalı.
+        var speakers = new[]
+        {
+            new SpeakerSegment(new SpeakerId(0), TimeSpan.Zero, TimeSpan.FromSeconds(4)),
+            new SpeakerSegment(new SpeakerId(1), TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(8)),
+        };
+        var audio = new float[8 * 16000];
+        var store = new FakeStore(audio, speakers);
+        var job = new DiarizationJob(new FakeDiarizer(speakers), store, AppConfig.Default);
+        var analyzer = new SpeakerProsodyAnalyzer(new FakeProsody(), AppConfig.Default);
+        var service = new SpeakerAnalysisService(job, new FakeReader(speakers), new FakeState(), analyzer);
+
+        await service.RunAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(1, store.GetSessionAudioCalls);
+    }
+
+    [Fact]
+    public async Task RunAsync_SesYoksa_NoAudioDoner_ProzodiListesiBosKalir()
+    {
+        // Bulgu 2 (düzeltme turu 1): önceki adı ("...ProzodiListesiBosKalir") SpeakerAnalysisService
+        // içinde "Completed ama ses null" diye ayrı bir savunma dalı varmış gibi okunuyordu; ama
+        // DiarizationJob zaten NoAudio'da erken çıkıyor, o dal HİÇ ÇALIŞTIRILMIYORDU. Bulgu 3
+        // düzeltmesiyle (RunWithAudioAsync) bu dal artık YAPISAL OLARAK İMKANSIZ: Completed
+        // dönüldüğünde Audio her zaman doludur (bkz. DiarizationJob dokümantasyonu), bu yüzden
+        // SpeakerAnalysisService'teki ayrı null/boş kontrolü tamamen kaldırıldı. Bu test artık
+        // yalnızca gerçekten var olan yolu doğruluyor: ses hiç yoksa NoAudio döner ve
+        // SpeakerProsody boş kalır — ayrı bir dal iddia etmiyor.
         var store = new FakeStore(audio: null, saved: Array.Empty<SpeakerSegment>());
         var job = new DiarizationJob(new FakeDiarizer(Array.Empty<SpeakerSegment>()), store, AppConfig.Default);
         var analyzer = new SpeakerProsodyAnalyzer(new FakeProsody(), AppConfig.Default);
-        var service = new SpeakerAnalysisService(job, new FakeReader(Array.Empty<SpeakerSegment>()), new FakeState(), analyzer, store);
+        var service = new SpeakerAnalysisService(job, new FakeReader(Array.Empty<SpeakerSegment>()), new FakeState(), analyzer);
 
         var result = await service.RunAsync(Guid.NewGuid(), CancellationToken.None);
 

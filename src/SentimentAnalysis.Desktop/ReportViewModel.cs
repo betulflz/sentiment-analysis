@@ -40,7 +40,17 @@ public sealed class SpeakerLineVm
 
 /// <summary>Konuşmacı-başına duygu özeti (10c): metin/ses/nihai üç sütun, "Metin Analizi" /
 /// "Ses Analizi" / "Nihai Karar" panelleriyle aynı görünüm modeli (<see cref="SourceAnalysisVm"/>)
-/// yeniden kullanılır — canlı ekranla rapor asla ayrışmasın diye.</summary>
+/// yeniden kullanılır. Üç panel de <c>neutralRadius</c>'u canlı ekrandan alır — aksi halde aynı
+/// VA noktası rapor ile canlı ekranda farklı duygu etiketiyle görünürdü.
+/// <para><b>"Nihai Karar" neden ham prozodi DEĞİL:</b> <c>s.Combined</c>, <c>EmotionFusion</c>'ın
+/// ürettiği füzyon sonucudur ve ses güvenilirliği düşükken (düşük SNR, 3 sn altı süre, sessizlik)
+/// bilinçli olarak nötr merkeze çekilir — "bu sese güvenmiyorum" demenin yoludur (düzeltme turu
+/// 1 / bulgu 1). "Nihai Karar" panelini ölçülmüş ham prozodiyle (<c>audioVa</c>) beslemek bu
+/// korumayı atlayıp güvenilmez seste uydurma bir sonuç gösterirdi; ayrıca canlı ekran
+/// <c>Fused.Combined</c> gösterdiği için rapor başka şey gösterirse iki yüzey ayrışırdı. "Ses
+/// Analizi" paneli ise KASITLI olarak ham ölçülmüş prozodiyi (<c>audioVa</c>) göstermeye devam
+/// eder — 10d'nin getirdiği iyileştirme (kişinin KENDİ sesinden ölçüm) tam burada görünür
+/// olmalı.</para></summary>
 public sealed class SpeakerEmotionVm
 {
     public string Label { get; }
@@ -65,7 +75,9 @@ public sealed class SpeakerEmotionVm
         AnalyzedSeconds = prosody?.AnalyzedSeconds ?? 0;
         TextAnalysis = new SourceAnalysisVm("Metin Analizi", s.Text, temperature, neutralRadius);
         AudioAnalysis = new SourceAnalysisVm("Ses Analizi", audioVa, temperature, neutralRadius);
-        CombinedAnalysis = new SourceAnalysisVm("Nihai Karar", audioVa, temperature, neutralRadius);
+        // Bulgu 1: Nihai Karar füzyon sonucunu (s.Combined) gösterir, ham prozodiyi değil —
+        // bkz. sınıf-üstü açıklama.
+        CombinedAnalysis = new SourceAnalysisVm("Nihai Karar", s.Combined, temperature, neutralRadius);
     }
 }
 

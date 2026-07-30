@@ -40,14 +40,18 @@ public sealed class SpeakerAnalysisService : ISpeakerAnalysis
     private readonly ISpeakerDataReader _reader;
     private readonly IDiarizationState _state;
     private readonly SpeakerProsodyAnalyzer _prosody;
-    private readonly IDiarizationStore _store;
 
+    // NOT (düzeltme turu 1 / bulgu 3): IDiarizationStore burada KASITLI olarak alınmıyor.
+    // Ses artık _job.RunWithAudioAsync üzerinden TEK seferde okunuyor; ayrı bir store bağımlılığı
+    // ikinci bir GetSessionAudioAsync çağrısına (dolayısıyla ikinci bir şifre-çözme + tahsis) davetiye
+    // çıkarırdı. Segment kaydı zaten DiarizationJob içinde yapılıyor; bu sınıfın store'a doğrudan
+    // ihtiyacı yok.
     public SpeakerAnalysisService(
         DiarizationJob job, ISpeakerDataReader reader, IDiarizationState state,
-        SpeakerProsodyAnalyzer prosody, IDiarizationStore store)
+        SpeakerProsodyAnalyzer prosody)
     {
         _job = job; _reader = reader; _state = state;
-        _prosody = prosody; _store = store;
+        _prosody = prosody;
     }
 
     // Çalışma anında okunur: kullanıcı Ayarlar'dan açtığında uygulama yeniden başlatılmadan
@@ -56,7 +60,9 @@ public sealed class SpeakerAnalysisService : ISpeakerAnalysis
 
     public async Task<SpeakerAnalysisResult> RunAsync(Guid sessionId, CancellationToken ct)
     {
-        var outcome = await _job.RunAsync(sessionId, ct).ConfigureAwait(false);
+        // Ses BURADA değil, RunWithAudioAsync içinde okunur — tek okuma, iki tüketici (diarizer +
+        // prozodi analizörü). Bkz. DiarizationJob.RunWithAudioAsync dokümantasyonu (bulgu 3).
+        var (outcome, audio) = await _job.RunWithAudioAsync(sessionId, ct).ConfigureAwait(false);
 
         // Başarısızlıkta segment okumaya gerek yok: rapor konuşmacısız gösterilecek.
         if (outcome != DiarizationOutcome.Completed)
@@ -66,12 +72,10 @@ public sealed class SpeakerAnalysisService : ISpeakerAnalysis
         var speakers = await _reader.GetSpeakerSegmentsAsync(sessionId, ct).ConfigureAwait(false);
         var chunks = await _reader.GetChunkResultsAsync(sessionId, ct).ConfigureAwait(false);
 
-        // Konuşmacı duygusu, kişinin KENDİ sesinden ölçülür (10d). Ses zaten diarization için
-        // saklanmıştı; ek kayıt maliyeti yoktur.
-        var audio = await _store.GetSessionAudioAsync(sessionId, ct).ConfigureAwait(false);
-        var prosody = audio is null || audio.Length == 0
-            ? Array.Empty<SpeakerProsodySummary>()
-            : await _prosody.AnalyzeAsync(audio, speakers, ct).ConfigureAwait(false);
+        // Konuşmacı duygusu, kişinin KENDİ sesinden ölçülür (10d). outcome==Completed olduğu
+        // için audio DEĞİŞMEZ OLARAK doludur (bkz. RunWithAudioAsync sözleşmesi) — ikinci bir
+        // null/boş kontrolüne gerek yoktur.
+        var prosody = await _prosody.AnalyzeAsync(audio, speakers, ct).ConfigureAwait(false);
 
         return new SpeakerAnalysisResult(outcome, transcript, speakers, chunks) { SpeakerProsody = prosody };
     }
