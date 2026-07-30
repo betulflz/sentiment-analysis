@@ -49,13 +49,24 @@ public static class CompositionRoot
         // chunked near-real-time akış kullanır (konuşurken analiz). Sınıflar depoda kalıyor
         // (CrossPlatformAudioConverter onları kullanıyor ve testlidirler), ama canlı analiz
         // yolu MicrophoneCaptureSource → EmotionPipeline akışıdır.
+        // Teşhis kanalı: üretimde SESSİZ. Paketlenmiş uygulamada (macOS .app, Windows GUI)
+        // bağlı bir konsol olmadığından konsola yazmak maliyet ödeyip fayda sağlamaz; ayrıca
+        // ses geri çağrımı gibi gerçek zamanlı yollarda I/O ses kopmasına yol açar.
+        // Bir sorunu izlemek gerektiğinde SENTIMENT_DIAG=1 ile açılır ve çıktı Trace'e gider
+        // (hata ayıklayıcı, DebugView veya eklenecek bir dinleyici) — her platformda çalışır.
+        services.AddSingleton<IDiagnosticLog>(_ =>
+            Environment.GetEnvironmentVariable("SENTIMENT_DIAG") == "1"
+                ? new TraceDiagnosticLog()
+                : NullDiagnosticLog.Instance);
+
         services.AddSingleton<Func<IAudioCaptureSource?>>(sp =>
         {
             var selected = sp.GetRequiredService<ISelectedAudio>();
             var mode = sp.GetRequiredService<ICaptureModeState>();
             var audioSourceFactory = sp.GetRequiredService<IAudioSourceFactory>();
+            var log = sp.GetRequiredService<IDiagnosticLog>();
             return () => mode.Mode == CaptureMode.Mikrofon
-                ? new MicrophoneCaptureSource()
+                ? new MicrophoneCaptureSource(log)
                 : selected.Path is null ? null : audioSourceFactory.Create(selected.Path);
         });
         services.AddSingleton<IAnalysisRunner, PipelineAnalysisRunner>();

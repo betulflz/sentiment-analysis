@@ -20,21 +20,32 @@ public sealed class EmotionPipeline
     private readonly IChunkProcessor _processor;
     private readonly ISessionStore _store;
     private readonly IMeetingAggregator _aggregator;
+    private readonly IDiagnosticLog _log;
     private readonly int _capacity;
+    private readonly TimeSpan _drainTimeBudget;
 
     private readonly List<ChunkResult> _timeline = new();
     private int _droppedCount;
     private int _drainSkippedCount;
 
-    private const int MaxDrainedChunksAfterStop = 8;
-    private static readonly TimeSpan DrainTimeBudget = TimeSpan.FromSeconds(90);
-
-    public EmotionPipeline(IChunkProcessor processor, ISessionStore store, IMeetingAggregator aggregator, AppConfig config)
+    public EmotionPipeline(
+        IChunkProcessor processor, ISessionStore store, IMeetingAggregator aggregator,
+        AppConfig config, IDiagnosticLog? log = null)
     {
         _processor = processor;
         _store = store;
         _aggregator = aggregator;
+        _log = log ?? NullDiagnosticLog.Instance;   // üretim varsayılanı: sessiz
         _capacity = Math.Max(1, config.Pipeline.ChannelCapacity);
+        _drainTimeBudget = TimeSpan.FromSeconds(Math.Max(1.0, config.Pipeline.DrainTimeBudgetSeconds));
+    }
+
+    /// <summary>Teşhis mesajını yalnızca günlük açıkken kurar ve yazar. Teşhis, analizi
+    /// çökertemez: günlük uygulaması fırlatırsa hata yutulur.</summary>
+    private void Diagnose(Func<string> message)
+    {
+        if (!_log.IsEnabled) return;
+        try { _log.Write(message()); } catch { /* teşhis, teşhis ettiği şeyi bozamaz */ }
     }
 
     public IReadOnlyList<ChunkResult> Timeline => _timeline;
@@ -88,8 +99,8 @@ public sealed class EmotionPipeline
             }
         });
 
-        // Tüketici için 90 saniye güvenlik bütçeli bağımsız token
-        using var processingCts = new CancellationTokenSource(DrainTimeBudget);
+        // Tüketici için config'ten gelen güvenlik bütçeli bağımsız token
+        using var processingCts = new CancellationTokenSource(_drainTimeBudget);
 
         try
         {
@@ -128,24 +139,32 @@ public sealed class EmotionPipeline
         ChunkResult? result = null;
         try
         {
-            var rms = Math.Sqrt(chunk.Samples.Select(s => (double)s * s).Average());
-            var peak = chunk.Samples.Max(Math.Abs);
-            System.Console.WriteLine($"[PIPELINE] Chunk işleme başladı: Start={chunk.Start.TotalSeconds}s, End={chunk.End.TotalSeconds}s, Samples={chunk.Samples.Length}, RMS={rms:F4}, Peak={peak:F4}, Canceled={ct.IsCancellationRequested}");
-            
+            // RMS/tepe hesabı chunk başına ~160 bin örnek gezer — yalnızca teşhis açıkken.
+            Diagnose(() =>
+            {
+                double rms = Math.Sqrt(chunk.Samples.Select(s => (double)s * s).Average());
+                float peak = chunk.Samples.Length > 0 ? chunk.Samples.Max(Math.Abs) : 0f;
+                return $"[PIPELINE] Chunk işleme başladı: Start={chunk.Start.TotalSeconds}s, " +
+                       $"End={chunk.End.TotalSeconds}s, Samples={chunk.Samples.Length}, " +
+                       $"RMS={rms:F4}, Peak={peak:F4}, Canceled={ct.IsCancellationRequested}";
+            });
+
             var sw = System.Diagnostics.Stopwatch.StartNew();
             result = await _processor.ProcessAsync(chunk, ct).ConfigureAwait(false);
             sw.Stop();
-            
-            System.Console.WriteLine($"[PIPELINE] Chunk işleme bitti: Süre={sw.ElapsedMilliseconds}ms, VAD={(result != null ? "Konuşma var" : "Sessizlik")}");
+
+            var outcome = result is not null ? "Konuşma var" : "Sessizlik";
+            Diagnose(() => $"[PIPELINE] Chunk işleme bitti: Süre={sw.ElapsedMilliseconds}ms, VAD={outcome}");
         }
         catch (OperationCanceledException ex)
         {
-            System.Console.WriteLine($"[PIPELINE_ERROR] Chunk işlemi iptal edildi (OperationCanceledException): {ex.Message}");
+            Diagnose(() => $"[PIPELINE] Chunk işlemi iptal edildi: {ex.Message}");
             throw;
         }
         catch (Exception ex)
         {
-            System.Console.WriteLine($"[PIPELINE_ERROR] Chunk işleminde beklenmedik hata yutuldu: {ex.GetType().Name} - {ex.Message}\n{ex.StackTrace}");
+            Diagnose(() => $"[PIPELINE] Chunk işleminde beklenmedik hata yutuldu: " +
+                           $"{ex.GetType().Name} - {ex.Message}\n{ex.StackTrace}");
             return;
         }
 

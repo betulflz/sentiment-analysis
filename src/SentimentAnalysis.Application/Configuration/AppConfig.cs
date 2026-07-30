@@ -77,7 +77,17 @@ public sealed record VadConfig(
 
 /// <summary>Pipeline orkestrasyon ayarları (spec 06).</summary>
 public sealed record PipelineConfig(
-    int ChannelCapacity = 32);   // bounded kanal kapasitesi; taşarsa en eski chunk düşer
+    int ChannelCapacity = 32,   // bounded kanal kapasitesi; taşarsa en eski chunk düşer
+    // "Durdur" sonrası kanalda kalan chunk'ları işlemek için toplam zaman bütçesi. Bu süre
+    // dolarsa drenaj bir HATA sayılmaz — elde ne varsa onunla bir özet üretilir ve işlenemeyen
+    // chunk'lar DrainSkippedCount ile AYRICA raporlanır (sessizce yutulmaz).
+    // Neden config, neden koda gömülü değil: makine hızı platforma göre değişir (Windows
+    // dizüstü vs M1), ama kullanıcının "Durdur donmasın" garantisi değişmez — sabit gömmek,
+    // tek bir platformda ölçülen sayıyı diğerine dayatmak demekti.
+    // Neden 30: WarmUpAsync model yükleme maliyetini bu yoldan çıkardığı için drenajın kalan
+    // tek maliyeti kararlı-durum çıkarım süresidir; daha uzun bir tolerans kullanıcıya donmuş
+    // bir uygulama gibi görünür.
+    double DrainTimeBudgetSeconds = 30.0);
 
 /// <summary>Konuşmacı ayrımı (diarization) ayarları — spec 10.
 /// Değerler 10a spike'ında GERÇEK DONANIMDA ÖLÇÜLDÜ; keyfi varsayılan değildir

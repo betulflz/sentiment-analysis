@@ -102,6 +102,16 @@ public class EmotionPipelineTests
     private static AppConfig Cfg(int cap) =>
         AppConfig.Default with { Pipeline = AppConfig.Default.Pipeline with { ChannelCapacity = cap } };
 
+    private static AppConfig CfgWithDrainBudget(int cap, double seconds) =>
+        AppConfig.Default with
+        {
+            Pipeline = AppConfig.Default.Pipeline with
+            {
+                ChannelCapacity = cap,
+                DrainTimeBudgetSeconds = seconds,
+            },
+        };
+
     private static readonly CaptureOptions Opts = new(TimeSpan.FromSeconds(1), TimeSpan.Zero);
 
     [Fact]
@@ -383,5 +393,48 @@ public class EmotionPipelineTests
         Assert.NotNull(agg.Seen);
         Assert.Empty(agg.Seen!.Chunks);
         Assert.Equal("özet", summary.TurkishSummary);
+    }
+
+    // ---- Drenaj zaman bütçesi (platformlar arası) ----
+    // "Durdur" sonrası hattın ne kadar çalışabileceği artık koda gömülü DEĞİL, config'te.
+    // Neden: makine hızı platforma göre değişir (Windows dizüstü vs M1), ama kullanıcının
+    // "Durdur donmasın" garantisi değişmez. Sabit gömmek, tek bir platformda ölçülen sayının
+    // diğerine dayatılması demekti.
+
+    [Fact]
+    public void DrenajButcesi_Varsayilani_KullaniciyiDakikalarcaBekletmez()
+    {
+        // Warm-up (WarmUpAsync) model yükleme maliyetini bu yoldan çıkardığı için drenajın
+        // kalan tek maliyeti kararlı-durum çıkarım süresidir; 90 sn'lik bir tolerans artık
+        // gerekli değil ve "Durdur"u kullanıcı için donmuş gibi gösteriyor.
+        Assert.InRange(AppConfig.Default.Pipeline.DrainTimeBudgetSeconds, 5.0, 45.0);
+    }
+
+    [Fact]
+    public async Task RunAsync_DrenajButcesiDolunca_KalanlarSayilirVeOzetDoner()
+    {
+        // Bütçe çok kısa + consumer yavaş → kalan backlog işlenemez. Beklenen davranış:
+        // hata DEĞİL, sayılarak atlanan chunk'lar ve yine de geçerli bir özet (dürüstlük ilkesi).
+        var store = new RecordingStore(); var agg = new FakeAggregator();
+        var firstGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var proc = new FirstGatedThenSlowProcessor(firstGate, ResultFor);
+        var pipeline = new EmotionPipeline(proc, store, agg, CfgWithDrainBudget(32, seconds: 0.4));
+        using var cts = new CancellationTokenSource();
+
+        var run = pipeline.RunAsync(
+            new FakeSource(40, ChunkAt), Opts, Guid.NewGuid(), DateTimeOffset.UnixEpoch,
+            DetectedLanguage.Turkish, null, cts.Token);
+
+        await Task.Delay(TimeSpan.FromMilliseconds(200)); // kanalı doldur
+        cts.Cancel();
+        firstGate.SetResult();
+
+        var winner = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(10)));
+        Assert.Same(run, winner);   // bütçe gerçekten uygulanıyor: 90 sn beklenmiyor
+        var summary = await run;    // fırlatmamalı
+
+        Assert.NotNull(summary);
+        Assert.True(pipeline.DrainSkippedCount > 0,
+            "bütçe dolduğunda işlenemeyen chunk'lar sessizce yutulmamalı, sayılmalı");
     }
 }

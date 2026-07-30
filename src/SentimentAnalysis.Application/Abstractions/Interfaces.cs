@@ -90,6 +90,42 @@ public sealed class DiarizationState : IDiarizationState
     public bool Enabled { get; set; }
 }
 
+/// <summary>Geliştirici teşhis kanalı. Üretimde SESSİZDİR; gerektiğinde açılır.
+/// <para><b>Neden <c>Console</c> değil:</b> paketlenmiş uygulamada (macOS <c>.app</c>, Windows GUI)
+/// bağlı bir konsol yoktur — çıktı hiçbir yere gitmez, yani maliyet ödenir fayda alınmaz. Daha
+/// kötüsü, günlük satırının kendisi (metin biçimleme + I/O) ses geri çağrımı gibi GERÇEK ZAMANLI
+/// yollarda çalışırsa ses kopmasına yol açar; teşhis aracı, teşhis ettiği sorunu üretir.</para>
+/// <para><b>Sözleşme:</b> pahalı bir mesaj kurmadan ÖNCE <see cref="IsEnabled"/> kontrol edilmelidir
+/// (ör. chunk başına 160 bin örnek üzerinde RMS/tepe hesabı). Uygulamalar <see cref="Write"/>'tan
+/// fırlatmamalıdır; yine de çağıranlar, teşhisin analizi çökertmemesi için hataya dayanıklıdır.</para></summary>
+public interface IDiagnosticLog
+{
+    /// <summary>Kapalıysa çağıran, mesajı ve mesajı üretmek için gereken işi hiç yapmamalıdır.</summary>
+    bool IsEnabled { get; }
+
+    void Write(string message);
+}
+
+/// <summary>Üretim varsayılanı: hiçbir şey yapmaz, hiçbir maliyet üretmez.</summary>
+public sealed class NullDiagnosticLog : IDiagnosticLog
+{
+    public static readonly NullDiagnosticLog Instance = new();
+
+    public bool IsEnabled => false;
+
+    public void Write(string message) { }
+}
+
+/// <summary><see cref="System.Diagnostics.Trace"/> üzerine yazar — konsol gerektirmez, her
+/// platformda çalışır ve bir dinleyiciye (dosya, hata ayıklayıcı, DebugView) yönlendirilebilir.
+/// Yalnızca açıkça istendiğinde kurulur (bkz. composition root).</summary>
+public sealed class TraceDiagnosticLog : IDiagnosticLog
+{
+    public bool IsEnabled => true;
+
+    public void Write(string message) => System.Diagnostics.Trace.WriteLine(message);
+}
+
 /// <summary>Raporun konuşmacı etiketli transkripti kurabilmesi için gereken OKUMA yüzeyi
 /// (Alt-proje 10b). <see cref="IDiarizationStore"/>'dan ayrıdır: geçiş yazar, rapor okur.</summary>
 public interface ISpeakerDataReader
