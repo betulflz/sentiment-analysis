@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SentimentAnalysis.Application.Abstractions;
@@ -139,6 +140,21 @@ public class DiarizationJobTests
                 .RunAsync(Guid.NewGuid(), CancellationToken.None));
 
         Assert.Equal(0, store.SaveCalls);
+    }
+
+    [Fact]
+    public async Task RunAsync_SaklamadanOnce_KonusmaSirasinaGoreNumaralandirir()
+    {
+        // Motor keyfi kimlikler döndürür; SAKLANAN veri kanonik olmalı — aksi halde raporu
+        // okuyan her yüzey ayrı ayrı düzeltmek zorunda kalır ve biri unutulur.
+        var store = new FakeStore(new float[16000]);
+        var diarizer = new FakeDiarizer([S(5, 0, 2), S(3, 2, 4)]);
+
+        var outcome = await new DiarizationJob(diarizer, store, AppConfig.Default)
+            .RunAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(DiarizationOutcome.Completed, outcome);
+        Assert.Equal(new[] { 0, 1 }, store.Saved.Select(s => s.Speaker.Index));
     }
 
     [Fact]

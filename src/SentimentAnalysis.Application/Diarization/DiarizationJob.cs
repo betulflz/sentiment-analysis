@@ -62,9 +62,13 @@ public sealed class DiarizationJob
             return DiarizationOutcome.Failed;
         }
 
+        // Motorun keyfi küme kimlikleri KALICI veriye sızmasın: kanonik numaralar (ilk konuşan
+        // A) burada, saklamadan önce verilir — böylece okuyan her yüzey aynı numarayı görür.
+        var canonical = SpeakerRenumberer.ByFirstAppearance(speakers);
+
         // Boş liste de saklanır: "diarization çalıştı, konuşmacı ayırt edilemedi" ile
         // "diarization hiç çalışmadı" farklı durumlardır ve rapor bunları ayırt etmelidir.
-        await _store.SaveSpeakerSegmentsAsync(sessionId, speakers, ct).ConfigureAwait(false);
+        await _store.SaveSpeakerSegmentsAsync(sessionId, canonical, ct).ConfigureAwait(false);
         return DiarizationOutcome.Completed;
     }
 }
