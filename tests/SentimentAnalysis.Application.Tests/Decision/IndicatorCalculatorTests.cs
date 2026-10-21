@@ -1,0 +1,131 @@
+using System;
+using System.Collections.Generic;
+using SentimentAnalysis.Application.Configuration;
+using SentimentAnalysis.Application.Decision;
+using SentimentAnalysis.Core;
+using Xunit;
+
+namespace SentimentAnalysis.Application.Tests.Decision;
+
+public class IndicatorCalculatorTests
+{
+    private static readonly DecisionConfig Cfg = new();
+    private static readonly double[] NoHistory = Array.Empty<double>();
+    private static readonly FaceWindowSummary[] NoFaces = Array.Empty<FaceWindowSummary>();
+
+    private static ChunkResult Chunk(double v, double a, double congruence = 1.0, double aRel = 1.0,
+        double tRel = 0.5, string transcript = "bir iki üç dört beş altı yedi sekiz dokuz on on bir on iki on üç on dört on beş on altı on yedi on sekiz on dokuz yirmi", double seconds = 10)
+    {
+        var va = new ValenceArousal(v, a);
+        var fused = new FusedResult(va, Emotion.Notr, Emotion.Notr, Confidence.Orta, true, false,
+            IncongruencePattern.Yok, congruence, va, va, 0.8, 0.8, aRel, tRel);
+        return new ChunkResult(TimeSpan.Zero, TimeSpan.FromSeconds(seconds), fused, transcript);
+    }
+
+    private static FaceWindowSummary Face(int i, double visible = 1, double lookAway = 0, double shift = 0,
+        double neg = 0, double rel = 1) => new(i, visible, lookAway, shift, neg, 0, rel);
+
+    private static double K(Indicators ind, Criterion c) => ind.Values[(int)c];
+
+    [Fact]
+    public void NoFaces_UsesAudioOnly_NoNaN()
+    {
+        var ind = IndicatorCalculator.Compute(Chunk(-0.6, 0.9), NoFaces, NoHistory, Cfg);
+        Assert.Equal(0.48, K(ind, Criterion.Gerilim), 1e-9);
+        Assert.Equal(0.0, K(ind, Criterion.IlgiKaybi), 1e-9);
+        Assert.Equal(0.6, K(ind, Criterion.OlumsuzDuygu), 1e-9);
+        Assert.All(ind.SourceFace, s => Assert.Null(s));
+        Assert.Equal(0.6, ind.DataQuality, 1e-9);
+        Assert.All(ind.Values, v => Assert.True(double.IsFinite(v)));
+    }
+
+    [Fact]
+    public void TenseFace_RaisesTension_AndNamesFace()
+    {
+        var ind = IndicatorCalculator.Compute(Chunk(-0.6, 0.9), new[] { Face(0), Face(1, neg: 1) }, NoHistory, Cfg);
+        Assert.Equal(0.7 * 0.48 + 0.3, K(ind, Criterion.Gerilim), 1e-9);
+        Assert.Equal(1, ind.SourceFace[(int)Criterion.Gerilim]);
+    }
+
+    [Fact]
+    public void LookingAway_OnlyWhenVisible()
+    {
+        var hidden = IndicatorCalculator.Compute(Chunk(0, 0.5), new[] { Face(0, visible: 0, lookAway: 1) }, NoHistory, Cfg);
+        var seen = IndicatorCalculator.Compute(Chunk(0, 0.5), new[] { Face(0, visible: 1, lookAway: 1) }, NoHistory, Cfg);
+        Assert.Equal(0.0, K(hidden, Criterion.IlgiKaybi), 1e-9);
+        Assert.Equal(1.0, K(seen, Criterion.IlgiKaybi), 1e-9);
+        Assert.Equal(0, seen.SourceFace[(int)Criterion.IlgiKaybi]);
+    }
+
+    [Fact]
+    public void NegativeFace_PullsFusedValenceDown()
+    {
+        // aq = 1, yüz Rel 1 → V3 = (1·0 + 0.5·(−0.6)) / 1.5 = −0.2
+        var ind = IndicatorCalculator.Compute(Chunk(0, 0.5), new[] { Face(0, shift: -0.6) }, NoHistory, Cfg);
+        Assert.Equal(0.2, K(ind, Criterion.OlumsuzDuygu), 1e-9);
+    }
+
+    [Fact]
+    public void FaceVoiceGap_RaisesIncongruence()
+    {
+        var ind = IndicatorCalculator.Compute(Chunk(0.5, 0.5, congruence: 0.9), new[] { Face(0, shift: -0.3) }, NoHistory, Cfg);
+        Assert.Equal(0.8, K(ind, Criterion.Uyumsuzluk), 1e-9);
+    }
+
+    [Fact]
+    public void Trend_FewerThanThreePoints_IsZero()
+    {
+        var ind = IndicatorCalculator.Compute(Chunk(-1, 0.5), NoFaces, new[] { 1.0 }, Cfg);
+        Assert.Equal(0.0, K(ind, Criterion.Kotulesme), 1e-9);
+    }
+
+    [Fact]
+    public void Trend_FallingValence()
+    {
+        var ind = IndicatorCalculator.Compute(Chunk(0.0, 0.5), NoFaces, new[] { 0.4, 0.2 }, Cfg);
+        Assert.Equal(1.0, K(ind, Criterion.Kotulesme), 1e-9);
+        Assert.Null(ind.SourceFace[(int)Criterion.Kotulesme]);
+    }
+
+    [Fact]
+    public void Trend_UsesOnlyLastTrendWindows()
+    {
+        // eski düşüş pencere dışında kalır; son 6 nokta düz → 0
+        var history = new[] { 1.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0 };
+        var ind = IndicatorCalculator.Compute(Chunk(0.0, 0.5), NoFaces, history, Cfg);
+        Assert.Equal(0.0, K(ind, Criterion.Kotulesme), 1e-9);
+    }
+
+    [Fact]
+    public void LowSpeech_RaisesLowEnergy()
+    {
+        var ind = IndicatorCalculator.Compute(Chunk(0, 0.5, transcript: "", seconds: 10), NoFaces, NoHistory, Cfg);
+        Assert.Equal(0.5, K(ind, Criterion.DusukEnerji), 1e-9);
+    }
+
+    [Fact]
+    public void DataQuality_BlendsAudioAndFace()
+    {
+        var ind = IndicatorCalculator.Compute(Chunk(0, 0.5, aRel: 0.5, tRel: 0.2),
+            new[] { Face(0, visible: 1, rel: 1), Face(1, visible: 0.5, rel: 0.5) }, NoHistory, Cfg);
+        Assert.Equal(0.6 * 0.5 + 0.4 * ((1.0 + 0.25) / 2), ind.DataQuality, 1e-9);
+    }
+
+    public static IEnumerable<object[]> Extremes()
+    {
+        foreach (var v in new[] { -1.0, 1.0 })
+            foreach (var a in new[] { 0.0, 1.0 })
+                yield return new object[] { v, a };
+    }
+
+    [Theory]
+    [MemberData(nameof(Extremes))]
+    public void AllValuesInUnitRange(double v, double a)
+    {
+        var faces = new[] { Face(0, lookAway: 1, shift: -1, neg: 1), Face(1, shift: 1) };
+        var ind = IndicatorCalculator.Compute(Chunk(v, a, congruence: 0, transcript: "", seconds: 0), faces, new[] { 1.0, -1.0 }, Cfg);
+        Assert.Equal(6, ind.Values.Count);
+        Assert.All(ind.Values, x => Assert.InRange(x, 0.0, 1.0));
+        Assert.InRange(ind.DataQuality, 0.0, 1.0);
+    }
+}
