@@ -118,6 +118,16 @@ public sealed record DiarizationConfig(
     double SpeakerProsodyMinRegionSeconds = 1.0,
     double SpeakerProsodyBudgetSeconds = 60.0);
 
+/// <summary>Karar destek motoru ayarları (spec 11 §6.4). BAŞLANGIÇ DEĞERLERİ, KALİBRE EDİLMEMİŞ.</summary>
+public sealed record DecisionConfig(
+    double InterventionThreshold = 0.35, // max ihtiyaç bunun altındaysa "Devam et" / olumlu takip adımı
+    double SwitchMargin = 0.05,          // yeni öneri mevcudu bu kadar yakınlık farkıyla geçerse hemen değişir
+    int SwitchPersistence = 2,           // ya da art arda bu kadar pencere önde kalırsa (titreme önleme)
+    double InsufficientQuality = 0.25,   // altı: veri yetersiz → "Devam et", güven Düşük
+    double LowQuality = 0.4,             // altı: güven Düşük
+    double HighQuality = 0.7,            // üstü: güven Yüksek
+    int TrendWindows = 6);               // K6 eğimi için son pencere sayısı (şimdiki dahil)
+
 /// <summary>Uygulama genel konfigürasyonu (stajyerin config.py karşılığı).</summary>
 public sealed record AppConfig(
     FusionConfig Fusion,
@@ -130,6 +140,9 @@ public sealed record AppConfig(
     /// <summary>Konuşmacı ayrımı (spec 10). Additive: varsayılanlı olduğundan mevcut
     /// <c>AppConfig</c> kurucu çağrılarının hiçbiri değişmez.</summary>
     public DiarizationConfig Diarization { get; init; } = new();
+
+    /// <summary>Karar destek motoru (spec 11). Additive, varsayılanlı.</summary>
+    public DecisionConfig Decision { get; init; } = new();
 
     public static AppConfig Default => new(
         Fusion: new FusionConfig(),
