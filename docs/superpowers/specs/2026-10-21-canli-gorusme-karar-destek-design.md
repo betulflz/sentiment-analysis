@@ -164,9 +164,13 @@ eylem çıkarabilir veya isim/metin uyarlayabilir.
    metin bir yüze bağlanamadığı için genel katkı olarak her yüzün değerine aynı biçimde eklenir.
    Test tabanı tek ve iki yüzlü videodur; ızgara görünümü aynı kuralla çalışır.
 2. **Bilgi tabanı:** sabit **etki matrisi** `E[eylem][kriter]` (0..1; "bu eylem bu sorunu ne kadar
-   giderir"). A1 "Devam et" için etki, ihtiyaçlar düşükken yüksek olacak şekilde tanımlanır
-   (ör. `1 − n_j`).
-3. **Karar matrisi** `x_ij = E_ij · n_j` (A1 için özel tanım).
+   giderir").
+3. **Karar matrisi** `x_ij = E_ij`; anlık ihtiyaç **ağırlığa** girer: etkin ağırlık
+   `w'_j = w_j · n_j / Σ(w·n)`. *(Plan 11c'de ölçülerek düzeltildi: `x_ij = E_ij · n_j` yazılırsa
+   TOPSIS'in sütun normalizasyonu `n_j`'yi sadeleştirir ve ihtiyaç sonuca hiç yansımaz.)*
+   **A1 "Devam et" kuraldır:** en yüksek ihtiyaç `max n_j < 0,35` ise öneri A1'dir; değilse 5 müdahale
+   eylemi TOPSIS ile sıralanır. *(A1'i TOPSIS satırı olarak eklemek ideal çözümü bozuyordu —
+   gergin durumda bile A1 kazanıyordu.)*
 4. **Ağırlıklar** `w_j`: her profil için önceden doldurulmuş **AHP ikili karşılaştırma matrisi** →
    özvektör ağırlıkları, **tutarlılık oranı CR < 0,10** kontrolü (raporda gösterilir). Kullanıcı
    kaydırıcılarla doğrudan ağırlıkları değiştirebilir (normalize edilir).
