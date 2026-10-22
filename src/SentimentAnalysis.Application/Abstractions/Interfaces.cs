@@ -44,6 +44,27 @@ public interface IAudioCaptureSource
     IAsyncEnumerable<AudioChunk> CaptureAsync(CaptureOptions options, CancellationToken ct);
 }
 
+/// <summary>Görüntü kaynağı (video dosyası / kamera; spec 11). <b>İptal sözleşmesi</b>
+/// <see cref="IAudioCaptureSource"/> ile aynıdır: iptalde kısa sürede döner, ASLA süresiz bloklanmaz
+/// (11a ölçümü: kamera izni istemi açıkken ffmpeg kare göndermeden bekler — uygulama ilk kare için
+/// zaman aşımı koymalıdır).</summary>
+public interface IVideoCaptureSource
+{
+    IAsyncEnumerable<VideoFrame> CaptureAsync(CancellationToken ct);
+}
+
+/// <summary>Karedeki yüzleri bulur (YuNet; spec 11 §6.2).</summary>
+public interface IFaceDetector
+{
+    IReadOnlyList<DetectedFace> Detect(VideoFrame frame);
+}
+
+/// <summary>Bir yüz kutusunun ifade olasılıkları (FER+; 8 sınıf, FER+ sırası).</summary>
+public interface IFaceExpressionModel
+{
+    float[] Classify(VideoFrame frame, FaceBox box);
+}
+
 /// <summary>Yakalama seçenekleri.</summary>
 public sealed record CaptureOptions(TimeSpan ChunkLength, TimeSpan Overlap);
 

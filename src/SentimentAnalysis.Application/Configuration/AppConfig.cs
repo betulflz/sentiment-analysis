@@ -128,6 +128,24 @@ public sealed record DecisionConfig(
     double HighQuality = 0.7,            // üstü: güven Yüksek
     int TrendWindows = 6);               // K6 eğimi için son pencere sayısı (şimdiki dahil)
 
+/// <summary>Görüntü kanalı ayarları (spec 11 §6.2). Sayılar 11a spike'ında M1 Air 8 GB'ta ÖLÇÜLDÜ
+/// (bkz. <c>11a-goruntu-spike-olcumu.md</c>); yüz boyu eşikleri ise tahmindir.</summary>
+public sealed record VisionConfig(
+    int CaptureFps = 5,                 // ffmpeg'den alınan kare hızı
+    int AnalyzeEvery = 2,               // her N'inci kare analiz edilir (2,5 fps; kare başı ~72 ms)
+    int OnnxThreads = 2,                // ORT IntraOpNumThreads (Whisper GPU'da, çakışma ölçülmedi)
+    float MinFaceScore = 0.6f,          // YuNet skor eşiği
+    float NmsIou = 0.3f,                // YuNet NMS
+    double LookAwayYaw = 0.2,           // |yaw| bunun üstü "kameradan dönük" (düz ≤ 0,05, dönük medyan 0,37)
+    double BaselineSeconds = 10,        // kişi başı ifade taban çizgisi süresi (dinlenme yüzü ~%26 "üzgün")
+    double FirstFrameTimeoutSeconds = 10, // ilk kare gelmezse (izin istemi açık) anlamlı hata
+    string CameraName = "FaceTime",     // kamera ADIYLA seçilir — Continuity Camera sırayı değiştirir
+    double MinReliableFaceHeight = 48,  // KALİBRE EDİLMEMİŞ: bu boyun altında ifade güveni düşer
+    double MinUsableFaceHeight = 24,    // KALİBRE EDİLMEMİŞ: bu boyda ifade güveni 0
+    string YuNetModelFile = "face_detection_yunet_2023mar.onnx",
+    string FerPlusModelFile = "emotion-ferplus-8.onnx",
+    string? ModelDirectory = null);     // null → ~/Library/Application Support/SentimentAnalysis/models
+
 /// <summary>Uygulama genel konfigürasyonu (stajyerin config.py karşılığı).</summary>
 public sealed record AppConfig(
     FusionConfig Fusion,
@@ -143,6 +161,9 @@ public sealed record AppConfig(
 
     /// <summary>Karar destek motoru (spec 11). Additive, varsayılanlı.</summary>
     public DecisionConfig Decision { get; init; } = new();
+
+    /// <summary>Görüntü kanalı (spec 11). Additive, varsayılanlı.</summary>
+    public VisionConfig Vision { get; init; } = new();
 
     public static AppConfig Default => new(
         Fusion: new FusionConfig(),
