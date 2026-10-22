@@ -48,6 +48,23 @@ public class IndicatorCalculatorTests
     }
 
     [Fact]
+    public void AudioOnlyTension_NotPinnedOnNeutralFaces()
+    {
+        // Sesten gelen gerilim, yüzünde hiçbir şey görünmeyen bir kişiye yazılmamalı (spec §4).
+        var ind = IndicatorCalculator.Compute(Chunk(-0.6, 0.9), new[] { Face(0), Face(1) }, NoHistory, Cfg);
+        Assert.Null(ind.SourceFace[(int)Criterion.Gerilim]);
+        Assert.Null(ind.SourceFace[(int)Criterion.OlumsuzDuygu]);
+        Assert.Equal(0.7 * 0.48, K(ind, Criterion.Gerilim), 1e-9);
+    }
+
+    [Fact]
+    public void AudioOnlyTension_NotPinnedOnSingleNeutralFace()
+    {
+        var ind = IndicatorCalculator.Compute(Chunk(-0.6, 0.9), new[] { Face(0) }, NoHistory, Cfg);
+        Assert.Null(ind.SourceFace[(int)Criterion.Gerilim]);
+    }
+
+    [Fact]
     public void LookingAway_OnlyWhenVisible()
     {
         var hidden = IndicatorCalculator.Compute(Chunk(0, 0.5), new[] { Face(0, visible: 0, lookAway: 1) }, NoHistory, Cfg);

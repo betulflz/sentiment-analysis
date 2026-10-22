@@ -179,7 +179,9 @@ eylem çıkarabilir veya isim/metin uyarlayabilir.
 6. **Gerekçe:** Önerilen eylemin puanına en çok katkı veren 1–2 kriter + kişi + süre, Türkçe
    şablonla ("Yüz 2'de gerilim son 2 dakikada arttı ve ilgi düşük").
 7. **Kararlılık:** Öneri her pencerede zıplamasın diye histerezis (yeni öneri, mevcudu belirgin
-   bir farkla geçmeli veya art arda 2 pencere önde olmalı).
+   bir farkla geçmeli veya art arda 2 pencere önde olmalı). Kurallar da bantlıdır: müdahaleye
+   ihtiyaç ≥ 0,35'te girilir, ancak < 0,30'da "Devam et"e dönülür. "Veri yetersiz" durumuna
+   kalite < 0,25'te girilir, ancak > 0,30'da çıkılır. *(11c final incelemesi.)*
 8. **Güven:** Veri kalitesi düşükse (yüz yok, VAD sessiz) kart "düşük güven" der; A1 varsayılan.
 
 Motor **saf ve deterministiktir** (mevcut Fusion katmanı gibi): girdi → çıktı, I/O yok, TDD ile

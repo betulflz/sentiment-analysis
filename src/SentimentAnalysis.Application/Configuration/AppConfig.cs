@@ -121,6 +121,8 @@ public sealed record DiarizationConfig(
 /// <summary>Karar destek motoru ayarları (spec 11 §6.4). BAŞLANGIÇ DEĞERLERİ, KALİBRE EDİLMEMİŞ.</summary>
 public sealed record DecisionConfig(
     double InterventionThreshold = 0.35, // max ihtiyaç bunun altındaysa "Devam et" / olumlu takip adımı
+    double InterventionExitThreshold = 0.30, // müdahale gösterilirken "Devam et"e dönmek için max ihtiyaç bunun altına inmeli (titreme bandı)
+    double QualityRecovery = 0.30,       // "veri yetersiz" durumundan çıkmak için kalite bunun üstüne çıkmalı (titreme bandı)
     double SwitchMargin = 0.05,          // yeni öneri mevcudu bu kadar yakınlık farkıyla geçerse hemen değişir
     int SwitchPersistence = 2,           // ya da art arda bu kadar pencere önde kalırsa (titreme önleme)
     double InsufficientQuality = 0.25,   // altı: veri yetersiz → "Devam et", güven Düşük

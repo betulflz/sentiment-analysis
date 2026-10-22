@@ -58,6 +58,12 @@ public static class IndicatorCalculator
         return new Indicators(values.Select(C01).ToArray(), source, quality);
     }
 
+    // Bir yüz, değeri NÖTR bir yüzün alacağı değeri en az bu kadar aşıyorsa kaynak olarak anılır.
+    // Aksi halde değeri ses/metin sürüklüyordur ve gerekçe "Görüşme geneli" der — sesten gelen gerilim,
+    // yüzünde hiçbir şey görünmeyen birine yazılmaz (spec §4: kişi hakkında hüküm yok).
+    private const double FaceAttributionMargin = 0.05;
+    private static readonly FaceWindowSummary NeutralFace = new(-1, 1, 0, 0, 0, 0, 0);
+
     private static void MaxOverFaces(IReadOnlyList<FaceWindowSummary> faces, Criterion c,
         double[] values, int?[] source, Func<FaceWindowSummary, double> value)
     {
@@ -69,7 +75,7 @@ public static class IndicatorCalculator
             if (x > best) { best = x; bestFace = face.FaceIndex; }
         }
         values[(int)c] = best;
-        source[(int)c] = bestFace;
+        source[(int)c] = best >= C01(value(NeutralFace)) + FaceAttributionMargin ? bestFace : null;
     }
 
     /// <summary>En küçük kareler eğimi, x = 0,1,2…</summary>

@@ -187,6 +187,42 @@ public class LiveAdvisorTests
     }
 
     [Fact]
+    public void LowQuality_ScalesNeeds_NoIntervention()
+    {
+        // Spec §6.4.1: ihtiyaç = gösterge × veri kalitesi. 0,8 × 0,3 = 0,24 < 0,35 → müdahale yok.
+        var r = Once(MeetingProfile.Satis, Gergin, quality: 0.3);
+        Assert.Equal(LiveAction.DevamEt, r.Action);
+        Assert.Equal(Confidence.Dusuk, r.Confidence);
+        Assert.Contains("veri kalitesi düşük", r.Reason);
+    }
+
+    [Fact]
+    public void ThresholdBand_NoFlickerAroundThreshold()
+    {
+        var advisor = new LiveAdvisor(MeetingProfile.Satis, Cfg);
+        var w = DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis);
+        double[] Need(double k1) => new[] { k1, .1, k1 * .9, .1, .1, .1 };
+        // kalite 0,8 → ölçekli maks: 0,36 / 0,32 / 0,36 / 0,32
+        Assert.Equal(LiveAction.EmpatiKur, advisor.Next(Ind(Need(.45)), w).Action);
+        Assert.Equal(LiveAction.EmpatiKur, advisor.Next(Ind(Need(.40)), w).Action);
+        Assert.Equal(LiveAction.EmpatiKur, advisor.Next(Ind(Need(.45)), w).Action);
+        Assert.Equal(LiveAction.EmpatiKur, advisor.Next(Ind(Need(.40)), w).Action);
+        // gerçekten sakinleşince (0,2 × 0,8 = 0,16 < 0,30) Devam et
+        Assert.Equal(LiveAction.DevamEt, advisor.Next(Ind(Need(.2)), w).Action);
+    }
+
+    [Fact]
+    public void QualityBand_NoFlickerAroundInsufficient()
+    {
+        var advisor = new LiveAdvisor(MeetingProfile.Satis, Cfg);
+        var w = DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis);
+        Assert.Contains("Veri yetersiz", advisor.Next(Ind(Gergin, quality: 0.24), w).Reason);
+        Assert.Contains("Veri yetersiz", advisor.Next(Ind(Gergin, quality: 0.26), w).Reason);
+        Assert.Contains("Veri yetersiz", advisor.Next(Ind(Gergin, quality: 0.24), w).Reason);
+        Assert.Equal(LiveAction.EmpatiKur, advisor.Next(Ind(Gergin, quality: 0.8), w).Action);
+    }
+
+    [Fact]
     public void DecisionText_NamesAllEnums()
     {
         Assert.All(Enum.GetValues<Criterion>(), c => Assert.False(string.IsNullOrWhiteSpace(DecisionText.Name(c))));

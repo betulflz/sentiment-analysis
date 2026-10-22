@@ -14,6 +14,7 @@ public sealed class LiveAdvisor
     private LiveAction? _current;
     private LiveAction? _pending;
     private int _pendingCount;
+    private bool _insufficient;
 
     public LiveAdvisor(MeetingProfile profile, DecisionConfig cfg)
     {
@@ -24,9 +25,13 @@ public sealed class LiveAdvisor
     /// <param name="weights">Profil ya da kaydırıcı ağırlıkları; normalize edilmemiş olabilir.</param>
     public Recommendation Next(Indicators indicators, IReadOnlyList<double> weights)
     {
-        if (indicators.DataQuality < _cfg.InsufficientQuality)
+        // Bant: yetersiz duruma 0,25'in altında girilir, ancak 0,30'un üstünde çıkılır.
+        _insufficient = indicators.DataQuality < (_insufficient ? _cfg.QualityRecovery : _cfg.InsufficientQuality);
+        if (_insufficient)
         {
-            Reset();
+            _current = null;
+            _pending = null;
+            _pendingCount = 0;
             return new Recommendation(LiveAction.DevamEt, 0, Array.Empty<Ranked<LiveAction>>(),
                 Array.Empty<Criterion>(), null, Confidence.Dusuk,
                 "Veri yetersiz (yüz/ses kalitesi düşük) — öneri yapılmadı.");
@@ -36,14 +41,22 @@ public sealed class LiveAdvisor
             : indicators.DataQuality >= _cfg.HighQuality ? Confidence.Yuksek
             : Confidence.Orta;
 
-        if (indicators.Values.Max() < _cfg.InterventionThreshold)
+        // Spec §6.4.1: ihtiyaç = gösterge × veri kalitesi. TOPSIS sıralamasını değiştirmez (sabit çarpan
+        // ağırlık normalizasyonunda sadeleşir), yalnızca "müdahale gerekli mi" kuralını etkiler.
+        var needs = indicators.Values.Select(v => v * indicators.DataQuality).ToArray();
+        // Bant: müdahale 0,35'te başlar, ama gösterilen bir müdahale ancak 0,30'un altında "Devam et"e döner.
+        var intervening = _current is not null && _current != LiveAction.DevamEt;
+        if (needs.Max() < (intervening ? _cfg.InterventionExitThreshold : _cfg.InterventionThreshold))
         {
             Commit(LiveAction.DevamEt);
+            var reason = indicators.Values.Max() >= _cfg.InterventionThreshold
+                ? "Sinyal var ama veri kalitesi düşük — öneri yapılmadı."
+                : "Belirgin bir sorun yok.";
             return new Recommendation(LiveAction.DevamEt, 1, Array.Empty<Ranked<LiveAction>>(),
-                Array.Empty<Criterion>(), null, confidence, "Belirgin bir sorun yok.");
+                Array.Empty<Criterion>(), null, confidence, reason);
         }
 
-        var ranking = ActionRanker.Rank(_profile.Interventions, DecisionKnowledgeBase.LiveImpact, weights, indicators.Values);
+        var ranking = ActionRanker.Rank(_profile.Interventions, DecisionKnowledgeBase.LiveImpact, weights, needs);
         var chosen = Choose(ranking);
         var entry = ranking.First(r => r.Alternative == chosen);
         var face = indicators.SourceFace[(int)entry.TopCriteria[0]];
@@ -53,6 +66,7 @@ public sealed class LiveAdvisor
 
     public void Reset()
     {
+        _insufficient = false;
         _current = null;
         _pending = null;
         _pendingCount = 0;
