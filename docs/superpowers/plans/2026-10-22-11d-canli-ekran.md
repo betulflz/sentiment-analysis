@@ -205,3 +205,19 @@ Davranış (app katmanı, testsiz — 08e notu):
   (d) kamera modunda önizleme kendi yüzünü gösteriyor.
   Onay gelmeden commit edilmez.
 - [ ] **Step 3:** Commit `feat(11d): canlı ekran — önizleme, öneri kartı, göstergeler ve kaydırıcılar`.
+
+## Task 3 uygulama durumu — 22 Ekim 2026
+
+- Arayüz eklendi: Türkçe profil seçimi ve koşu kilidi, öneri/gerekçe/güven/alternatif kartı,
+  K1–K6 ve yüz başına gösterge çubukları, anlık ağırlık kaydırıcıları ve varsayılana dönüş.
+- Önizleme 200 ms zamanlayıcıyla güncellenir. Görüntü ve kutular aynı Viewbox içinde gerçek
+  kare boyutlarına göre ölçeklenir (640×360 varsayımına bağlı değildir).
+- Bitmap dönüşümünün sahibi LiveView'dır; eski bitmap değiştirilirken ve görünüm ayrılırken
+  Dispose edilir. Zamanlayıcı görsel ağaçtan ayrılınca durur. Koşu sonunda VM önizlemesi de
+  yenilenir; rapora geçilince durmuş zamanlayıcıya bağımlı kalmaz.
+- Doğrulama: `dotnet build --no-restore -m:1 -nodeReuse:false -p:UseSharedCompilation=false`
+  → 0 hata / 0 uyarı; `dotnet test --no-build --no-restore -m:1 -nodeReuse:false`
+  → 636 başarılı / 16 atlanan / 0 başarısız.
+- Gerçek uygulamada video/kamera, kutu hizası, kaydırıcı, profil kilidi ve durdurma kontrolü
+  kullanıcı tarafından henüz doğrulanmadı. Kullanıcının 22 Ekim 2026 tarihli açık talebiyle
+  mevcut çalışma commit ediliyor; sonraki oturum gerçek uygulama doğrulamasından devam edecek.

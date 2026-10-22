@@ -9,6 +9,8 @@
 
     <UserControl.Resources>
         <conv:StringNotEmptyConverter x:Key="StringNotEmptyConverter" />
+        <conv:MeetingProfileNameConverter x:Key="ProfileName" />
+        <conv:UncertainOpacityConverter x:Key="UncertainOpacity" />
 
         <DataTemplate x:Key="SourcePanel" DataType="desktop:SourceAnalysisVm">
             <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1"
@@ -50,7 +52,7 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
     <DockPanel>
         <StackPanel DockPanel.Dock="Top" Spacing="12" Margin="0,0,0,16">
-            <StackPanel Orientation="Horizontal" Spacing="8">
+            <WrapPanel Orientation="Horizontal">
                 <ToggleSwitch IsChecked="{Binding UseMicrophone}"
                               OnContent="Mikrofon" OffContent="Dosya"
                               IsEnabled="{Binding !IsCapturing}" VerticalAlignment="Center" />
@@ -68,11 +70,109 @@
                         IsVisible="{Binding IsCapturing}" VerticalAlignment="Center">
                     <TextBlock Text="{Binding CaptureStatusText}" Foreground="White" FontSize="12" />
                 </Border>
-            </StackPanel>
+                <ComboBox ItemsSource="{Binding Decision.Profiles}" Margin="8,0"
+                          SelectedItem="{Binding Decision.SelectedProfile, Mode=TwoWay}"
+                          IsEnabled="{Binding !Decision.IsLocked}" MinWidth="160"
+                          AutomationProperties.Name="Görüşme profili">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate><TextBlock Text="{Binding Converter={StaticResource ProfileName}}" /></DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </WrapPanel>
 
             <TextBlock Text="{Binding DiarizationHint}" FontSize="11" TextWrapping="Wrap"
                        IsVisible="{Binding DiarizationHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                        Foreground="{DynamicResource SystemBaseMediumColor}" FontStyle="Italic" />
+
+            <Border IsVisible="{Binding HasPreview}" Background="#15191F" CornerRadius="6" ClipToBounds="True">
+                <Viewbox Stretch="Uniform" MaxHeight="360" HorizontalAlignment="Center">
+                    <Grid Width="{Binding PreviewFrame.Width}" Height="{Binding PreviewFrame.Height}">
+                        <Image x:Name="PreviewImage" Stretch="Fill" />
+                        <ItemsControl ItemsSource="{Binding PreviewFaces}">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.Styles>
+                                <Style Selector="ContentPresenter">
+                                    <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                    <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                </Style>
+                            </ItemsControl.Styles>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="{Binding W}" Height="{Binding H}" BorderBrush="#5CE0B4" BorderThickness="2">
+                                        <Border Background="#C020302B" HorizontalAlignment="Left" VerticalAlignment="Top" Padding="4,2">
+                                            <TextBlock Text="{Binding Label}" Foreground="White" FontSize="13" />
+                                        </Border>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </Viewbox>
+            </Border>
+
+            <Border BorderBrush="{DynamicResource SystemAccentColor}" BorderThickness="3,1,1,1"
+                    CornerRadius="6" Padding="16" Opacity="{Binding Decision.IsLowConfidence, Converter={StaticResource UncertainOpacity}}">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Görüşme önerisi" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Decision.ActionText}" FontSize="26" FontWeight="Bold" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Decision.ReasonText}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Decision.ConfidenceText}" FontSize="12" />
+                    <TextBlock Text="{Binding Decision.AlternativeText}" FontSize="12" TextWrapping="Wrap" />
+                    <TextBlock Text="İlk analiz penceresi bekleniyor." IsVisible="{Binding Decision.ConfidenceText, Converter={x:Static StringConverters.IsNullOrEmpty}}" FontSize="12" />
+                </StackPanel>
+            </Border>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Görüşme göstergeleri" FontWeight="SemiBold" />
+                    <ItemsControl ItemsSource="{Binding Decision.Indicators}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Spacing="4" Margin="0,0,0,10">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="{Binding Name}" FontSize="12" TextWrapping="Wrap" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Subject}" FontSize="11" Margin="8,0,0,0" />
+                                    </Grid>
+                                    <ProgressBar Minimum="0" Maximum="1" Value="{Binding Value}" Height="8" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding Decision.Faces}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Spacing="4" Margin="0,4,0,8">
+                                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                                    <TextBlock Text="Başın dönüklüğü" FontSize="11" />
+                                    <ProgressBar Minimum="0" Maximum="1" Value="{Binding LookAway}" Height="6" />
+                                    <TextBlock Text="Olumsuz ifade" FontSize="11" />
+                                    <ProgressBar Minimum="0" Maximum="1" Value="{Binding Negative}" Height="6" />
+                                    <TextBlock Text="Gülümseme" FontSize="11" />
+                                    <ProgressBar Minimum="0" Maximum="1" Value="{Binding Smile}" Height="6" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="8">
+                    <TextBlock Text="Karar ağırlıkları" FontWeight="SemiBold" />
+                    <ItemsControl ItemsSource="{Binding Decision.Weights}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel>
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="{Binding Name}" FontSize="12" TextWrapping="Wrap" />
+                                        <TextBlock Grid.Column="1" Text="{Binding ShareText}" FontSize="12" />
+                                    </Grid>
+                                    <Slider Minimum="0" Maximum="1" Value="{Binding Value, Mode=TwoWay}"
+                                            SmallChange="0.01" LargeChange="0.1" AutomationProperties.Name="{Binding Name}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Content="Varsayılana dön" Command="{Binding Decision.ResetWeightsCommand}" />
+                </StackPanel>
+            </Grid>
 
             <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
                 <ContentControl Grid.Column="0" Content="{Binding TextAnalysis}"

@@ -259,6 +259,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         { 
             IsCapturing = false; 
             Decision.IsLocked = false;
+            RefreshPreview();
             IsPreparingModels = false;
             IsFinishing = false; 
             StartCommand.NotifyCanExecuteChanged(); 
