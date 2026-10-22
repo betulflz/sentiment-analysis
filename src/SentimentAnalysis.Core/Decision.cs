@@ -55,6 +55,9 @@ public sealed record Recommendation(
     Confidence Confidence,
     string Reason);
 
+/// <summary>Bir analiz penceresinin karar kaydı (canlı ekran üretir, rapor/depolama tüketir).</summary>
+public sealed record DecisionWindow(System.TimeSpan Start, System.TimeSpan End, Indicators Indicators, Recommendation Recommendation);
+
 /// <summary>Görüşme sonrası takip kararı.</summary>
 public sealed record FollowUpDecision(FollowUpAction Best, IReadOnlyList<Ranked<FollowUpAction>> Ranking, string Reason);
 

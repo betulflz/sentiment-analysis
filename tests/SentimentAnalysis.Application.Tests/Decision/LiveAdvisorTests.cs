@@ -148,6 +148,17 @@ public class LiveAdvisorTests
     }
 
     [Fact]
+    public void Rerank_SkipsHysteresis()
+    {
+        var advisor = new LiveAdvisor(MeetingProfile.Satis, Cfg);
+        var w = DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis);
+        Assert.Equal(LiveAction.EmpatiKur, advisor.Next(Ind(A), w).Action);
+        // Next(B) burada histerezis yüzünden Empati'de kalırdı (bkz. Hysteresis_SmallLead_NeedsTwoWindows).
+        Assert.Equal(LiveAction.KonuyuDegistir, advisor.Rerank(Ind(B), w).Action);
+        Assert.Equal(LiveAction.KonuyuDegistir, advisor.Next(Ind(A), w).Action);  // Rerank sonucu mevcut öneri oldu
+    }
+
+    [Fact]
     public void Reset_ForgetsCurrent()
     {
         var advisor = new LiveAdvisor(MeetingProfile.Satis, Cfg);

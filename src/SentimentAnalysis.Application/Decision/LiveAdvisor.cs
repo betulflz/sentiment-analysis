@@ -64,6 +64,14 @@ public sealed class LiveAdvisor
             DecisionText.Reason(indicators, entry.TopCriteria));
     }
 
+    /// <summary>Kullanıcı ağırlıkları değiştirdi: histerezis atlanır, en iyi eylem hemen gösterilir ve
+    /// mevcut öneri kabul edilir (spec §6.5: "değişince sıralama anında yeniden hesaplanır").</summary>
+    public Recommendation Rerank(Indicators indicators, IReadOnlyList<double> weights)
+    {
+        Reset();
+        return Next(indicators, weights);
+    }
+
     public void Reset()
     {
         _insufficient = false;

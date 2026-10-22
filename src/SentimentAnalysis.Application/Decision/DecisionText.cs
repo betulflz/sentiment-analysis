@@ -43,6 +43,14 @@ public static class DecisionText
         _ => a.ToString(),
     };
 
+    public static string Name(MeetingProfile p) => p switch
+    {
+        MeetingProfile.Satis => "Satış / müşteri",
+        MeetingProfile.Mulakat => "Mülakat",
+        MeetingProfile.Toplanti => "Toplantı",
+        _ => p.ToString(),
+    };
+
     public static string Subject(int? face) => face is int i ? $"Yüz {i + 1}" : "Görüşme geneli";
 
     /// <summary>"{Kişi}: {kriter} %{değer}, {kriter} %{değer}." — ikinci kriter 0,2'nin altındaysa yazılmaz.</summary>

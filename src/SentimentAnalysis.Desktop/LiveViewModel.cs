@@ -24,6 +24,9 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
     public ObservableCollection<ChunkRowVm> Timeline { get; } = new();
 
+    /// <summary>Karar paneli (11d): öneri kartı, profil, kaydırıcılar, göstergeler.</summary>
+    public DecisionPanelViewModel Decision { get; }
+
     /// <summary>Koşu bittiğinde raised olur; sonucu (Rapor'a devretmek gibi) dinleyicilere iletir.</summary>
     public event Action<MeetingSummary>? Completed;
 
@@ -107,6 +110,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         _picker = picker;
         _selected = selected;
         var fusion = (config ?? AppConfig.Default).Fusion;
+        Decision = new DecisionPanelViewModel((config ?? AppConfig.Default).Decision);
         _temperature = fusion.DistributionTemperature;
         _neutralRadius = fusion.NeutralRadius;
         _captureMode = captureMode;
@@ -138,7 +142,9 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
     public void Report(ChunkResult r)
     {
-        var row = new ChunkRowVm(r, _runner.FacesFor(r));
+        var faces = _runner.FacesFor(r);
+        var row = new ChunkRowVm(r, faces);
+        Decision.OnWindow(r, faces);
         Timeline.Add(row);
         CurrentEmotion = row.Emotion;
         CurrentValence = row.Valence;
@@ -168,6 +174,8 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     {
         if (IsCapturing || IsPreparingModels) return;
         IsCapturing = true;
+        Decision.Start();
+        Decision.IsLocked = true;
         DiarizationHint = _diarization?.Enabled == true
             ? "Konuşmacı ayrımı bu oturum için AÇIK — ses geçici olarak saklanacak, konuşmacılar Durdur sonrası Rapor'da görünür."
             : "Konuşmacı ayrımı KAPALI (Ayarlar'dan açıp Kaydet'e basarak bir sonraki oturumda etkinleştirebilirsiniz).";
@@ -225,6 +233,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         finally 
         { 
             IsCapturing = false; 
+            Decision.IsLocked = false;
             IsPreparingModels = false;
             IsFinishing = false; 
             StartCommand.NotifyCanExecuteChanged(); 

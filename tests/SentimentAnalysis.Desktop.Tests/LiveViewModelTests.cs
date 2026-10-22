@@ -413,4 +413,31 @@ public class LiveViewModelTests
         Assert.StartsWith("Bu videoda ses yok.", vm.CaptureError);
         Assert.Contains("Analiz sonucu üretilemedi", vm.CaptureError);
     }
+
+    // --- Karar paneli (11d) ---
+
+    [Fact]
+    public void Report_FeedsDecisionPanel()
+    {
+        var vm = new LiveViewModel(new FaceRunner());
+        vm.Decision.Start();
+        vm.Report(Chunk(0, Emotion.Notr, 0));
+        Assert.Single(vm.Decision.History);
+        Assert.Single(vm.Decision.Faces);
+    }
+
+    [Fact]
+    public async Task Start_LocksProfileAndResetsPanel()
+    {
+        var runner = new StoppableRunner();
+        var vm = new LiveViewModel(runner);
+        vm.Report(Chunk(0, Emotion.Notr, 0));          // önceki oturumdan kalan pencere
+        vm.StartCommand.Execute(null);
+        await runner.Started.Task;
+        Assert.True(vm.Decision.IsLocked);
+        Assert.Empty(vm.Decision.History);
+        vm.StopCommand.Execute(null);
+        await vm.WaitForIdleAsync();
+        Assert.False(vm.Decision.IsLocked);
+    }
 }
