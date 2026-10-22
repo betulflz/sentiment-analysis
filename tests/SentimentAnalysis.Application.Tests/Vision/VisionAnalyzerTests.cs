@@ -74,7 +74,6 @@ public class VisionAnalyzerTests
         var analyzer = new VisionAnalyzer(detector, new FakeExpression(), new VisionTimeline(Cfg), Cfg);
         await analyzer.RunAsync(new ListSource(10), CancellationToken.None);
         Assert.Equal(5, detector.Calls);
-        Assert.NotNull(analyzer.LatestFrame);
     }
 
     [Fact]
@@ -85,7 +84,48 @@ public class VisionAnalyzerTests
         await analyzer.RunAsync(new ListSource(10), CancellationToken.None);
         var s = Assert.Single(timeline.Summarize(TimeSpan.Zero, TimeSpan.FromSeconds(10)));
         Assert.Equal(1.0, s.VisibleRatio, 1e-9);
-        Assert.Single(analyzer.LatestFaces);
+    }
+
+    [Fact]
+    public async Task LatestFrameAndFaces_PopulatedWhileCapturing()
+    {
+        // 11d önizlemesi koşu SIRASINDA LatestFrame/LatestFaces'i okur; bu test o sözleşmeyi
+        // RunAsync tamamlanmadan ayrı bir eşzamanlı okuyucuyla doğrular.
+        var analyzer = new VisionAnalyzer(new FakeDetector(), new FakeExpression(), new VisionTimeline(Cfg), Cfg);
+        using var cts = new CancellationTokenSource();
+        var run = analyzer.RunAsync(new EndlessSource(), cts.Token);
+        VideoFrame? seenFrame = null;
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (seenFrame is null && DateTime.UtcNow < deadline)
+        {
+            seenFrame = analyzer.LatestFrame;
+            await Task.Delay(5);
+        }
+        cts.Cancel();
+        await run;
+        Assert.NotNull(seenFrame);
+    }
+
+    [Fact]
+    public async Task RunAsync_ClearsPreviousSessionTimeline()
+    {
+        var timeline = new VisionTimeline(Cfg);
+        var analyzer = new VisionAnalyzer(new FakeDetector(), new FakeExpression(), timeline, Cfg);
+        await analyzer.RunAsync(new ListSource(5), CancellationToken.None);
+        Assert.NotEmpty(timeline.Summarize(TimeSpan.Zero, TimeSpan.FromSeconds(5)));
+
+        // Yeni oturum, 0. saniyede hiç kare yok → eski oturumun gözlemleri sızmamalı.
+        await analyzer.RunAsync(new ListSource(0), CancellationToken.None);
+        Assert.Empty(timeline.Summarize(TimeSpan.Zero, TimeSpan.FromSeconds(5)));
+    }
+
+    [Fact]
+    public async Task RunAsync_ClearsLatestFrameAndFacesWhenCaptureEnds()
+    {
+        var analyzer = new VisionAnalyzer(new FakeDetector(), new FakeExpression(), new VisionTimeline(Cfg), Cfg);
+        await analyzer.RunAsync(new ListSource(5), CancellationToken.None);
+        Assert.Null(analyzer.LatestFrame);
+        Assert.Empty(analyzer.LatestFaces);
     }
 
     [Fact]

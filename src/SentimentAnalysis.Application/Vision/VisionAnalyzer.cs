@@ -39,7 +39,10 @@ public sealed class VisionAnalyzer
 
     public async Task RunAsync(IVideoCaptureSource source, CancellationToken ct)
     {
+        // Önceki oturumun izleri ve gözlemleri yeni oturuma SIZMAMALI (aynı VisionAnalyzer/VisionTimeline
+        // birden çok oturumda yeniden kullanılabilir — composition root singleton deseni).
         _tracker.Reset();
+        _timeline.Clear();
         int n = 0;
         try
         {
@@ -53,6 +56,13 @@ public sealed class VisionAnalyzer
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             // "Durdur": normal bitiş.
+        }
+        finally
+        {
+            // Son kare, oturum bittikten sonra bellekte sızıntı gibi durmasın — görüntü diske
+            // yazılmıyor (spec §4), bitmiş bir oturumun karesini bellekte tutmak da aynı ilkeyi ihlal eder.
+            _latestFrame = null;
+            _latestFaces = Array.Empty<(int, FaceBox)>();
         }
     }
 
