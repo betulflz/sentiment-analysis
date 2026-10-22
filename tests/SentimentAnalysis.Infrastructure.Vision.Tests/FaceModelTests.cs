@@ -76,6 +76,25 @@ public class FaceModelPureTests
     }
 
     [Fact]
+    public void Decode_NonFiniteOutputs_FailClosed()
+    {
+        var o = EmptyOutputs();
+        SetAnchor(o, 8, 10, 20, float.NaN, [0, 0, 0, 0]);
+        SetAnchor(o, 8, 30, 30, 1f, [float.NaN, 0, float.PositiveInfinity, 0]);
+        Assert.Empty(YuNetDecoder.Decode(o, 0.6f, 0.3f));
+    }
+
+    [Fact]
+    public void Decode_AllAnchorsAboveThreshold_CapsCandidates()
+    {
+        var o = EmptyOutputs();
+        foreach (var k in o.Keys.Where(k => k.StartsWith("cls_") || k.StartsWith("obj_")).ToList())
+            Array.Fill(o[k], 1f);
+        var faces = YuNetDecoder.Decode(o, 0.6f, 0.3f);
+        Assert.InRange(faces.Count, 1, YuNetDecoder.MaxCandidates);
+    }
+
+    [Fact]
     public void ToInput_BgrOrderAndPadding()
     {
         var rgb = new byte[640 * 360 * 3];

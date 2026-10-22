@@ -30,6 +30,10 @@ public static class YuNetDecoder
     public const int Size = 640;
     private static readonly int[] Strides = [8, 16, 32];
 
+    /// <summary>NMS öncesi en yüksek skorlu aday sayısı (OpenCV FaceDetectorYN top_k ile aynı). 8400 çapanın
+    /// hepsi eşiği geçse bile NMS karesel patlamasın.</summary>
+    public const int MaxCandidates = 5000;
+
     public static IReadOnlyList<DetectedFace> Decode(IReadOnlyDictionary<string, float[]> outputs, float minScore, float nmsIou)
     {
         var candidates = new List<DetectedFace>();
@@ -42,11 +46,14 @@ public static class YuNetDecoder
             int cols = Size / s;
             for (int i = 0; i < cls.Length; i++)
             {
+                // Kapalı kapı: NaN skor "eşiği geçmedi" sayılır (NaN < eşik false döndüğü için ters koşul).
                 float score = MathF.Sqrt(Math.Clamp(cls[i], 0f, 1f) * Math.Clamp(obj[i], 0f, 1f));
-                if (score < minScore) continue;
+                if (!(score >= minScore)) continue;
                 int r = i / cols, c = i % cols;
                 float cx = (c + bbox[i * 4]) * s, cy = (r + bbox[i * 4 + 1]) * s;
                 float w = MathF.Exp(bbox[i * 4 + 2]) * s, h = MathF.Exp(bbox[i * 4 + 3]) * s;
+                if (!float.IsFinite(cx) || !float.IsFinite(cy) || !(w > 0 && w <= 2 * Size) || !(h > 0 && h <= 2 * Size))
+                    continue;
                 var points = new float[10];
                 for (int k = 0; k < 5; k++)
                 {
@@ -59,6 +66,7 @@ public static class YuNetDecoder
 
         // Skora göre azalan NMS.
         candidates.Sort((a, b) => b.Score.CompareTo(a.Score));
+        if (candidates.Count > MaxCandidates) candidates.RemoveRange(MaxCandidates, candidates.Count - MaxCandidates);
         var kept = new List<DetectedFace>();
         foreach (var f in candidates)
             if (kept.TrueForAll(k => IoU(k.Box, f.Box) <= nmsIou)) kept.Add(f);
