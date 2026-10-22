@@ -27,6 +27,31 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     /// <summary>Karar paneli (11d): öneri kartı, profil, kaydırıcılar, göstergeler.</summary>
     public DecisionPanelViewModel Decision { get; }
 
+    /// <summary>Önizlemedeki yüz kutuları (kare pikselinde).</summary>
+    public ObservableCollection<FaceBoxVm> PreviewFaces { get; } = new();
+
+    /// <summary>Önizlenen son kare; <c>null</c> = görüntü yok (önizleme gizlenir).</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPreview))] private VideoFrame? _previewFrame;
+
+    public bool HasPreview => PreviewFrame is not null;
+
+    private IReadOnlyList<(int Index, FaceBox Box)>? _previewBoxes;
+
+    /// <summary>Runner'ın son karesini ve yüz kutularını okur (UI zamanlayıcısı ~5 Hz çağırır).
+    /// Kare ve kutular değişmediyse hiçbir özellik değişmez.</summary>
+    public void RefreshPreview()
+    {
+        var frame = _runner.LatestFrame;
+        var boxes = frame is null ? Array.Empty<(int, FaceBox)>() : _runner.LatestFaces;
+        if (!ReferenceEquals(frame, PreviewFrame)) PreviewFrame = frame;
+        if (ReferenceEquals(boxes, _previewBoxes)) return;
+        _previewBoxes = boxes;
+        if (boxes.Count == 0 && PreviewFaces.Count == 0) return;
+        PreviewFaces.Clear();
+        foreach (var (index, box) in boxes)
+            PreviewFaces.Add(new FaceBoxVm(box.X, box.Y, box.W, box.H, $"Yüz {index + 1}"));
+    }
+
     /// <summary>Koşu bittiğinde raised olur; sonucu (Rapor'a devretmek gibi) dinleyicilere iletir.</summary>
     public event Action<MeetingSummary>? Completed;
 

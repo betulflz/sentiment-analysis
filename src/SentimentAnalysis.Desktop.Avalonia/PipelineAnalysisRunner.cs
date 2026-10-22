@@ -60,6 +60,12 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
     /// bkz. <see cref="IAnalysisRunner.SkippedChunkCount"/> ve 08e düzeltme turu Fix 2.</summary>
     public int SkippedChunkCount => _pipeline.DroppedCount + _pipeline.DrainSkippedCount;
 
+    /// <summary>Önizleme (11d): etkin görüntü analizcisinin son karesi; koşu bitince analizci bunu sıfırlar.</summary>
+    public VideoFrame? LatestFrame => _activeVision?.LatestFrame;
+
+    public IReadOnlyList<(int Index, FaceBox Box)> LatestFaces =>
+        _activeVision?.LatestFaces ?? Array.Empty<(int, FaceBox)>();
+
     /// <summary>Chunk aralığındaki yüz özeti; görüntü kanalı olmayan koşuda boş.</summary>
     public IReadOnlyList<FaceWindowSummary> FacesFor(ChunkResult r) =>
         _activeVision?.Timeline.Summarize(r.TimeStart, r.TimeEnd) ?? Array.Empty<FaceWindowSummary>();

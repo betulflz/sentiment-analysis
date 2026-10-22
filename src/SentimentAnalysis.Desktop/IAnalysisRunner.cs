@@ -26,6 +26,13 @@ public interface IAnalysisRunner
     /// <summary>Bu chunk'ın zaman aralığında görülen yüzlerin özeti (11b; video/kamera modu).
     /// Additive üye: varsayılan boş — görüntü kanalı olmayan koşularda satırda yüz notu çıkmaz.</summary>
     IReadOnlyList<FaceWindowSummary> FacesFor(ChunkResult r) => Array.Empty<FaceWindowSummary>();
+
+    /// <summary>Önizleme için son alınan kare (11d). Additive: varsayılan <c>null</c> = görüntü yok.
+    /// Koşu bitince runner bunu <c>null</c>'a çeker — bitmiş oturumun karesi gösterilmez.</summary>
+    VideoFrame? LatestFrame => null;
+
+    /// <summary>Son analiz edilen karedeki yüz kutuları (11d önizlemesi). Additive, varsayılan boş.</summary>
+    IReadOnlyList<(int Index, FaceBox Box)> LatestFaces => Array.Empty<(int, FaceBox)>();
 }
 
 /// <summary>Koşuyu DURDURMAYAN uyarılar (görüntü kanalı hatası, videoda ses olmaması) için kanal.
