@@ -56,24 +56,27 @@ public static class AvFoundationDevices
     }
 }
 
-/// <summary>ffmpeg komut satırları (11a'da ölçülmüş biçimleriyle) ve çıkış kodlarının Türkçe açıklaması.</summary>
+/// <summary>ffmpeg komut satırları (11a'da ölçülmüş biçimleriyle) ve çıkış kodlarının Türkçe açıklaması.
+/// Argümanlar TOKEN listesidir (<c>ProcessStartInfo.ArgumentList</c>): dosya adındaki tırnak/boşluk ffmpeg'e
+/// ek seçenek sokamaz.</summary>
 public static class FfmpegArgs
 {
     public const int FrameWidth = 640, FrameHeight = 360;
 
-    public static string VideoFile(string path, int fps) =>
-        $"-hide_banner -loglevel error -re -i \"{path}\" " +
-        $"-vf \"fps={fps},scale={FrameWidth}:{FrameHeight}:force_original_aspect_ratio=decrease,pad={FrameWidth}:{FrameHeight}:(ow-iw)/2:(oh-ih)/2\" " +
-        "-pix_fmt rgb24 -f rawvideo pipe:1";
+    public static string[] VideoFile(string path, int fps) =>
+        ["-hide_banner", "-loglevel", "error", "-re", "-i", path,
+         "-vf", $"fps={fps},scale={FrameWidth}:{FrameHeight}:force_original_aspect_ratio=decrease,pad={FrameWidth}:{FrameHeight}:(ow-iw)/2:(oh-ih)/2",
+         "-pix_fmt", "rgb24", "-f", "rawvideo", "pipe:1"];
 
-    public static string Camera(int index, int fps) =>
-        $"-hide_banner -loglevel error -f avfoundation -pixel_format nv12 -framerate 30 -video_size 1280x720 -i \"{index}:none\" " +
-        $"-vf \"fps={fps},scale={FrameWidth}:{FrameHeight}\" -pix_fmt rgb24 -f rawvideo pipe:1";
+    public static string[] Camera(int index, int fps) =>
+        ["-hide_banner", "-loglevel", "error", "-f", "avfoundation", "-pixel_format", "nv12", "-framerate", "30",
+         "-video_size", "1280x720", "-i", $"{index}:none",
+         "-vf", $"fps={fps},scale={FrameWidth}:{FrameHeight}", "-pix_fmt", "rgb24", "-f", "rawvideo", "pipe:1"];
 
-    public static string ListDevices => "-hide_banner -f avfoundation -list_devices true -i \"\"";
+    public static string[] ListDevices => ["-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", ""];
 
-    public static string AudioFileRealtime(string path) =>
-        $"-hide_banner -loglevel error -re -i \"{path}\" -vn -ac 1 -ar 16000 -f s16le pipe:1";
+    public static string[] AudioFileRealtime(string path) =>
+        ["-hide_banner", "-loglevel", "error", "-re", "-i", path, "-vn", "-ac", "1", "-ar", "16000", "-f", "s16le", "pipe:1"];
 
     public static string ExplainExit(int exitCode, string stderr, bool camera)
     {

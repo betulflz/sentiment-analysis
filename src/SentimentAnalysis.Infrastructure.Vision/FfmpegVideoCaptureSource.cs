@@ -36,7 +36,7 @@ public sealed class FfmpegVideoCaptureSource : IVideoCaptureSource
     public async IAsyncEnumerable<VideoFrame> CaptureAsync([EnumeratorCancellation] CancellationToken ct)
     {
         var ffmpeg = FfmpegLocator.Find();
-        string args;
+        string[] args;
         if (IsCamera)
         {
             var index = AvFoundationDevices.FindVideoIndex(await ListDevicesAsync(ffmpeg, ct).ConfigureAwait(false), _cfg.CameraName)
@@ -121,16 +121,18 @@ public sealed class FfmpegVideoCaptureSource : IVideoCaptureSource
         return err;
     }
 
-    internal static Process Start(string ffmpeg, string args)
+    internal static Process Start(string ffmpeg, IEnumerable<string> args)
     {
         try
         {
-            return Process.Start(new ProcessStartInfo(ffmpeg, args)
+            var psi = new ProcessStartInfo(ffmpeg)
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
-            })!;
+            };
+            foreach (var a in args) psi.ArgumentList.Add(a);
+            return Process.Start(psi)!;
         }
         catch (Exception ex)
         {

@@ -160,6 +160,7 @@ public class FaceModelPureTests
 }
 
 /// <summary>Gerçek YuNet + FER+ ile. Model ya da SENTIMENT_TEST_VIDEO (iki kişilik mülakat) yoksa atlanır.</summary>
+[Collection(RealVideoCollection.Name)]
 public class FaceModelIntegrationTests
 {
     private static readonly VisionConfig Cfg = new();

@@ -33,10 +33,23 @@ public class FfmpegPureTests
     [Fact]
     public void Args_VideoFile_ContainsRealtimeAndFilter()
     {
-        var a = FfmpegArgs.VideoFile("/v/a b.mp4", 5);
-        Assert.Contains("-re -i \"/v/a b.mp4\"", a);
+        var a = string.Join(' ', FfmpegArgs.VideoFile("/v/a b.mp4", 5));
+        Assert.Contains("-re -i /v/a b.mp4", a);
         Assert.Contains("fps=5,scale=640:360:force_original_aspect_ratio=decrease,pad=640:360", a);
         Assert.Contains("-pix_fmt rgb24 -f rawvideo pipe:1", a);
+    }
+
+    [Fact]
+    public void Args_PathWithQuotes_StaysSingleToken()
+    {
+        // Güvenlik: dosya adı ffmpeg'e ek seçenek sokamamalı (ör. -y ile dosya yazdırma).
+        const string evil = "/v/a\" -y -f mp4 \"/tmp/x.mov";
+        foreach (var args in new[] { FfmpegArgs.VideoFile(evil, 5), FfmpegArgs.AudioFileRealtime(evil) })
+        {
+            int i = args.ToList().IndexOf("-i");
+            Assert.Equal(evil, args[i + 1]);
+            Assert.DoesNotContain("-y", args);
+        }
     }
 
     [Fact]
@@ -51,16 +64,16 @@ public class FfmpegPureTests
     [Fact]
     public void Args_Camera_UsesNv12AndIndex()
     {
-        var a = FfmpegArgs.Camera(2, 5);
+        var a = string.Join(' ', FfmpegArgs.Camera(2, 5));
         Assert.Contains("-f avfoundation -pixel_format nv12", a);
-        Assert.Contains("-i \"2:none\"", a);
+        Assert.Contains("-i 2:none", a);
     }
 
     [Fact]
     public void Args_Audio_IsRealtimeMono16k()
     {
-        var a = FfmpegArgs.AudioFileRealtime("/v/x.mp4");
-        Assert.Contains("-re -i \"/v/x.mp4\" -vn -ac 1 -ar 16000 -f s16le pipe:1", a);
+        var a = string.Join(' ', FfmpegArgs.AudioFileRealtime("/v/x.mp4"));
+        Assert.Contains("-re -i /v/x.mp4 -vn -ac 1 -ar 16000 -f s16le pipe:1", a);
     }
 
     [Fact]
@@ -101,7 +114,9 @@ public class FfmpegPureTests
     }
 }
 
-/// <summary>Gerçek ffmpeg + video ile. SENTIMENT_TEST_VIDEO yoksa atlanır.</summary>
+/// <summary>Gerçek ffmpeg + video ile. SENTIMENT_TEST_VIDEO yoksa atlanır. Aynı videoyu açan sınıflar
+/// tek koleksiyonda sırayla koşar — <see cref="Cancel_KillsProcess"/>'in pgrep'i diğer testin ffmpeg'ini görmesin.</summary>
+[Collection(RealVideoCollection.Name)]
 public class FfmpegIntegrationTests
 {
     private static string? Video => Environment.GetEnvironmentVariable("SENTIMENT_TEST_VIDEO");
@@ -154,11 +169,19 @@ public class FfmpegIntegrationTests
         Assert.False(FfmpegRunningFor(Video!), "iptal sonrası ffmpeg süreci hâlâ çalışıyor");
     }
 
+    // Desen ffmpeg İKİLİSİNİN komut satırıyla başlamalı: aksi halde testi çalıştıran kabuk (komut metninde
+    // "ffmpeg" ve video yolu geçebilir) eşleşir ve test sahte-kırmızı verir.
     private static bool FfmpegRunningFor(string path)
     {
-        var p = Process.Start(new ProcessStartInfo("pgrep", $"-f \"ffmpeg.*{Path.GetFileName(path)}\"") { RedirectStandardOutput = true })!;
+        var p = Process.Start(new ProcessStartInfo("pgrep", $"-f \"^[^ ]*/ffmpeg .*{Path.GetFileName(path)}\"") { RedirectStandardOutput = true })!;
         var output = p.StandardOutput.ReadToEnd();
         p.WaitForExit();
         return output.Trim().Length > 0;
     }
+}
+
+[CollectionDefinition(Name)]
+public sealed class RealVideoCollection
+{
+    public const string Name = "Gerçek video (sıralı)";
 }
