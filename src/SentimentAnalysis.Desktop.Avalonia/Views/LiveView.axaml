@@ -54,10 +54,13 @@
                 <ToggleSwitch IsChecked="{Binding UseMicrophone}"
                               OnContent="Mikrofon" OffContent="Dosya"
                               IsEnabled="{Binding !IsCapturing}" VerticalAlignment="Center" />
+                <ToggleSwitch IsChecked="{Binding UseCamera}"
+                              OnContent="Kamera açık" OffContent="Kamera kapalı"
+                              IsEnabled="{Binding !IsCapturing}" VerticalAlignment="Center" />
                 <Button Content="Dosya Seç" Command="{Binding SelectFileCommand}"
-                        IsEnabled="{Binding !IsCapturing}" IsVisible="{Binding !UseMicrophone}" />
+                        IsEnabled="{Binding !IsCapturing}" IsVisible="{Binding IsFileMode}" />
                 <TextBlock Text="{Binding SelectedFile}" VerticalAlignment="Center" FontStyle="Italic"
-                           IsVisible="{Binding !UseMicrophone}"
+                           IsVisible="{Binding IsFileMode}"
                            Foreground="{DynamicResource SystemBaseMediumColor}" />
                 <Button Content="Başlat" Command="{Binding StartCommand}" IsEnabled="{Binding !IsCapturing}" />
                 <Button Content="Durdur" Command="{Binding StopCommand}" IsEnabled="{Binding IsCapturing}" />
@@ -133,6 +136,10 @@
                                                Foreground="{DynamicResource SystemBaseMediumColor}"
                                                TextWrapping="Wrap" />
                                     <TextBlock Text="{Binding QualityNote}" FontSize="10"
+                                               Foreground="{DynamicResource SystemBaseMediumColor}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding FaceNote}" FontSize="10"
+                                               IsVisible="{Binding FaceNote, Converter={StaticResource StringNotEmptyConverter}}"
                                                Foreground="{DynamicResource SystemBaseMediumColor}"
                                                TextWrapping="Wrap" />
                                     <TextBlock Text="Girdi zayıf — bu satır temkinli okunmalı."

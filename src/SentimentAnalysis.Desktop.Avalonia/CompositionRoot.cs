@@ -5,6 +5,7 @@ using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Application.Diarization;
 using SentimentAnalysis.Application.Fusion;
 using SentimentAnalysis.Application.Pipeline;
+using SentimentAnalysis.Application.Vision;
 using SentimentAnalysis.Desktop;
 using SentimentAnalysis.Infrastructure.Audio;
 using SentimentAnalysis.Infrastructure.Diarization;
@@ -12,6 +13,7 @@ using SentimentAnalysis.Infrastructure.Emotion;
 using SentimentAnalysis.Infrastructure.Storage;
 using SentimentAnalysis.Infrastructure.Stt;
 using SentimentAnalysis.Infrastructure.Vad;
+using SentimentAnalysis.Infrastructure.Vision;
 
 namespace SentimentAnalysis.Desktop.Avalonia;
 
@@ -65,11 +67,45 @@ public static class CompositionRoot
             var mode = sp.GetRequiredService<ICaptureModeState>();
             var audioSourceFactory = sp.GetRequiredService<IAudioSourceFactory>();
             var log = sp.GetRequiredService<IDiagnosticLog>();
-            return () => mode.Mode == CaptureMode.Mikrofon
-                ? new MicrophoneCaptureSource(log)
-                : selected.Path is null ? null : audioSourceFactory.Create(selected.Path);
+            return () => mode.Mode switch
+            {
+                CaptureMode.Mikrofon or CaptureMode.Kamera => new MicrophoneCaptureSource(log),
+                _ when selected.Path is null => null,
+                _ when IsVideo(selected.Path) => new FfmpegRealtimeAudioSource(selected.Path),
+                _ => audioSourceFactory.Create(selected.Path),
+            };
         });
-        services.AddSingleton<IAnalysisRunner, PipelineAnalysisRunner>();
+
+        // Görüntü kanalı (11b): kamera modunda kamera, dosya modunda video uzantılı dosya. Ses dosyası ve
+        // mikrofon modunda görüntü YOK (davranış değişmez). Modeller ilk görüntülü koşuda yüklenir.
+        services.AddSingleton<Func<IVideoCaptureSource?>>(sp =>
+        {
+            var selected = sp.GetRequiredService<ISelectedAudio>();
+            var mode = sp.GetRequiredService<ICaptureModeState>();
+            var cfg = sp.GetRequiredService<AppConfig>().Vision;
+            return () => mode.Mode switch
+            {
+                CaptureMode.Kamera => FfmpegVideoCaptureSource.ForCamera(cfg),
+                CaptureMode.Dosya when selected.Path is not null && IsVideo(selected.Path) =>
+                    FfmpegVideoCaptureSource.ForFile(selected.Path, cfg),
+                _ => null,
+            };
+        });
+        services.AddSingleton<Func<VisionAnalyzer>>(sp =>
+        {
+            var cfg = sp.GetRequiredService<AppConfig>().Vision;
+            return () => new VisionAnalyzer(new YuNetFaceDetector(cfg), new FerPlusExpressionModel(cfg),
+                new VisionTimeline(cfg), cfg);
+        });
+        services.AddSingleton<IAnalysisRunner>(sp => new PipelineAnalysisRunner(
+            sp.GetRequiredService<EmotionPipeline>(),
+            sp.GetRequiredService<Func<IAudioCaptureSource?>>(),
+            sp.GetRequiredService<AppConfig>(),
+            sp.GetRequiredService<ICaptureModeState>(),
+            sp.GetService<ISessionAudioSink>(),
+            sp.GetService<IDiarizationState>(),
+            sp.GetRequiredService<Func<IVideoCaptureSource?>>(),
+            sp.GetRequiredService<Func<VisionAnalyzer>>()));
 
         // Konuşmacı ayrımı (10b): motor + arka plan geçişi + UI'nin dokunduğu servis.
         // Model YÜKLENMEZ; ilk gerçek çağrıya kadar maliyeti sıfırdır (özellik kapalıysa hiç).
@@ -110,4 +146,7 @@ public static class CompositionRoot
 
         return services.BuildServiceProvider();
     }
+
+    private static bool IsVideo(string path) =>
+        Path.GetExtension(path).ToLowerInvariant() is ".mp4" or ".mov" or ".m4v";
 }

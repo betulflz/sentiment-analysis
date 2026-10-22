@@ -10,7 +10,7 @@ namespace SentimentAnalysis.Desktop;
 /// <summary>Canlı analiz görünümü VM'i. <see cref="IProgress{ChunkResult}"/> olarak pipeline'a verilir;
 /// gelen her chunk çizelgeye + güncel VA/duygu/rozete yansır. Start/Stop koşuyu <see cref="IAnalysisRunner"/>
 /// üzerinden yönetir. UI-agnostik (headless test).</summary>
-public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkResult>
+public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkResult>, ICaptureWarnings
 {
     private readonly IAnalysisRunner _runner;
     private readonly IAudioFilePicker? _picker;
@@ -43,7 +43,13 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     [ObservableProperty] private SourceAnalysisVm _finalAnalysis = SourceAnalysisVm.Empty("Nihai Karar");
 
     /// <summary>Canlı mikrofon mu kullanılsın (aksi halde seçili dosya)?</summary>
-    [ObservableProperty] private bool _useMicrophone;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsFileMode))] private bool _useMicrophone;
+
+    /// <summary>Kamera modu: mikrofon + kamera (11b). <see cref="UseMicrophone"/> ile karşılıklı dışlayıcı.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsFileMode))] private bool _useCamera;
+
+    /// <summary>Dosya modu mu (dosya seçici görünür)?</summary>
+    public bool IsFileMode => !UseMicrophone && !UseCamera;
 
     /// <summary>Koşu sırasında oluşan hatanın (örn. reddedilen mikrofon izni) tam metni.
     /// <see cref="CongruenceBadge"/> kısa bir rozet olduğundan uzun/açıklayıcı hatalar buraya yazılır.</summary>
@@ -109,14 +115,30 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
     partial void OnUseMicrophoneChanged(bool value)
     {
+        if (value) UseCamera = false;
+        SyncCaptureMode();
+    }
+
+    partial void OnUseCameraChanged(bool value)
+    {
+        if (value) UseMicrophone = false;
+        SyncCaptureMode();
+    }
+
+    private void SyncCaptureMode()
+    {
         if (_captureMode is not null)
-            _captureMode.Mode = value ? CaptureMode.Mikrofon : CaptureMode.Dosya;
+            _captureMode.Mode = UseCamera ? CaptureMode.Kamera : UseMicrophone ? CaptureMode.Mikrofon : CaptureMode.Dosya;
         StartCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>Koşuyu durdurmayan uyarı (ör. görüntü kanalı hatası): ses analizi sürerken gösterilir.</summary>
+    public void Warn(string message) =>
+        CaptureError = string.IsNullOrEmpty(CaptureError) ? message : $"{CaptureError} {message}";
+
     public void Report(ChunkResult r)
     {
-        var row = new ChunkRowVm(r);
+        var row = new ChunkRowVm(r, _runner.FacesFor(r));
         Timeline.Add(row);
         CurrentEmotion = row.Emotion;
         CurrentValence = row.Valence;
@@ -155,7 +177,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         _run = RunAsync(_cts.Token);
     }
 
-    private bool CanStart() => !IsCapturing && !IsPreparingModels && (UseMicrophone || _selected?.Path != null);
+    private bool CanStart() => !IsCapturing && !IsPreparingModels && (!IsFileMode || _selected?.Path != null);
 
     private async Task RunAsync(CancellationToken ct)
     {
@@ -186,7 +208,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
             }
             else if (summary.Outcome == AnalysisOutcome.NoResult)
             {
-                CaptureError = "Analiz sonucu üretilemedi (hiç konuşma/ses algılanmadı).";
+                Warn("Analiz sonucu üretilemedi (hiç konuşma/ses algılanmadı).");
             }
             else
             {

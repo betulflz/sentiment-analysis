@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Core;
 using SentimentAnalysis.Desktop;
@@ -351,5 +352,65 @@ public class LiveViewModelTests
 
         Assert.Contains(uzunMesaj, vm.CaptureError);
         Assert.False(vm.IsCapturing);
+    }
+
+    // --- Kamera modu ve yüz notları (11b) ---
+
+    [Fact]
+    public void UseCamera_SetsModeKamera_AndClearsMicrophone()
+    {
+        var mode = new CaptureModeState();
+        var vm = new LiveViewModel(new FakeRunner(), null, new SelectedAudio(), null, mode);
+
+        vm.UseMicrophone = true;
+        vm.UseCamera = true;
+        Assert.Equal(CaptureMode.Kamera, mode.Mode);
+        Assert.False(vm.UseMicrophone);
+        Assert.False(vm.IsFileMode);
+        Assert.True(vm.StartCommand.CanExecute(null)); // kamera modu dosya istemez
+
+        vm.UseMicrophone = true;
+        Assert.False(vm.UseCamera);
+        Assert.Equal(CaptureMode.Mikrofon, mode.Mode);
+
+        vm.UseMicrophone = false;
+        Assert.Equal(CaptureMode.Dosya, mode.Mode);
+        Assert.True(vm.IsFileMode);
+    }
+
+    private sealed class FaceRunner : IAnalysisRunner
+    {
+        public Task<MeetingSummary> RunAsync(IProgress<ChunkResult> progress, CancellationToken ct) =>
+            Task.FromResult(MeetingSummary.CreateEmpty(AnalysisOutcome.NoResult));
+        public IReadOnlyList<FaceWindowSummary> FacesFor(ChunkResult r) =>
+            new[] { new FaceWindowSummary(0, 1, 0.5, 0, 0, 0, 1) };
+    }
+
+    [Fact]
+    public void LiveViewModel_Report_UsesRunnerFacesFor()
+    {
+        var vm = new LiveViewModel(new FaceRunner());
+        vm.Report(Chunk(0, Emotion.Notr, 0));
+        Assert.StartsWith("Yüz 1: dönük %50", vm.Timeline[0].FaceNote);
+    }
+
+    private sealed class WarningRunner : IAnalysisRunner
+    {
+        public Task<MeetingSummary> RunAsync(IProgress<ChunkResult> progress, CancellationToken ct)
+        {
+            ((ICaptureWarnings)progress).Warn("Bu videoda ses yok.");
+            return Task.FromResult(MeetingSummary.CreateEmpty(AnalysisOutcome.NoResult));
+        }
+    }
+
+    [Fact]
+    public async Task Warn_DuringRun_KeptWhenRunHasNoResult()
+    {
+        var vm = new LiveViewModel(new WarningRunner());
+        vm.StartCommand.Execute(null);
+        await vm.WaitForIdleAsync();
+
+        Assert.StartsWith("Bu videoda ses yok.", vm.CaptureError);
+        Assert.Contains("Analiz sonucu üretilemedi", vm.CaptureError);
     }
 }

@@ -23,10 +23,13 @@ public sealed class AvaloniaAudioFilePicker : IAudioFilePicker
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             AllowMultiple = false,
-            Title = "Ses dosyası seç",
+            Title = "Ses ya da video dosyası seç",
             FileTypeFilter = new[]
             {
+                new FilePickerFileType("Ses ve video")
+                    { Patterns = new[] { "*.mp3", "*.m4a", "*.aac", "*.wav", "*.mp4", "*.mov", "*.m4v" } },
                 new FilePickerFileType("Ses") { Patterns = new[] { "*.mp3", "*.m4a", "*.aac", "*.wav" } },
+                new FilePickerFileType("Video") { Patterns = new[] { "*.mp4", "*.mov", "*.m4v" } },
             },
         }).ConfigureAwait(true);
 

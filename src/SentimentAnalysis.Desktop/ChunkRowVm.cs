@@ -25,9 +25,13 @@ public sealed class ChunkRowVm
     /// <summary>Girdi kanallarından biri zayıf (&lt; %30) — UI bu satıra temkinli yaklaşmalı.</summary>
     public bool WeakInput { get; }
 
+    /// <summary>Bu aralıkta görülen yüzlerin kısa özeti (11b): "Yüz 1: dönük %20, olumsuz ifade %10,
+    /// gülümseme %0 · Yüz 2: …". Görüntü kanalı yoksa ya da yüz görülmediyse boş.</summary>
+    public string FaceNote { get; }
+
     private const double WeakInputThreshold = 0.3;
 
-    public ChunkRowVm(ChunkResult r)
+    public ChunkRowVm(ChunkResult r, IReadOnlyList<FaceWindowSummary>? faces = null)
     {
         Time = r.TimeStart;
         Emotion = EmotionLocalizer.Emotion(r.Fused.PrimaryEmotion);
@@ -41,6 +45,9 @@ public sealed class ChunkRowVm
             $"Ses girdisi %{Percent(r.Fused.AudioReliability)} · Metin girdisi %{Percent(r.Fused.TextReliability)}";
         WeakInput = r.Fused.AudioReliability < WeakInputThreshold
                  || r.Fused.TextReliability < WeakInputThreshold;
+        FaceNote = string.Join(" · ", (faces ?? Array.Empty<FaceWindowSummary>()).Select(f =>
+            $"Yüz {f.FaceIndex + 1}: dönük %{Percent(f.LookAwayRatio)}, " +
+            $"olumsuz ifade %{Percent(f.NegativeExpression)}, gülümseme %{Percent(f.SmileRatio)}"));
     }
 
     private static int Percent(double reliability) =>

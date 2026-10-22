@@ -2,9 +2,11 @@ using Avalonia.Threading;
 using SentimentAnalysis.Application.Abstractions;
 using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Application.Pipeline;
+using SentimentAnalysis.Application.Vision;
 using SentimentAnalysis.Core;
 using SentimentAnalysis.Desktop;
 using SentimentAnalysis.Infrastructure.Audio;
+using SentimentAnalysis.Infrastructure.Vision;
 
 namespace SentimentAnalysis.Desktop.Avalonia;
 
@@ -23,12 +25,21 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
     private readonly ICaptureModeState? _captureMode;
     private readonly ISessionAudioSink? _audioSink;
     private readonly IDiarizationState? _diarization;
+    private readonly Func<IVideoCaptureSource?>? _videoFactory;
+    private readonly Func<VisionAnalyzer>? _visionFactory;
+    private VisionAnalyzer? _vision;
+    private volatile VisionAnalyzer? _activeVision;
 
     public PipelineAnalysisRunner(EmotionPipeline pipeline, Func<IAudioCaptureSource?> sourceFactory,
                                   AppConfig config, ICaptureModeState? captureMode = null,
                                   ISessionAudioSink? audioSink = null,
-                                  IDiarizationState? diarization = null)
+                                  IDiarizationState? diarization = null,
+                                  Func<IVideoCaptureSource?>? videoFactory = null,
+                                  Func<VisionAnalyzer>? visionFactory = null)
     {
+        // 11b: görüntü kanalı additive — fabrika yoksa ya da null dönerse (ses dosyası, mikrofon) davranış değişmez.
+        _videoFactory = videoFactory;
+        _visionFactory = visionFactory;
         _diarization = diarization;
         _pipeline = pipeline;
         _sourceFactory = sourceFactory;
@@ -49,6 +60,10 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
     /// bkz. <see cref="IAnalysisRunner.SkippedChunkCount"/> ve 08e düzeltme turu Fix 2.</summary>
     public int SkippedChunkCount => _pipeline.DroppedCount + _pipeline.DrainSkippedCount;
 
+    /// <summary>Chunk aralığındaki yüz özeti; görüntü kanalı olmayan koşuda boş.</summary>
+    public IReadOnlyList<FaceWindowSummary> FacesFor(ChunkResult r) =>
+        _activeVision?.Timeline.Summarize(r.TimeStart, r.TimeEnd) ?? Array.Empty<FaceWindowSummary>();
+
     public async Task<MeetingSummary> RunAsync(IProgress<ChunkResult> progress, CancellationToken ct)
     {
         var source = _sourceFactory()
@@ -56,10 +71,47 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
                 "Analiz için bir ses kaynağı seçilmedi. Dosya modunda bir ses dosyası seçin " +
                 "veya mikrofon modunu açın.");
 
+        // Görüntü kanalı (11b): video dosyası ya da kamera modunda ses hattıyla birlikte koşar.
+        // Görüntü hatası analizi DURDURMAZ — uyarı olarak gösterilir, ses analizi sürer.
+        var warnings = progress as ICaptureWarnings;
+        void Warn(string message)
+        {
+            if (warnings is not null) Dispatcher.UIThread.Post(() => warnings.Warn(message));
+        }
+
+        _activeVision = null;
+        using var visionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var visionTask = Task.CompletedTask;
+        var video = _videoFactory?.Invoke();
+        if (video is not null)
+        {
+            if (_captureMode?.Mode == CaptureMode.Kamera) video = new ClockedVideoSource(video);
+            try
+            {
+                var vision = _vision ??= _visionFactory?.Invoke()
+                    ?? throw new VideoSourceException("Görüntü analizi yapılandırılmamış.");
+                _activeVision = vision;
+                visionTask = Task.Run(async () =>
+                {
+                    try { await vision.RunAsync(video, visionCts.Token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) { }
+                    catch (Exception ex) { Warn($"Görüntü analizi durdu: {ex.Message}"); }
+                }, CancellationToken.None);
+            }
+            catch (VideoSourceException ex)
+            {
+                Warn($"Görüntü analizi başlatılamadı: {ex.Message}");
+            }
+            // Videonun sesi yoksa (ya da ses okunamazsa) ses hattı hemen biter; görüntü yine de
+            // video boyunca sürsün diye ses kaynağı, görüntü bitene kadar "sessizce" bekletilir.
+            source = new VisionTolerantAudioSource(source, visionTask, Warn);
+        }
+
         try
         {
             // Canlı mikrofonda kısa parça = hızlı geri bildirim; dosyada uzun parça = daha iyi bağlam.
-            var options = _captureMode?.Mode == CaptureMode.Mikrofon
+            // Video/kamera da canlı akış gibi davranır (gerçek hızda).
+            var options = _captureMode?.Mode is CaptureMode.Mikrofon or CaptureMode.Kamera || video is not null
                 ? new CaptureOptions(ChunkLength: TimeSpan.FromSeconds(10), Overlap: TimeSpan.FromSeconds(2))
                 : new CaptureOptions(ChunkLength: TimeSpan.FromSeconds(30), Overlap: TimeSpan.FromSeconds(5));
             var language = ParseLanguage(_config.Stt.Language);
@@ -116,6 +168,10 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
         }
         finally
         {
+            // Ses hattı bitti ya da "Durdur": görüntü görevini kapat ve bekle (ffmpeg süreci öldürülür).
+            visionCts.Cancel();
+            await visionTask.ConfigureAwait(false);
+
             // EmotionPipeline kaynağı elden çıkarmaz (motor sınırının dışında kalır); mikrofon
             // kaynağı yerel AudioQueue + pinlenmiş delegate tuttuğundan burada serbest bırakılmalı,
             // aksi halde her başlat/durdur döngüsünde kaynak sızar.
@@ -131,6 +187,54 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
         "en" => DetectedLanguage.English,
         _ => DetectedLanguage.Other,
     };
+
+    /// <summary>Kamera karelerini oturum başından geçen GERÇEK süreyle damgalar. ffmpeg'in kare sırası
+    /// kamera ısınmasını (4–7 sn, 11a §3) saymaz; mikrofon chunk'ları ise ilk andan itibaren sayılır —
+    /// sıra-tabanlı zaman yüz notlarını birkaç saniye kaydırırdı.</summary>
+    private sealed class ClockedVideoSource(IVideoCaptureSource inner) : IVideoCaptureSource
+    {
+        public async IAsyncEnumerable<VideoFrame> CaptureAsync(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            await foreach (var f in inner.CaptureAsync(ct).ConfigureAwait(false))
+                yield return f with { Time = clock.Elapsed };
+        }
+    }
+
+    /// <summary>Video dosyasının ses kaynağı hata verirse (ör. "Bu videoda ses yok") hatayı uyarıya
+    /// çevirir ve görüntü bitene kadar akışı açık tutar — görüntü analizi video boyunca sürer.</summary>
+    private sealed class VisionTolerantAudioSource(IAudioCaptureSource inner, Task vision, Action<string> warn)
+        : IAudioCaptureSource, IDisposable
+    {
+        public async IAsyncEnumerable<AudioChunk> CaptureAsync(CaptureOptions options,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            var e = inner.CaptureAsync(options, ct).GetAsyncEnumerator(ct);
+            try
+            {
+                while (true)
+                {
+                    bool more;
+                    try { more = await e.MoveNextAsync().ConfigureAwait(false); }
+                    catch (VideoSourceException ex)
+                    {
+                        warn(ex.Message);
+                        try { await vision.WaitAsync(ct).ConfigureAwait(false); } catch (OperationCanceledException) { }
+                        yield break;
+                    }
+                    if (!more) yield break;
+                    yield return e.Current;
+                }
+            }
+            finally
+            {
+                await e.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+
+        public void Dispose() => (inner as IDisposable)?.Dispose();
+    }
 
     /// <summary>Sarılan <see cref="IProgress{T}"/>'i, çağrıldığı iş parçacığı ne olursa olsun her
     /// zaman Avalonia UI thread'ine POST ederek çağıran ince adaptör (bkz. Fix 4). <c>Progress&lt;T&gt;</c>

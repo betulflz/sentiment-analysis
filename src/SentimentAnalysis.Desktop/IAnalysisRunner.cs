@@ -22,4 +22,16 @@ public interface IAnalysisRunner
     /// <summary>Modelleri asenkron olarak warm-up eder ve ilk çıkarım gecikmesini önler.
     /// Additive üye: varsayılan olarak no-op döner, sahte implementasyonları bozmaz.</summary>
     Task WarmUpAsync(CancellationToken ct) => Task.CompletedTask;
+
+    /// <summary>Bu chunk'ın zaman aralığında görülen yüzlerin özeti (11b; video/kamera modu).
+    /// Additive üye: varsayılan boş — görüntü kanalı olmayan koşularda satırda yüz notu çıkmaz.</summary>
+    IReadOnlyList<FaceWindowSummary> FacesFor(ChunkResult r) => Array.Empty<FaceWindowSummary>();
+}
+
+/// <summary>Koşuyu DURDURMAYAN uyarılar (görüntü kanalı hatası, videoda ses olmaması) için kanal.
+/// <see cref="LiveViewModel"/> bunu implemente eder; runner, kendisine verilen progress nesnesi
+/// bunu destekliyorsa kullanır (VM ↔ runner DI döngüsü kurmadan).</summary>
+public interface ICaptureWarnings
+{
+    void Warn(string message);
 }
