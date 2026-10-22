@@ -94,8 +94,19 @@ public static class CompositionRoot
         services.AddSingleton<Func<VisionAnalyzer>>(sp =>
         {
             var cfg = sp.GetRequiredService<AppConfig>().Vision;
-            return () => new VisionAnalyzer(new YuNetFaceDetector(cfg), new FerPlusExpressionModel(cfg),
-                new VisionTimeline(cfg), cfg);
+            return () =>
+            {
+                var detector = new YuNetFaceDetector(cfg);
+                try
+                {
+                    return new VisionAnalyzer(detector, new FerPlusExpressionModel(cfg), new VisionTimeline(cfg), cfg);
+                }
+                catch
+                {
+                    detector.Dispose();
+                    throw;
+                }
+            };
         });
         services.AddSingleton<IAnalysisRunner>(sp => new PipelineAnalysisRunner(
             sp.GetRequiredService<EmotionPipeline>(),

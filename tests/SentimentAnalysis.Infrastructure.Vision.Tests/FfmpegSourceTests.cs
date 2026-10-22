@@ -40,6 +40,15 @@ public class FfmpegPureTests
     }
 
     [Fact]
+    public void FirstFrameTimeout_CameraWaitsForPermissionPrompt()
+    {
+        var cfg = new VisionConfig();
+        // 11a §3: izin istemi yanıtlanırken ffmpeg bloklanır; istem hızlı yanıtlansa bile ilk kare 7,5 sn.
+        Assert.True(FfmpegVideoCaptureSource.FirstFrameTimeout(cfg, camera: true) >= TimeSpan.FromSeconds(60));
+        Assert.Equal(TimeSpan.FromSeconds(10), FfmpegVideoCaptureSource.FirstFrameTimeout(cfg, camera: false));
+    }
+
+    [Fact]
     public void Args_Camera_UsesNv12AndIndex()
     {
         var a = FfmpegArgs.Camera(2, 5);

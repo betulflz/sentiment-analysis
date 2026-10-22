@@ -136,6 +136,20 @@ public class FaceModelPureTests
     }
 
     [Fact]
+    public void CorruptModel_ThrowsVideoSourceException()
+    {
+        var dir = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var cfg = new VisionConfig(ModelDirectory: dir);
+            File.WriteAllText(Path.Combine(dir, cfg.YuNetModelFile), "yarım indirme");
+            var ex = Assert.Throws<VideoSourceException>(() => new YuNetFaceDetector(cfg));
+            Assert.Contains("Yüz modeli yüklenemedi", ex.Message);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
     public void MissingModel_ThrowsVideoSourceException()
     {
         var cfg = new VisionConfig(ModelDirectory: "/olmayan/klasor");

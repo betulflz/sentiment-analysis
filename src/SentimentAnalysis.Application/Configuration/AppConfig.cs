@@ -146,7 +146,8 @@ public sealed record VisionConfig(
     double MinUsableFaceHeight = 24,    // KALİBRE EDİLMEMİŞ: bu boyda ifade güveni 0
     string YuNetModelFile = "face_detection_yunet_2023mar.onnx",
     string FerPlusModelFile = "emotion-ferplus-8.onnx",
-    string? ModelDirectory = null);     // null → ~/Library/Application Support/SentimentAnalysis/models
+    string? ModelDirectory = null,      // null → ~/Library/Application Support/SentimentAnalysis/models
+    double CameraFirstFrameTimeoutSeconds = 60); // kamera: izin istemi açıkken ffmpeg bloklanır (11a §3)
 
 /// <summary>Uygulama genel konfigürasyonu (stajyerin config.py karşılığı).</summary>
 public sealed record AppConfig(

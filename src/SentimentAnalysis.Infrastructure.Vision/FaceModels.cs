@@ -19,7 +19,15 @@ public static class VisionModels
         var path = Resolve(cfg, file);
         if (!File.Exists(path)) throw new VideoSourceException($"Yüz modeli bulunamadı: {path}");
         using var options = new SessionOptions { IntraOpNumThreads = cfg.OnnxThreads };
-        return new InferenceSession(path, options);
+        try
+        {
+            return new InferenceSession(path, options);
+        }
+        catch (Exception ex)
+        {
+            // Bozuk/yarım model görüntü kanalının hatasıdır — ses analizini durdurmamalı (runner yalnız bunu yakalar).
+            throw new VideoSourceException($"Yüz modeli yüklenemedi: {path} ({ex.Message})", ex);
+        }
     }
 }
 

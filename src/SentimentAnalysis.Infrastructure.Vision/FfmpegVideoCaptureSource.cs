@@ -27,6 +27,12 @@ public sealed class FfmpegVideoCaptureSource : IVideoCaptureSource
 
     private bool IsCamera => _file is null;
 
+    /// <summary>İlk kare için bekleme sınırı. Kamerada izin istemi yanıtlanırken ffmpeg bloklanır (11a §3);
+    /// kullanıcının istemi okumasına yetecek kadar beklenir — aksi halde "İzin Ver"e geç basan kullanıcı
+    /// o oturumu yüzsüz geçirirdi.</summary>
+    public static TimeSpan FirstFrameTimeout(VisionConfig cfg, bool camera) =>
+        TimeSpan.FromSeconds(camera ? cfg.CameraFirstFrameTimeoutSeconds : cfg.FirstFrameTimeoutSeconds);
+
     public async IAsyncEnumerable<VideoFrame> CaptureAsync([EnumeratorCancellation] CancellationToken ct)
     {
         var ffmpeg = FfmpegLocator.Find();
@@ -55,7 +61,7 @@ public sealed class FfmpegVideoCaptureSource : IVideoCaptureSource
                 if (index == 0)
                 {
                     using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    timeout.CancelAfter(TimeSpan.FromSeconds(_cfg.FirstFrameTimeoutSeconds));
+                    timeout.CancelAfter(FirstFrameTimeout(_cfg, IsCamera));
                     result = await ReadFrameAsync(stdout, buffer, timeout.Token).ConfigureAwait(false);
                     if (result == ReadResult.Cancelled && !ct.IsCancellationRequested)
                         throw new VideoSourceException(IsCamera
