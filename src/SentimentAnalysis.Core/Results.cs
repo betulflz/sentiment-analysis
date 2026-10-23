@@ -22,8 +22,17 @@ public sealed record FusedResult(
     // emin", bunlar "girdi ne kadar analiz edilebilir". "Neden Nötr çıktı?" sorusunun cevabı
     // çoğu zaman burada olduğu için sonuçla birlikte dışarı taşınır. Additive: varsayılan 1,0.
     double AudioReliability = 1.0,
-    double TextReliability = 1.0)
+    double TextReliability = 1.0,
+    // Üç kaynaklı füzyon (11d, spec 11 §3.2): yüz eklendiyse Combined/PrimaryEmotion üç kaynaklıdır;
+    // SpeechVa yüzden ÖNCEKİ (metin+ses) sonuçtur. Karar göstergeleri yüzü kendileri kattığından
+    // SpeechValence'ı kullanır (çift sayım olmasın). Additive: yüz yoksa null / 0.
+    ValenceArousal? SpeechVa = null,
+    double? FaceValence = null,
+    double FaceWeight = 0.0)
 {
+    /// <summary>Yalnızca metin + ses valence'ı (yüz eklenmeden önce).</summary>
+    public double SpeechValence => (SpeechVa ?? Combined).Valence;
+
     /// <summary>Bu chunk "işaretli/şüpheli" mi? Söz-ton uyumsuzluğu eşiği aşıldıysa
     /// (<see cref="Incongruent"/>) VEYA adı konmuş bir örüntü varsa (<see cref="Pattern"/> ≠ Yok,
     /// ör. eşik-altı ironi) true. Aşağı akış (UI/depolama) "şüpheli chunk" filtrelemesini TEK

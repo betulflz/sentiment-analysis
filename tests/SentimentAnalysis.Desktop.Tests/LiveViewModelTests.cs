@@ -51,6 +51,26 @@ public class LiveViewModelTests
     }
 
     [Fact]
+    public void Report_FaceFusedChunk_ShowsFaceContribution()
+    {
+        var vm = new LiveViewModel(new FakeRunner());
+        var speech = Chunk(0, Emotion.Uzgun, -0.4);
+        vm.Report(speech);
+        Assert.Equal(string.Empty, vm.FaceContributionText);
+
+        vm.Report(speech with
+        {
+            Fused = speech.Fused with
+            {
+                Combined = new ValenceArousal(0.25, 0.6), PrimaryEmotion = Emotion.Mutlu,
+                SpeechVa = speech.Fused.Combined, FaceValence = 0.9, FaceWeight = 1.0,
+            },
+        });
+        Assert.Equal("Mutlu", vm.CurrentEmotion);
+        Assert.Equal("Yüz dahil: konuşma −0,40 · yüz +0,90 → nihai +0,25", vm.FaceContributionText);
+    }
+
+    [Fact]
     public async Task Start_RunsRunner_FeedsTimeline_ThenStops()
     {
         var runner = new FakeRunner(Chunk(0, Emotion.Mutlu, 0.5), Chunk(1, Emotion.Sakin, 0.3));

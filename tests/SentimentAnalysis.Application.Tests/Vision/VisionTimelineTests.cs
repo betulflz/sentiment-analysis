@@ -107,6 +107,27 @@ public class VisionTimelineTests
     }
 
     [Fact]
+    public void Summarize_SmilingFromStart_BaselineCappedAtNeutral()
+    {
+        // İlk 10 sn gülümseyen kişinin gülümsemesi "dinlenme yüzü" sayılıp silinmemeli.
+        var tl = new VisionTimeline(Cfg);
+        for (double t = 0; t < 20; t += 0.4) tl.AddFrame(S(t), new[] { Obs(0, t, Happy) });
+        var s = Assert.Single(tl.Summarize(S(10), S(20)));
+        Assert.Equal(0.8, s.ValenceShift, 1e-6);
+    }
+
+    [Fact]
+    public void Summarize_FrowningFromStart_BaselineCapped()
+    {
+        var sad = new float[] { .1f, 0, 0, .9f, 0, 0, 0, 0 };
+        var tl = new VisionTimeline(Cfg);
+        for (double t = 0; t < 20; t += 0.4) tl.AddFrame(S(t), new[] { Obs(0, t, sad) });
+        var s = Assert.Single(tl.Summarize(S(10), S(20)));
+        Assert.Equal(-0.54 - (-0.4), s.ValenceShift, 1e-6);
+        Assert.Equal((0.9 - 0.5) / 0.5, s.NegativeExpression, 1e-6);
+    }
+
+    [Fact]
     public void Summarize_BeforeBaseline_UsesDefault_NoNaN()
     {
         var tl = new VisionTimeline(Cfg);

@@ -28,6 +28,14 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
     [ObservableProperty] private bool _isLowConfidence;
     [ObservableProperty] private IReadOnlyList<IndicatorBarVm> _indicators = EmptyBars();
 
+    /// <summary>Son pencerenin ilk 3 eylemi (TOPSIS yakınlığı). Kart "Devam et" derken de hesaplanır —
+    /// müdahale eşiğinin altında kaydırıcıların etkisi böylece görünür kalır. Veri yetersizse boş.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasRanking))]
+    private IReadOnlyList<RankingRowVm> _ranking = Array.Empty<RankingRowVm>();
+
+    public bool HasRanking => Ranking.Count > 0;
+
     /// <summary>Koşu sırasında true: profil görüşme başında seçilir (spec §2), kaydırıcılar serbesttir.</summary>
     [ObservableProperty] private bool _isLocked;
 
@@ -79,12 +87,14 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
         ActionText = Dash;
         ReasonText = ConfidenceText = AlternativeText = string.Empty;
         IsLowConfidence = false;
+        Ranking = Array.Empty<RankingRowVm>();
+        foreach (var w in Weights) w.IdleNote = string.Empty;
     }
 
     public void OnWindow(ChunkResult chunk, IReadOnlyList<FaceWindowSummary> faces)
     {
         var indicators = IndicatorCalculator.Compute(chunk, faces, _valences, _cfg);
-        _valences.Add(chunk.Fused.Combined.Valence);
+        _valences.Add(chunk.Fused.SpeechValence);
         var rec = _advisor.Next(indicators, CurrentWeights);
         _history.Add(new DecisionWindow(chunk.TimeStart, chunk.TimeEnd, indicators, rec));
 
@@ -96,6 +106,7 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
                 indicators.SourceFace[(int)c] is int i ? DecisionText.Subject(i) : string.Empty))
             .ToArray();
         Show(rec);
+        UpdateRanking();
     }
 
     private void OnWeightChanged()
@@ -106,6 +117,30 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
         var rec = _advisor.Rerank(last.Indicators, CurrentWeights);
         _history[^1] = last with { Recommendation = rec };
         Show(rec);
+        UpdateRanking();
+    }
+
+    private void UpdateRanking()
+    {
+        var ind = _history[^1].Indicators;
+        if (ind.DataQuality < _cfg.InsufficientQuality)
+        {
+            Ranking = Array.Empty<RankingRowVm>();
+            foreach (var w in Weights) w.IdleNote = string.Empty;
+            return;
+        }
+        var needs = ind.Values.Select(v => v * ind.DataQuality).ToArray();
+        // İhtiyaç-ağırlıklı TOPSIS'te (w·n) ihtiyacı 0 olan kriterin ağırlığı sıralamayı etkilemez;
+        // tüm ihtiyaçlar 0 ise motor saf ağırlıklara döner ve hepsi etkilidir.
+        bool anyNeed = needs.Any(n => n > 0);
+        foreach (var w in Weights)
+            w.IdleNote = anyNeed && needs[(int)w.Criterion] <= 0 ? "şu an etkisiz — bu göstergede ihtiyaç yok" : string.Empty;
+        Ranking = ActionRanker.Rank(DecisionKnowledgeBase.Get(SelectedProfile).Interventions,
+                DecisionKnowledgeBase.LiveImpact, CurrentWeights, needs)
+            .Take(3)
+            .Select((r, i) => new RankingRowVm($"{i + 1}. {DecisionText.Name(r.Alternative)}", r.Closeness,
+                $"%{Math.Round(r.Closeness * 100, MidpointRounding.AwayFromZero)}"))
+            .ToArray();
     }
 
     private void ApplyProfileWeights()
@@ -146,6 +181,9 @@ public sealed partial class WeightSliderVm : ObservableObject
     [ObservableProperty] private double _value;
     [ObservableProperty] private string _shareText = string.Empty;
 
+    /// <summary>Son pencerede bu kriterin ihtiyacı 0 ise kaydırıcının neden etkisiz olduğunu söyler.</summary>
+    [ObservableProperty] private string _idleNote = string.Empty;
+
     public WeightSliderVm(Criterion criterion, Action changed)
     {
         Criterion = criterion;
@@ -168,6 +206,9 @@ public sealed partial class WeightSliderVm : ObservableObject
 
 /// <summary>Bir gösterge çubuğu. <paramref name="Subject"/>: değeri sürükleyen yüz ("Yüz 2") ya da boş.</summary>
 public sealed record IndicatorBarVm(string Name, double Value, string Subject);
+
+/// <summary>Eylem sıralamasında bir satır: "1. Empati kur", yakınlık (0..1) ve yüzde metni.</summary>
+public sealed record RankingRowVm(string Label, double Closeness, string PercentText);
 
 /// <summary>Bir yüzün son penceredeki çubukları (0..1).</summary>
 public sealed record FaceBarsVm(string Label, double LookAway, double Negative, double Smile);

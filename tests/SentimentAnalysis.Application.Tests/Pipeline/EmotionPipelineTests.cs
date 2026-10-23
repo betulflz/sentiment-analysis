@@ -138,6 +138,43 @@ public class EmotionPipelineTests
     }
 
     [Fact]
+    public async Task RunAsync_Enrich_AppliedBeforeTimelineProgressAndStore()
+    {
+        var store = new RecordingStore(); var agg = new FakeAggregator();
+        var pipeline = new EmotionPipeline(new GatedProcessor(ResultFor), store, agg, Cfg(32));
+        var reported = new List<ChunkResult>();
+        var progress = new SyncProgress(reported);
+
+        await pipeline.RunAsync(new FakeSource(2, ChunkAt), Opts, Guid.NewGuid(), DateTimeOffset.UnixEpoch,
+            DetectedLanguage.Turkish, progress, CancellationToken.None,
+            enrich: r => r with { Transcript = r.Transcript + "+yüz" });
+
+        Assert.All(pipeline.Timeline, c => Assert.EndsWith("+yüz", c.Transcript));
+        Assert.All(reported, c => Assert.EndsWith("+yüz", c.Transcript));
+        Assert.All(store.Saved, s => Assert.EndsWith("+yüz", s.Item2.Transcript));
+        Assert.Equal(2, store.Saved.Count);
+    }
+
+    [Fact]
+    public async Task RunAsync_EnrichThrows_KeepsUnenrichedChunk()
+    {
+        var store = new RecordingStore(); var agg = new FakeAggregator();
+        var pipeline = new EmotionPipeline(new GatedProcessor(ResultFor), store, agg, Cfg(32));
+
+        await pipeline.RunAsync(new FakeSource(2, ChunkAt), Opts, Guid.NewGuid(), DateTimeOffset.UnixEpoch,
+            DetectedLanguage.Turkish, null, CancellationToken.None,
+            enrich: _ => throw new InvalidOperationException("yüz hatası"));
+
+        Assert.Equal(new[] { "c0", "c1" }, pipeline.Timeline.Select(c => c.Transcript).ToArray());
+        Assert.Equal(2, store.Saved.Count);
+    }
+
+    private sealed class SyncProgress(List<ChunkResult> sink) : IProgress<ChunkResult>
+    {
+        public void Report(ChunkResult value) { lock (sink) sink.Add(value); }
+    }
+
+    [Fact]
     public async Task RunAsync_SilenceChunks_SkippedFromTimeline()
     {
         var store = new RecordingStore(); var agg = new FakeAggregator();

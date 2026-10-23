@@ -27,7 +27,9 @@ public sealed record FusionConfig(
     // Nötr merkezde, diğerleri kenarda olduğu için Nötr orantısız büyük bir havza kazanıyordu
     // (a=0,5'te valence −0,33…+0,40 arası her şey Nötr). null → klasik kural.
     // BAŞLANGIÇ DEĞERİ, KALİBRE EDİLMEMİŞ (eval-09).
-    double? NeutralRadius = 0.2);
+    double? NeutralRadius = 0.2,
+    // Yüzün valence ağırlığı (11d): tam güvenilir, tam görünür yüz = sesle eşit pay. KALİBRE EDİLMEMİŞ.
+    double FaceValenceWeight = 1.0);
 
 /// <summary>Depolama/gizlilik ayarları (master §D13).</summary>
 public sealed record StorageConfig(

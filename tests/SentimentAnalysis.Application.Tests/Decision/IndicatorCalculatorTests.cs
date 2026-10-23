@@ -28,6 +28,36 @@ public class IndicatorCalculatorTests
     private static double K(Indicators ind, Criterion c) => ind.Values[(int)c];
 
     [Fact]
+    public void FaceFusedChunk_IndicatorsUseSpeechValence_NoDoubleCounting()
+    {
+        // Yüz göstergelere zaten FaceWindowSummary ile girer; üç kaynaklı Combined kullanılırsa iki kez sayılır.
+        var speech = Chunk(-0.6, 0.9);
+        var fused = speech with
+        {
+            Fused = speech.Fused with
+            {
+                Combined = new ValenceArousal(0.2, 0.9), SpeechVa = speech.Fused.Combined, FaceValence = 1.0, FaceWeight = 1.0,
+            },
+        };
+        var faces = new[] { Face(0, shift: 1.0) };
+        var expected = IndicatorCalculator.Compute(speech, faces, new[] { -0.2, -0.4 }, Cfg);
+        var actual = IndicatorCalculator.Compute(fused, faces, new[] { -0.2, -0.4 }, Cfg);
+        Assert.Equal(expected.Values, actual.Values);
+    }
+
+    [Fact]
+    public void PhantomFace_DoesNotDragDataQualityDown()
+    {
+        // Gürültülü ortam: ses/metin kalitesi ~0. Net bir yüzün yanında anlık yanlış algılanan
+        // ikinci yüz, kaliteyi "veri yetersiz" eşiğinin altına çekmemeli.
+        var chunk = Chunk(0, 0.5, aRel: 0.03, tRel: 0);
+        var alone = IndicatorCalculator.Compute(chunk, new[] { Face(0) }, NoHistory, Cfg);
+        var withPhantom = IndicatorCalculator.Compute(chunk, new[] { Face(0), Face(1, visible: 0.05, rel: 0.3) }, NoHistory, Cfg);
+        Assert.Equal(alone.DataQuality, withPhantom.DataQuality, 1e-9);
+        Assert.True(withPhantom.DataQuality >= Cfg.InsufficientQuality);
+    }
+
+    [Fact]
     public void NoFaces_UsesAudioOnly_NoNaN()
     {
         var ind = IndicatorCalculator.Compute(Chunk(-0.6, 0.9), NoFaces, NoHistory, Cfg);
@@ -125,7 +155,7 @@ public class IndicatorCalculatorTests
     {
         var ind = IndicatorCalculator.Compute(Chunk(0, 0.5, aRel: 0.5, tRel: 0.2),
             new[] { Face(0, visible: 1, rel: 1), Face(1, visible: 0.5, rel: 0.5) }, NoHistory, Cfg);
-        Assert.Equal(0.6 * 0.5 + 0.4 * ((1.0 + 0.25) / 2), ind.DataQuality, 1e-9);
+        Assert.Equal(0.6 * 0.5 + 0.4 * 1.0, ind.DataQuality, 1e-9); // en iyi görülen yüz
     }
 
     public static IEnumerable<object[]> Extremes()

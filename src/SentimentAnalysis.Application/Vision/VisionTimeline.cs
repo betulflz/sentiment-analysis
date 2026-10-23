@@ -14,6 +14,10 @@ public sealed class VisionTimeline
     // 11a §5: dinlenme yüzü nötr ~.73 / üzgün ~.26 → valence ≈ −0,15, olumsuz pay ≈ 0,27.
     private const double DefaultBaselineValence = -0.15;
     private const double DefaultBaselineNegative = 0.27;
+    // Kişisel taban bir dinlenme yüzüdür, ifade değil: ilk saniyelerde gülümseyen/kaş çatan kişinin
+    // ifadesi tabana yazılıp sonradan silinmesin diye taban bu aralıklara sıkıştırılır (11d).
+    private const double MinBaselineValence = -0.4, MaxBaselineValence = 0.0;
+    private const double MaxBaselineNegative = 0.5;
 
     private readonly VisionConfig _cfg;
     private readonly object _gate = new();
@@ -87,6 +91,7 @@ public sealed class VisionTimeline
             return (DefaultBaselineValence, DefaultBaselineNegative);
 
         var first = history.TakeWhile(o => o.Time - history[0].Time < window).ToArray();
-        return (first.Average(o => FaceSignals.Valence(o.Expression)), first.Average(o => FaceSignals.Negative(o.Expression)));
+        return (Math.Clamp(first.Average(o => FaceSignals.Valence(o.Expression)), MinBaselineValence, MaxBaselineValence),
+                Math.Min(first.Average(o => FaceSignals.Negative(o.Expression)), MaxBaselineNegative));
     }
 }

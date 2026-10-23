@@ -153,4 +153,54 @@ public class DecisionPanelViewModelTests
         p.OnWindow(Chunk(0, -0.9, 0.5), NoFaces);
         Assert.Equal(0.0, p.History[0].Indicators.Values[(int)Criterion.Kotulesme], 9); // eski valence serisi taşınmadı
     }
+
+    [Fact]
+    public void Ranking_EmptyBeforeFirstWindow()
+    {
+        Assert.Empty(Panel().Ranking);
+        Assert.False(Panel().HasRanking);
+    }
+
+    [Fact]
+    public void Ranking_ShownEvenWhenCardSaysContinue_AndFollowsSliders()
+    {
+        var p = Panel();
+        p.Start();
+        p.OnWindow(Calm(), NoFaces);
+        Assert.Equal("Devam et", p.ActionText);
+        Assert.Equal(3, p.Ranking.Count);
+        Assert.True(p.HasRanking);
+        Assert.StartsWith("1. ", p.Ranking[0].Label);
+        Assert.True(p.Ranking[0].Closeness >= p.Ranking[1].Closeness);
+        Assert.StartsWith("%", p.Ranking[0].PercentText);
+
+        var before = p.Ranking.Select(r => (r.Label, r.Closeness)).ToArray();
+        foreach (var w in p.Weights) w.Value = w.Criterion == Criterion.IlgiKaybi ? 1 : 0;
+        var after = p.Ranking.Select(r => (r.Label, r.Closeness)).ToArray();
+        Assert.NotEqual(before, after);
+    }
+
+    [Fact]
+    public void Ranking_ClearedOnStart()
+    {
+        var p = Panel();
+        p.Start();
+        p.OnWindow(Tense(), NoFaces);
+        p.Start();
+        Assert.Empty(p.Ranking);
+    }
+
+    [Fact]
+    public void Sliders_ZeroNeedCriterion_MarkedIdle()
+    {
+        // Gergin pencere: gerilim ihtiyacı var, ilgi kaybı (yüz yok) 0 → ilgi kaybı kaydırıcısı sıralamayı etkilemez.
+        var p = Panel();
+        p.Start();
+        Assert.All(p.Weights, w => Assert.Equal(string.Empty, w.IdleNote));
+        p.OnWindow(Tense(), NoFaces);
+        Assert.NotEqual(string.Empty, p.Weights[(int)Criterion.IlgiKaybi].IdleNote);
+        Assert.Equal(string.Empty, p.Weights[(int)Criterion.Gerilim].IdleNote);
+        p.Start();
+        Assert.All(p.Weights, w => Assert.Equal(string.Empty, w.IdleNote));
+    }
 }

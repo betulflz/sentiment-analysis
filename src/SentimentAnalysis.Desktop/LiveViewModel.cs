@@ -63,6 +63,9 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     [ObservableProperty] private double _currentValence;
     [ObservableProperty] private double _currentArousal;
     [ObservableProperty] private string _congruenceBadge = string.Empty;
+
+    /// <summary>Üç kaynaklı füzyonda yüzün nihai valence'a etkisi (11d); yüz katılmadıysa boş.</summary>
+    [ObservableProperty] private string _faceContributionText = string.Empty;
     [ObservableProperty] private bool _isCapturing;
     [ObservableProperty] private string _selectedFile = "(dosya seçilmedi)";
     [ObservableProperty] private string _currentConfidence = "—";
@@ -175,6 +178,9 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         CurrentValence = row.Valence;
         CurrentArousal = row.Arousal;
         CongruenceBadge = row.Badge;
+        FaceContributionText = r.Fused.FaceValence is double fv
+            ? $"Yüz dahil: konuşma {Signed(r.Fused.SpeechValence)} · yüz {Signed(fv)} → nihai {Signed(r.Fused.Combined.Valence)}"
+            : string.Empty;
 
         // Üç kaynak ayrı ayrı — söz-ton uyumsuzluğu böylece ekranda görünür hale gelir.
         CurrentConfidence = EmotionLocalizer.Confidence(r.Fused.Confidence);
@@ -182,6 +188,9 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         AudioAnalysis = new SourceAnalysisVm("Ses Analizi", r.Fused.ProsodyVa, _temperature, _neutralRadius);
         FinalAnalysis = new SourceAnalysisVm("Nihai Karar", r.Fused.Combined, _temperature, _neutralRadius);
     }
+
+    private static string Signed(double v) =>
+        (v < 0 ? "−" : "+") + Math.Abs(v).ToString("0.00", new System.Globalization.CultureInfo("tr-TR"));
 
     [RelayCommand]
     private async Task SelectFileAsync()

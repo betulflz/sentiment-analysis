@@ -221,3 +221,18 @@ Davranış (app katmanı, testsiz — 08e notu):
 - Gerçek uygulamada video/kamera, kutu hizası, kaydırıcı, profil kilidi ve durdurma kontrolü
   kullanıcı tarafından henüz doğrulanmadı. Kullanıcının 22 Ekim 2026 tarihli açık talebiyle
   mevcut çalışma commit ediliyor; sonraki oturum gerçek uygulama doğrulamasından devam edecek.
+
+## Task 3 canlı doğrulama turu — 23 Ekim 2026
+
+Kullanıcı bulguları: (a) tamam; (b) kaydırıcı kartı değiştirmiyor görünüyor; (c) Durdur → rapor tamam;
+(d) kamerada yüz algılanıyor ama "kocaman gülümsedim, üzgün dedi".
+
+- **(b) kök neden:** müdahale eşiği (0,35) aşılmadıkça LiveAdvisor TOPSIS'e girmeden "Devam et" döner —
+  sakin videoda ağırlıkların görünür etkisi yoktu. Çözüm: karta her zaman görünen "Eylem sıralaması"
+  (ilk 3 eylem + TOPSIS yakınlığı) eklendi; kaydırıcıyla canlı değişir. Motor davranışı değişmedi.
+- **(d) kök neden:** spec §3.2 "üç kaynaklı duygu" hedefi duygu etiketine uygulanmamıştı — etiket
+  yalnızca ses tonundan geliyordu. Çözüm: `FaceFusion` (saf) yüz valence'ını (kişisel tabana göre)
+  metin+ses valence'ıyla kalite ağırlıklı birleştirir ve etiketi yeniden belirler; `EmotionPipeline`
+  bunu `enrich` kancasıyla kayıttan ÖNCE uygular (rapor/DB de üç kaynaklı). Karar göstergeleri yüzü
+  zaten kendileri kattığından `SpeechValence` kullanır (çift sayım yok). Kişisel taban çizgisi
+  [-0,4; 0] valence / ≤0,5 olumsuz aralığına sıkıştırıldı: ilk saniyelerdeki gülümseme tabana yazılıp silinmez.

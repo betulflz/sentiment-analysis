@@ -56,10 +56,13 @@ public sealed class EmotionPipeline
     /// Yüklenemeyen modelin hatasını açıklayıcı bir şekilde fırlatır.</summary>
     public Task WarmUpAsync(CancellationToken ct) => _processor.WarmUpAsync(ct);
 
+    /// <param name="enrich">İsteğe bağlı (11d): işlenen chunk timeline/progress/depoya yazılmadan önce
+    /// dönüştürülür — ör. aynı aralığın yüz özetiyle üç kaynaklı füzyon. Fırlatırsa chunk olduğu gibi kalır.</param>
     public async Task<MeetingSummary> RunAsync(
         IAudioCaptureSource source, CaptureOptions options, Guid sessionId,
         DateTimeOffset startedAt, DetectedLanguage language,
-        IProgress<ChunkResult>? progress, CancellationToken ct)
+        IProgress<ChunkResult>? progress, CancellationToken ct,
+        Func<ChunkResult, ChunkResult>? enrich = null)
     {
         _timeline.Clear();
         _droppedCount = 0;
@@ -107,7 +110,7 @@ public sealed class EmotionPipeline
             // ct iptal olsa bile kanal writer tamamlanana ( Complete ) kadar tüm chunk'ları tüketiriz
             await foreach (var chunk in channel.Reader.ReadAllAsync(processingCts.Token).ConfigureAwait(false))
             {
-                await ProcessOneAsync(chunk, sessionId, progress, processingCts.Token).ConfigureAwait(false);
+                await ProcessOneAsync(chunk, sessionId, progress, enrich, processingCts.Token).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -134,7 +137,8 @@ public sealed class EmotionPipeline
     /// iptal (<see cref="OperationCanceledException"/>) yukarı akar, çünkü o bir chunk hatası
     /// değil, koşunun kendisinin durumudur.</summary>
     private async Task ProcessOneAsync(
-        AudioChunk chunk, Guid sessionId, IProgress<ChunkResult>? progress, CancellationToken ct)
+        AudioChunk chunk, Guid sessionId, IProgress<ChunkResult>? progress,
+        Func<ChunkResult, ChunkResult>? enrich, CancellationToken ct)
     {
         ChunkResult? result = null;
         try
@@ -169,6 +173,14 @@ public sealed class EmotionPipeline
         }
 
         if (result is null) return; // VAD sessiz
+        if (enrich is not null)
+        {
+            try { result = enrich(result); }
+            catch (Exception ex)
+            {
+                Diagnose(() => $"[PIPELINE] Chunk zenginleştirme hatası yutuldu: {ex.GetType().Name} - {ex.Message}");
+            }
+        }
         _timeline.Add(result);
         progress?.Report(result);
         await _store.SaveChunkAsync(sessionId, result, ct).ConfigureAwait(false);

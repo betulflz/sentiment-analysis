@@ -15,7 +15,8 @@ public static class IndicatorCalculator
         IReadOnlyList<double> previousValences, DecisionConfig cfg)
     {
         var f = chunk.Fused;
-        double v = f.Combined.Valence, a = f.Combined.Arousal;
+        // Yüz K1–K4'e aşağıda yüz özetiyle girer; üç kaynaklı Combined değil konuşma valence'ı alınır (çift sayım yok).
+        double v = f.SpeechValence, a = f.Combined.Arousal;
         double aq = Math.Max(f.AudioReliability, f.TextReliability);
         double audioTension = C01((a - 0.5) * 2) * C01(-v);
 
@@ -52,7 +53,8 @@ public static class IndicatorCalculator
         var series = previousValences.Append(v).TakeLast(cfg.TrendWindows).ToArray();
         values[(int)Criterion.Kotulesme] = series.Length < 3 ? 0 : C01(-Slope(series) * 5);
 
-        double faceQ = faces.Count == 0 ? 0 : faces.Average(x => C01(x.VisibleRatio) * C01(x.Reliability));
+        // En iyi görülen yüz: anlık yanlış algılanan bir "hayalet" yüz ortalamayı (ve kararı) düşürmesin.
+        double faceQ = faces.Count == 0 ? 0 : faces.Max(x => C01(x.VisibleRatio) * C01(x.Reliability));
         double quality = C01(0.6 * C01(aq) + 0.4 * faceQ);
 
         return new Indicators(values.Select(C01).ToArray(), source, quality);

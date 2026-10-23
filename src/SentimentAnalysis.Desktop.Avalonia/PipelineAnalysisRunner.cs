@@ -1,6 +1,7 @@
 using Avalonia.Threading;
 using SentimentAnalysis.Application.Abstractions;
 using SentimentAnalysis.Application.Configuration;
+using SentimentAnalysis.Application.Fusion;
 using SentimentAnalysis.Application.Pipeline;
 using SentimentAnalysis.Application.Vision;
 using SentimentAnalysis.Core;
@@ -155,7 +156,13 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
             LastSessionId = sessionId;
             AudioLimitReached = false;
 
-            var summary = await _pipeline.RunAsync(pipelineSource, options, sessionId, startedAt, language, uiThreadProgress, ct)
+            // 11d: üç kaynaklı duygu — chunk, kaydedilmeden önce aynı aralığın yüz özetiyle birleştirilir.
+            ChunkResult WithFace(ChunkResult r) => _activeVision is { } v
+                ? r with { Fused = FaceFusion.Apply(r.Fused, v.Timeline.Summarize(r.TimeStart, r.TimeEnd), _config.Fusion) }
+                : r;
+
+            var summary = await _pipeline.RunAsync(pipelineSource, options, sessionId, startedAt, language, uiThreadProgress, ct,
+                    enrich: WithFace)
                 .ConfigureAwait(false);
 
             // Ses, özet ÜRETİLDİKTEN SONRA saklanır: rapor bu yüzden gecikmez (spec 10 S2).
