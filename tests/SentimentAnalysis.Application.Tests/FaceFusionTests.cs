@@ -57,12 +57,12 @@ public class FaceFusionTests
     }
 
     [Fact]
-    public void TwoFaces_ReliabilityWeightedAverage()
+    public void TwoFaces_UsesMostProminentFace_NotAverage()
     {
-        var r = FaceFusion.Apply(Speech(0), new[] { Face(0, 0.8), Face(1, -0.4, visible: 0.5) }, Cfg);
-        double faceV = (1 * 0.8 + 0.5 * -0.4) / 1.5;
-        Assert.Equal(faceV, r.FaceValence!.Value, 1e-9);
-        Assert.Equal(faceV / 2, r.Combined.Valence, 1e-9);
+        // İki kişilik görüşmede dinleyenin ifadesi konuşanın duygusuna karışmasın: en güvenilir/görünür yüz.
+        var r = FaceFusion.Apply(Speech(0), new[] { Face(0, -0.4, visible: 0.5), Face(1, 0.8) }, Cfg);
+        Assert.Equal(0.8, r.FaceValence!.Value, 1e-9);
+        Assert.Equal(0.4, r.Combined.Valence, 1e-9);
     }
 
     [Fact]

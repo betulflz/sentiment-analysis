@@ -203,4 +203,20 @@ public class DecisionPanelViewModelTests
         p.Start();
         Assert.All(p.Weights, w => Assert.Equal(string.Empty, w.IdleNote));
     }
+
+    [Fact]
+    public void AfterSession_SliderOrProfileChange_DoesNotRewriteHistory()
+    {
+        var p = Panel();
+        p.Start();
+        p.IsLocked = true;
+        p.OnWindow(Tense(), NoFaces);
+        p.IsLocked = false; // Durdur
+        var recorded = p.History[^1].Recommendation;
+
+        foreach (var w in p.Weights) w.Value = w.Criterion == Criterion.Kotulesme ? 1 : 0;
+        p.SelectedProfile = MeetingProfile.Toplanti;
+
+        Assert.Same(recorded, p.History[^1].Recommendation);
+    }
 }

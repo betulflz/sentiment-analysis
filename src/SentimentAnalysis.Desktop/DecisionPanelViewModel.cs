@@ -115,7 +115,9 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
         if (_applyingProfile || _history.Count == 0) return;
         var last = _history[^1];
         var rec = _advisor.Rerank(last.Indicators, CurrentWeights);
-        _history[^1] = last with { Recommendation = rec };
+        // Geçmiş yalnızca koşu sırasında güncellenir: Durdur sonrası profil/kaydırıcı oynatmak bitmiş
+        // görüşmede hiç gösterilmemiş bir öneriyi rapora (11e) yazmasın — kart yine "ya şöyle olsaydı"yı gösterir.
+        if (IsLocked) _history[^1] = last with { Recommendation = rec };
         Show(rec);
         UpdateRanking();
     }
