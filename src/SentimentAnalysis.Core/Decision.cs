@@ -71,6 +71,9 @@ public sealed record DecisionSession(
     IReadOnlyList<double> FinalWeights,
     IReadOnlyList<DecisionWindow> Windows);
 
+/// <summary>Saklanan karar kaydı (11e): görüşmenin karar verisi + görüşme sonu ağırlıklarıyla verilen takip kararı.</summary>
+public sealed record DecisionSessionRecord(DecisionSession Session, FollowUpAction FollowUp, string FollowUpReason);
+
 /// <summary>Raporun kritik anı: ihtiyacın müdahale eşiğini aştığı ardışık pencereler. <paramref name="Peak"/>
 /// ihtiyaçtır (değer × veri kalitesi); <paramref name="Face"/> tepe penceresinde o kriteri sürükleyen yüz;
 /// <paramref name="Shown"/> tepe penceresinde gösterilen öneri.</summary>

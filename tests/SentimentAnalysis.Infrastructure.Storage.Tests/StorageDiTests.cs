@@ -19,4 +19,15 @@ public class StorageDiTests
         Assert.IsType<SqliteSessionStore>(provider.GetRequiredService<ISessionStore>());
         Assert.NotNull(provider.GetRequiredService<IKeyProvider>());
     }
+
+    [Fact]
+    public void AddSqliteStorage_DecisionStore_AyniOrnek()
+    {
+        var provider = new ServiceCollection()
+            .AddApplicationCore()
+            .AddSqliteStorage()
+            .BuildServiceProvider();
+
+        Assert.Same(provider.GetRequiredService<SqliteSessionStore>(), provider.GetRequiredService<IDecisionStore>());
+    }
 }

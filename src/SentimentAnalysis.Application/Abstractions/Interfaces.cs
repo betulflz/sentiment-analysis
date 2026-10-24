@@ -159,6 +159,18 @@ public interface ISpeakerDataReader
     Task<IReadOnlyList<ChunkResult>> GetChunkResultsAsync(Guid sessionId, CancellationToken ct);
 }
 
+/// <summary>Oturumun karar verisini saklar (11e; spec 11 §6.7): pencere göstergeleri, yüz özetleri, gösterilen
+/// öneriler, profil, ağırlıklar, takip kararı. Göstergeler yeniden hesaplanmak yerine pencere başına saklanır —
+/// konuşma valence'ı DB'de yok, kayıtlı chunk'lardan hesaplamak yüzü iki kez sayardı.</summary>
+public interface IDecisionStore
+{
+    /// <summary>Oturumun önceki karar kaydının yerine yazar (yeniden çalıştırılabilir).</summary>
+    Task SaveDecisionSessionAsync(Guid sessionId, DecisionSessionRecord record, CancellationToken ct);
+
+    /// <summary>Kayıt yoksa <c>null</c>. Önerilerin <c>Ranking</c>'i saklanmaz, boş döner.</summary>
+    Task<DecisionSessionRecord?> GetDecisionSessionAsync(Guid sessionId, CancellationToken ct);
+}
+
 /// <summary>Tüm kaydı görüp konuşmacı bölgeleri üretir (Alt-proje 10b; sherpa-onnx offline
 /// diarization). Canlı hatta ÇAĞRILMAZ — oturum bittikten sonra arka planda bir kez çalışır
 /// (spec 10 S2: sherpa'nın diarization'ı yalnızca offline'dır ve 10a ölçümünde RTF ~0,44

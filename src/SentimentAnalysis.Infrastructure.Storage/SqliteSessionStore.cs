@@ -9,7 +9,7 @@ namespace SentimentAnalysis.Infrastructure.Storage;
 /// (<see cref="EncryptedAudioStore"/>). Retention dolunca ses silinir, metrik korunur. Bağlantı-başına-işlem
 /// (SQLite dosya kilidi ile serileşir). Metadata sınırı: StartedAt = ilk kayıt (enjekte saat), Language = Other
 /// (ChunkResult taşımaz; toplantı metadata'sı 06 pipeline'da).</summary>
-public sealed class SqliteSessionStore : ISessionStore, ISessionAudioSink, IDiarizationStore, ISpeakerDataReader
+public sealed class SqliteSessionStore : ISessionStore, ISessionAudioSink, IDiarizationStore, ISpeakerDataReader, IDecisionStore
 {
     /// <summary>Oturumun saklanmış (şifreli) sesini 16 kHz mono float PCM olarak okur.
     /// Ses yoksa <c>null</c> — hata değil, "bu oturumda ses saklanmamış" demektir (10b).
@@ -337,6 +337,150 @@ public sealed class SqliteSessionStore : ISessionStore, ISessionAudioSink, IDiar
             cmd.Parameters.AddWithValue("$id", id);
             await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
+    }
+
+    private static readonly string[] DecisionTables =
+        ["decision_sessions", "decision_weights", "decision_windows", "window_indicators", "window_faces"];
+
+    /// <summary>Oturumun karar kaydını (11e) tek transaction'da yazar; önce eskisini siler — aynı oturum
+    /// yeniden kaydedilince satırlar çoğalmaz. Pencere <c>seq</c> = liste sırası.</summary>
+    public async Task SaveDecisionSessionAsync(Guid sessionId, DecisionSessionRecord record, CancellationToken ct)
+    {
+        var sid = sessionId.ToString("N");
+        var session = record.Session;
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+        await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+
+        async Task Exec(string sql, params (string Name, object? Value)[] args)
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = sql;
+            cmd.Parameters.AddWithValue("$sid", sid);
+            foreach (var (name, value) in args) cmd.Parameters.AddWithValue(name, value ?? DBNull.Value);
+            await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+
+        // Tablo adları sabit listeden gelir (kullanıcı girdisi değil).
+        foreach (var table in DecisionTables)
+            await Exec($"DELETE FROM {table} WHERE session_id = $sid").ConfigureAwait(false);
+
+        await Exec("INSERT INTO decision_sessions (session_id, profile, followup_action, followup_reason) VALUES ($sid, $p, $f, $r)",
+            ("$p", (int)session.Profile), ("$f", (int)record.FollowUp), ("$r", record.FollowUpReason)).ConfigureAwait(false);
+
+        foreach (var (kind, weights) in new[] { (0, session.ProfileWeights), (1, session.FinalWeights) })
+            for (int j = 0; j < weights.Count; j++)
+                await Exec("INSERT INTO decision_weights (session_id, kind, criterion, weight) VALUES ($sid, $k, $c, $w)",
+                    ("$k", kind), ("$c", j), ("$w", weights[j])).ConfigureAwait(false);
+
+        for (int i = 0; i < session.Windows.Count; i++)
+        {
+            var w = session.Windows[i];
+            var r = w.Recommendation;
+            await Exec("""
+                INSERT INTO decision_windows (session_id, seq, start_ms, end_ms, data_quality,
+                    action, closeness, confidence, face, top1, top2, reason)
+                VALUES ($sid, $seq, $st, $en, $q, $a, $cl, $cf, $face, $t1, $t2, $reason)
+                """,
+                ("$seq", i), ("$st", (long)w.Start.TotalMilliseconds), ("$en", (long)w.End.TotalMilliseconds),
+                ("$q", w.Indicators.DataQuality), ("$a", (int)r.Action), ("$cl", r.Closeness),
+                ("$cf", (int)r.Confidence), ("$face", r.Face),
+                ("$t1", r.TopCriteria.Count > 0 ? (int)r.TopCriteria[0] : null),
+                ("$t2", r.TopCriteria.Count > 1 ? (int)r.TopCriteria[1] : null),
+                ("$reason", r.Reason)).ConfigureAwait(false);
+
+            for (int j = 0; j < w.Indicators.Values.Count; j++)
+                await Exec("INSERT INTO window_indicators (session_id, window_seq, criterion, value, source_face) VALUES ($sid, $seq, $c, $v, $sf)",
+                    ("$seq", i), ("$c", j), ("$v", w.Indicators.Values[j]), ("$sf", w.Indicators.SourceFace[j])).ConfigureAwait(false);
+
+            foreach (var f in w.Faces)
+                await Exec("""
+                    INSERT INTO window_faces (session_id, window_seq, face_index, visible_ratio, look_away_ratio,
+                        valence_shift, negative_expression, smile_ratio, reliability)
+                    VALUES ($sid, $seq, $fi, $vr, $la, $vs, $ne, $sm, $rl)
+                    """,
+                    ("$seq", i), ("$fi", f.FaceIndex), ("$vr", f.VisibleRatio), ("$la", f.LookAwayRatio),
+                    ("$vs", f.ValenceShift), ("$ne", f.NegativeExpression), ("$sm", f.SmileRatio),
+                    ("$rl", f.Reliability)).ConfigureAwait(false);
+        }
+
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Oturumun karar kaydı (11e); yoksa <c>null</c>. <c>Recommendation.Ranking</c> saklanmaz, boş döner.</summary>
+    public async Task<DecisionSessionRecord?> GetDecisionSessionAsync(Guid sessionId, CancellationToken ct)
+    {
+        var sid = sessionId.ToString("N");
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+
+        async Task Read(string sql, Action<SqliteDataReader> row)
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.Parameters.AddWithValue("$sid", sid);
+            await using var rd = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await rd.ReadAsync(ct).ConfigureAwait(false)) row(rd);
+        }
+
+        (MeetingProfile Profile, FollowUpAction FollowUp, string Reason)? head = null;
+        await Read("SELECT profile, followup_action, followup_reason FROM decision_sessions WHERE session_id = $sid",
+            rd => head = ((MeetingProfile)rd.GetInt32(0), (FollowUpAction)rd.GetInt32(1), rd.GetString(2))).ConfigureAwait(false);
+        if (head is not { } h) return null;
+
+        var weights = new[] { new List<double>(), new List<double>() };
+        await Read("SELECT kind, weight FROM decision_weights WHERE session_id = $sid ORDER BY kind, criterion",
+            rd => weights[rd.GetInt32(0)].Add(rd.GetDouble(1))).ConfigureAwait(false);
+
+        var values = new Dictionary<int, (List<double> V, List<int?> F)>();
+        await Read("SELECT window_seq, value, source_face FROM window_indicators WHERE session_id = $sid ORDER BY window_seq, criterion",
+            rd =>
+            {
+                var seq = rd.GetInt32(0);
+                if (!values.TryGetValue(seq, out var x)) values[seq] = x = (new List<double>(), new List<int?>());
+                x.V.Add(rd.GetDouble(1));
+                x.F.Add(rd.IsDBNull(2) ? null : rd.GetInt32(2));
+            }).ConfigureAwait(false);
+
+        var faces = new Dictionary<int, List<FaceWindowSummary>>();
+        await Read("""
+            SELECT window_seq, face_index, visible_ratio, look_away_ratio, valence_shift, negative_expression,
+                smile_ratio, reliability
+            FROM window_faces WHERE session_id = $sid ORDER BY window_seq, face_index
+            """,
+            rd =>
+            {
+                var seq = rd.GetInt32(0);
+                if (!faces.TryGetValue(seq, out var list)) faces[seq] = list = new List<FaceWindowSummary>();
+                list.Add(new FaceWindowSummary(rd.GetInt32(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4),
+                    rd.GetDouble(5), rd.GetDouble(6), rd.GetDouble(7)));
+            }).ConfigureAwait(false);
+
+        var windows = new List<DecisionWindow>();
+        await Read("""
+            SELECT seq, start_ms, end_ms, data_quality, action, closeness, confidence, face, top1, top2, reason
+            FROM decision_windows WHERE session_id = $sid ORDER BY seq
+            """,
+            rd =>
+            {
+                var seq = rd.GetInt32(0);
+                var top = new List<Criterion>();
+                if (!rd.IsDBNull(8)) top.Add((Criterion)rd.GetInt32(8));
+                if (!rd.IsDBNull(9)) top.Add((Criterion)rd.GetInt32(9));
+                var ind = values.TryGetValue(seq, out var x) ? x : (new List<double>(), new List<int?>());
+                windows.Add(new DecisionWindow(
+                    TimeSpan.FromMilliseconds(rd.GetInt64(1)), TimeSpan.FromMilliseconds(rd.GetInt64(2)),
+                    new Indicators(ind.Item1, ind.Item2, rd.GetDouble(3)),
+                    new Recommendation((LiveAction)rd.GetInt32(4), rd.GetDouble(5), Array.Empty<Ranked<LiveAction>>(),
+                        top, rd.IsDBNull(7) ? null : rd.GetInt32(7), (Confidence)rd.GetInt32(6), rd.GetString(10)))
+                {
+                    Faces = faces.TryGetValue(seq, out var f) ? f : Array.Empty<FaceWindowSummary>(),
+                });
+            }).ConfigureAwait(false);
+
+        return new DecisionSessionRecord(
+            new DecisionSession(h.Profile, weights[0], weights[1], windows), h.FollowUp, h.Reason);
     }
 
     private static async Task<IReadOnlyList<ChunkResult>> ReadChunksAsync(SqliteConnection conn, Guid id, CancellationToken ct)
