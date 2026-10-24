@@ -56,7 +56,28 @@ public sealed record Recommendation(
     string Reason);
 
 /// <summary>Bir analiz penceresinin karar kaydı (canlı ekran üretir, rapor/depolama tüketir).</summary>
-public sealed record DecisionWindow(System.TimeSpan Start, System.TimeSpan End, Indicators Indicators, Recommendation Recommendation);
+public sealed record DecisionWindow(System.TimeSpan Start, System.TimeSpan End, Indicators Indicators, Recommendation Recommendation)
+{
+    /// <summary>Pencerede görülen yüzlerin özetleri (11e depolaması). Additive, varsayılan boş.</summary>
+    public IReadOnlyList<FaceWindowSummary> Faces { get; init; } = System.Array.Empty<FaceWindowSummary>();
+}
+
+/// <summary>Bitmiş bir görüşmenin karar verisi (11e): rapor ve depolama bu anlık görüntüyle çalışır.
+/// <paramref name="ProfileWeights"/> profilin AHP ağırlıkları, <paramref name="FinalWeights"/> görüşme
+/// sonundaki kaydırıcı değerleridir.</summary>
+public sealed record DecisionSession(
+    MeetingProfile Profile,
+    IReadOnlyList<double> ProfileWeights,
+    IReadOnlyList<double> FinalWeights,
+    IReadOnlyList<DecisionWindow> Windows);
+
+/// <summary>Raporun kritik anı: ihtiyacın müdahale eşiğini aştığı ardışık pencereler. <paramref name="Peak"/>
+/// ihtiyaçtır (değer × veri kalitesi); <paramref name="Face"/> tepe penceresinde o kriteri sürükleyen yüz;
+/// <paramref name="Shown"/> tepe penceresinde gösterilen öneri.</summary>
+public sealed record CriticalMoment(System.TimeSpan Start, System.TimeSpan End, Criterion Criterion, double Peak, int? Face, LiveAction Shown);
+
+/// <summary>Görüşme sırasında gösterilen önerinin değiştiği an.</summary>
+public sealed record RecommendationChange(System.TimeSpan At, LiveAction Action, string Reason, Confidence Confidence);
 
 /// <summary>Görüşme sonrası takip kararı.</summary>
 public sealed record FollowUpDecision(FollowUpAction Best, IReadOnlyList<Ranked<FollowUpAction>> Ranking, string Reason);
