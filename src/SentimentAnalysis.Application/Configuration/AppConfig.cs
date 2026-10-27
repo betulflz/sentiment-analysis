@@ -97,16 +97,16 @@ public sealed record PipelineConfig(
 public sealed record DiarizationConfig(
     bool Enabled = false,                 // opt-in: kapalıyken davranış 10b öncesiyle aynı
                                           // (ses de saklanmaz — gizlilik varsayılanı, master §12.5)
-    double ClusteringThreshold = 0.4,     // ÖLÇÜLDÜ (2026-07-30): wespeaker_en_voxceleb_resnet34_LM
-                                          // embedding modeli + scratchpad/diar-spike/toplanti.wav
-                                          // (16 kHz mono, 120,6 sn, bilinen gerçek: 2 konuşmacı).
-                                          // Taranan {0,3; 0,4; 0,5; 0,6} eşiklerinden yalnızca 0,4
-                                          // tam 2 küme verdi (0,3→3 küme, 0,5 ve 0,6→1 küme).
-                                          // Detay: scratchpad/diar-threshold-2026-07-30.md
-                                          // (embedding modeli 3dspeaker'dan wespeaker'a değişince
-                                          // eşik de değişti — önceki 0,8, farklı bir embedding
-                                          // uzayı için ölçülmüştü ve bu uzaya taşınmaz. TEK KAYDA
-                                          // dayalı ölçüm; 0,4 civarındaki aralığın sınırları bilinmiyor)
+    double ClusteringThreshold = 0.7,     // YENİDEN ÖLÇÜLDÜ (2026-10-27), wespeaker_en_voxceleb_resnet34_LM.
+                                          // Küme SAYISI değil konuşmacı başına SÜRE okunarak:
+                                          //   canlı kamera oturumu (76 sn, gerçek 2): 0,4→5 küme, 0,5–0,6→3, 0,7–0,8→2 (26,5 / 42,9 sn)
+                                          //   iki-kisi.mp4 (77 sn, gerçek 2):         0,4→3 (2,5 sn kırıntı), 0,7→2 (13,9 / 60,1 sn)
+                                          //   toplanti.wav (120,6 sn, gerçek 2):      0,4→"2" ama 111,9 / 1,9 sn (fiilen 1), ≥0,45→1
+                                          // Önceki 0,4 seçimi "tam 2 küme" sayımına dayanıyordu; o iki kümeden biri 1,9 sn'lik
+                                          // kırıntıydı. toplanti'daki iki ses bu modelle hiçbir eşikte (ve NumClusters=2 ile de)
+                                          // düzgün ayrılmıyor — 0,7 onu kötüleştirmiyor, diğer ikisini düzeltiyor.
+                                          // SINIR: 3+ kişili kayıtla doğrulanmadı; yüksek eşik benzer sesleri birleştirmeye eğilimli.
+                                          // Ölçüm: scratchpad/diar-session-sweep (kayıtlı oturum sesi bellekte okunur).
     double MinOverlapRatio = 0.5,         // SpeakerAligner eşiği: örtüşme >= bu oran → kesin atama;
                                           // 0 < örtüşme < bu oran → yine en iyi adaya atanır ama
                                           // Uncertain=true işaretlenir; hiç örtüşme (aday) yoksa
