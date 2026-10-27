@@ -78,7 +78,8 @@ public class FollowUpPanelViewModelTests
         Assert.Equal("Teklif gönder", vm.BestText);
         Assert.Empty(vm.Ranking);
         Assert.All(vm.Sensitivity.SelectMany(r => r.Cells), c => Assert.Equal("aynı", c.Text));
-        Assert.Equal("24 senaryonun hepsinde en iyi seçenek aynı kaldı — karar ağırlıklara duyarlı değil.", vm.SensitivitySummary);
+        // Karar kuraldan geldi (TOPSIS çalışmadı): "ağırlıklara duyarlı değil" demek yanıltır.
+        Assert.Equal("Karar ağırlıklardan değil kuraldan geliyor (gerekçeye bakın); 24 senaryonun hepsinde aynı kaldı.", vm.SensitivitySummary);
     }
 
     [Fact]

@@ -124,6 +124,36 @@ public class MainViewModelDecisionWiringTests
 
         Assert.True(vm.Report.HasDecisionData);
         Assert.StartsWith("Karar kaydı saklanamadı", vm.Report.DecisionSaveStatus);
+        Assert.DoesNotContain("veritabanı kilitli", vm.Report.DecisionSaveStatus); // ham teknik mesaj kullanıcıya gösterilmez
+    }
+
+    /// <summary>İlk çağrıyı dışarıdan bitirilene kadar bekletir, sonrakileri hemen kaydeder.</summary>
+    private sealed class SlowFirstStore : IDecisionStore
+    {
+        public readonly TaskCompletionSource First = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _calls;
+
+        public Task SaveDecisionSessionAsync(Guid sessionId, DecisionSessionRecord record, CancellationToken ct) =>
+            ++_calls == 1 ? First.Task : Task.CompletedTask;
+
+        public Task<DecisionSessionRecord?> GetDecisionSessionAsync(Guid sessionId, CancellationToken ct) =>
+            Task.FromResult<DecisionSessionRecord?>(null);
+    }
+
+    [Fact]
+    public async Task GecBitenKayitHatasi_SonrakiGorusmeninRaporunaDusmez()
+    {
+        var store = new SlowFirstStore();
+        var vm = Build(Guid.NewGuid(), store, ThreeChunks);
+        vm.Live.StartCommand.Execute(null);
+        await vm.Live.WaitForIdleAsync();
+        var firstSave = vm.DecisionSaveTask!;
+
+        await RunToEnd(vm); // ikinci görüşme biter ve kaydedilir; rapor artık onu gösterir
+        store.First.SetException(new InvalidOperationException("veritabanı kilitli"));
+        await firstSave;
+
+        Assert.Equal(string.Empty, vm.Report.DecisionSaveStatus);
     }
 
     [Fact]

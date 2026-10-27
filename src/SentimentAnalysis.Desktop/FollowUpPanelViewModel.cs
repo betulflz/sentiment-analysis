@@ -113,6 +113,12 @@ public sealed partial class FollowUpPanelViewModel : ObservableObject
             .ToArray();
 
         int changed = rows.Count(r => r.Changed);
+        if (decision.Ranking.Count == 0)
+        {
+            // Kural yolu (sakin görüşme, düşük veri kalitesi): TOPSIS hiç çalışmadı, ağırlıklar kullanılmadı.
+            SensitivitySummary = $"Karar ağırlıklardan değil kuraldan geliyor (gerekçeye bakın); {rows.Count} senaryonun hepsinde aynı kaldı.";
+            return;
+        }
         if (changed == 0)
         {
             SensitivitySummary = $"{rows.Count} senaryonun hepsinde en iyi seçenek aynı kaldı — karar ağırlıklara duyarlı değil.";

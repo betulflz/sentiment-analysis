@@ -17,6 +17,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly AppConfig? _config;
     private readonly Action<Action> _dispatch;
     private readonly IDecisionStore? _decisions;
+    private int _reportGeneration; // raporda gösterilen görüşmenin sırası — geç biten kayıt eski görüşmeye aitse uyarı yazılmaz
 
     public LiveViewModel Live { get; }
     public ReportViewModel Report { get; }
@@ -57,7 +58,8 @@ public sealed partial class MainViewModel : ObservableObject
             // Kopya alınır: rapor açıkken yeni koşu başlarsa canlı geçmiş temizlenir, rapor eskisini korur.
             var decision = Live.Decision.Snapshot();
             Report.LoadDecisions(decision);
-            if (_decisions is not null) DecisionSaveTask = SaveDecisionsAsync(_decisions, decision);
+            var generation = ++_reportGeneration;
+            if (_decisions is not null) DecisionSaveTask = SaveDecisionsAsync(_decisions, decision, generation);
             History.RefreshCommand.Execute(null);
             CurrentView = Report;
 
@@ -68,7 +70,7 @@ public sealed partial class MainViewModel : ObservableObject
         };
     }
 
-    private async Task SaveDecisionsAsync(IDecisionStore store, DecisionSession session)
+    private async Task SaveDecisionsAsync(IDecisionStore store, DecisionSession session, int generation)
     {
         // Takip kararı LoadDecisions'ta görüşme sonu ağırlıklarıyla hesaplandı; kullanıcının raporda
         // kaydırıcı oynatması ("ya şöyle olsaydı") saklanmaz — kayıt burada, beklemeden önce alınır.
@@ -80,8 +82,14 @@ public sealed partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            // Kayıt hatası (DB kilitli/bozuk) raporu bozmaz; kullanıcıya kısa bir uyarı gösterilir.
-            _dispatch(() => Report.DecisionSaveStatus = $"Karar kaydı saklanamadı: {ex.Message}");
+            // Kayıt hatası (DB kilitli/bozuk) raporu bozmaz; kullanıcıya kısa bir Türkçe uyarı gösterilir,
+            // teknik ayrıntı (çoğu zaman İngilizce SQLite mesajı) yalnızca teşhis çıktısına gider.
+            System.Diagnostics.Debug.WriteLine($"Karar kaydı saklanamadı: {ex}");
+            _dispatch(() =>
+            {
+                if (generation == _reportGeneration)
+                    Report.DecisionSaveStatus = "Karar kaydı saklanamadı — bu rapor yalnızca şimdilik ekranda; veritabanına yazılamadı.";
+            });
         }
     }
 
