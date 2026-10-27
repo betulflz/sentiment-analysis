@@ -15,6 +15,7 @@ public sealed class LiveAdvisor
     private LiveAction? _pending;
     private int _pendingCount;
     private bool _insufficient;
+    private bool _skipHysteresis;
 
     public LiveAdvisor(MeetingProfile profile, DecisionConfig cfg)
     {
@@ -65,11 +66,15 @@ public sealed class LiveAdvisor
     }
 
     /// <summary>Kullanıcı ağırlıkları değiştirdi: histerezis atlanır, en iyi eylem hemen gösterilir ve
-    /// mevcut öneri kabul edilir (spec §6.5: "değişince sıralama anında yeniden hesaplanır").</summary>
+    /// mevcut öneri kabul edilir (spec §6.5: "değişince sıralama anında yeniden hesaplanır"). Kalite ve
+    /// müdahale bantları KORUNUR — ağırlık değişimi veri kalitesini ya da ihtiyacı değiştirmez.</summary>
     public Recommendation Rerank(Indicators indicators, IReadOnlyList<double> weights)
     {
-        Reset();
-        return Next(indicators, weights);
+        _pending = null;
+        _pendingCount = 0;
+        _skipHysteresis = true;
+        try { return Next(indicators, weights); }
+        finally { _skipHysteresis = false; }
     }
 
     public void Reset()
@@ -83,7 +88,7 @@ public sealed class LiveAdvisor
     private LiveAction Choose(IReadOnlyList<Ranked<LiveAction>> ranking)
     {
         var candidate = ranking[0];
-        if (_current is null || candidate.Alternative == _current)
+        if (_skipHysteresis || _current is null || candidate.Alternative == _current)
             return Commit(candidate.Alternative);
 
         // Mevcut öneri "Devam et" ise sıralamada yoktur → yakınlığı 0 sayılır, aday hemen geçer.

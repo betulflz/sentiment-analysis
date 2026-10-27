@@ -159,6 +159,30 @@ public class LiveAdvisorTests
     }
 
     [Fact]
+    public void Rerank_VeriYetersizBandiniKorur()
+    {
+        // 0,27: yetersiz duruma girmek için yüksek (≥0,25), çıkmak için düşük (≤0,30). Kaydırıcı oynatmak
+        // bandı sıfırlamamalı — yoksa kart "Veri yetersiz"den müdahaleye zıplar (11d minor).
+        var advisor = new LiveAdvisor(MeetingProfile.Satis, Cfg);
+        var w = DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis);
+        Assert.StartsWith("Veri yetersiz", advisor.Next(Ind(Gergin, 0.2), w).Reason);
+        Assert.StartsWith("Veri yetersiz", advisor.Next(Ind(Gergin, 0.27), w).Reason);
+        Assert.StartsWith("Veri yetersiz", advisor.Rerank(Ind(Gergin, 0.27), w).Reason);
+    }
+
+    [Fact]
+    public void Rerank_MudahaleBandiniKorur()
+    {
+        // Gösterilen müdahale ancak max ihtiyaç < 0,30'da "Devam et"e döner; 0,32'de Rerank da müdahalede kalmalı.
+        var advisor = new LiveAdvisor(MeetingProfile.Satis, Cfg);
+        var w = DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis);
+        var sinirda = new[] { .4, .1, .4, .1, .1, .1 }; // × kalite 0,8 → max ihtiyaç 0,32
+        Assert.NotEqual(LiveAction.DevamEt, advisor.Next(Ind(Gergin), w).Action);
+        Assert.NotEqual(LiveAction.DevamEt, advisor.Next(Ind(sinirda), w).Action);
+        Assert.NotEqual(LiveAction.DevamEt, advisor.Rerank(Ind(sinirda), w).Action);
+    }
+
+    [Fact]
     public void Reset_ForgetsCurrent()
     {
         var advisor = new LiveAdvisor(MeetingProfile.Satis, Cfg);
