@@ -8,17 +8,24 @@ public static class PreviewPixels
 {
     public static byte[] ToBgra(VideoFrame frame)
     {
-        int pixels = frame.Width * frame.Height;
-        var bgra = new byte[pixels * 4];
-        var rgb = frame.Rgb24;
-        for (int i = 0; i < pixels; i++)
-        {
-            bgra[4 * i] = rgb[3 * i + 2];
-            bgra[4 * i + 1] = rgb[3 * i + 1];
-            bgra[4 * i + 2] = rgb[3 * i];
-            bgra[4 * i + 3] = 255;
-        }
+        var bgra = new byte[frame.Width * frame.Height * 4];
+        for (int y = 0; y < frame.Height; y++)
+            WriteBgraRow(frame, y, bgra.AsSpan(y * frame.Width * 4, frame.Width * 4));
         return bgra;
+    }
+
+    /// <summary>Karenin <paramref name="y"/>. satırını BGRA olarak <paramref name="row"/>'a yazar (en az
+    /// genişlik × 4 bayt). Önizleme tek satırlık tamponu tekrar kullanır — kare başına tam kare ayırmaz.</summary>
+    public static void WriteBgraRow(VideoFrame frame, int y, Span<byte> row)
+    {
+        var rgb = frame.Rgb24.AsSpan(y * frame.Width * 3, frame.Width * 3);
+        for (int x = 0; x < frame.Width; x++)
+        {
+            row[4 * x] = rgb[3 * x + 2];
+            row[4 * x + 1] = rgb[3 * x + 1];
+            row[4 * x + 2] = rgb[3 * x];
+            row[4 * x + 3] = 255;
+        }
     }
 }
 

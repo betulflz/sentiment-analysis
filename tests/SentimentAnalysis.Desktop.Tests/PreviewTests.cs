@@ -23,6 +23,17 @@ public class PreviewTests
     private static VideoFrame Frame() => new(new byte[4 * 2 * 3], 4, 2, TimeSpan.Zero);
 
     [Fact]
+    public void WriteBgraRow_TekSatiriYazar_TamKareAyirmadan()
+    {
+        // 2×2 kare; ikinci satır (y=1) tek satırlık, tekrar kullanılan bir tampona yazılır.
+        var rgb = new byte[2 * 2 * 3];
+        rgb[6] = 1; rgb[7] = 2; rgb[8] = 3; rgb[9] = 4; rgb[10] = 5; rgb[11] = 6;
+        var row = new byte[2 * 4];
+        PreviewPixels.WriteBgraRow(new VideoFrame(rgb, 2, 2, TimeSpan.Zero), 1, row);
+        Assert.Equal(new byte[] { 3, 2, 1, 255, 6, 5, 4, 255 }, row);
+    }
+
+    [Fact]
     public void ToBgra_SwapsChannels()
     {
         var rgb = new byte[2 * 1 * 3];
