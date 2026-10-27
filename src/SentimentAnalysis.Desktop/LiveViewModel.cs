@@ -66,7 +66,13 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
     /// <summary>Üç kaynaklı füzyonda yüzün nihai valence'a etkisi (11d); yüz katılmadıysa boş.</summary>
     [ObservableProperty] private string _faceContributionText = string.Empty;
-    [ObservableProperty] private bool _isCapturing;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(WaitingForSpeech))] private bool _isCapturing;
+
+    private bool _receivedThisRun;
+
+    /// <summary>Koşu sürüyor ama bu koşuda henüz hiç analiz satırı gelmedi (ör. sessiz video: VAD tüm
+    /// parçaları eler). Boş ekranın "bozuk" sanılmaması için açıklama gösterilir (11b minor).</summary>
+    public bool WaitingForSpeech => IsCapturing && !IsPreparingModels && !IsFinishing && !_receivedThisRun;
     [ObservableProperty] private string _selectedFile = "(dosya seçilmedi)";
     [ObservableProperty] private string _currentConfidence = "—";
     [ObservableProperty] private SourceAnalysisVm _textAnalysis = SourceAnalysisVm.Empty("Metin Analizi");
@@ -89,7 +95,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     /// <summary>"Durdur"a basıldı ama koşu henüz bitmedi: motor kanalda kalan chunk'ları drene
     /// edip (Whisper/ONNX ile) işliyor — bu birkaç saniye sürebilir. Kullanıcı bu sürede ekranın
     /// donduğunu/hiçbir şey olmadığını düşünmesin diye ayrı bir durum olarak gösterilir.</summary>
-    [ObservableProperty] private bool _isFinishing;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(WaitingForSpeech))] private bool _isFinishing;
 
     /// <summary>Dinleme rozetinin metni: normalde "Dinleniyor", Durdur sonrası (drene/analiz
     /// tamamlanana kadar) "Analiz tamamlanıyor…".</summary>
@@ -112,7 +118,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     [ObservableProperty] private string _diarizationHint = string.Empty;
 
     /// <summary>Modeller hazırlanıyor mu (warm-up)?</summary>
-    [ObservableProperty] private bool _isPreparingModels;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(WaitingForSpeech))] private bool _isPreparingModels;
 
     partial void OnIsPreparingModelsChanged(bool value)
     {
@@ -172,6 +178,11 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     {
         var faces = _runner.FacesFor(r);
         var row = new ChunkRowVm(r, faces);
+        if (!_receivedThisRun)
+        {
+            _receivedThisRun = true;
+            OnPropertyChanged(nameof(WaitingForSpeech));
+        }
         Decision.OnWindow(r, faces);
         Timeline.Add(row);
         CurrentEmotion = row.Emotion;
@@ -207,6 +218,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     private void Start()
     {
         if (IsCapturing || IsPreparingModels) return;
+        _receivedThisRun = false;
         IsCapturing = true;
         Decision.Start();
         Decision.IsLocked = true;

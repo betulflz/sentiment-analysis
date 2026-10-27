@@ -240,6 +240,10 @@
 
         <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6"
                 MinHeight="200">
+            <Grid>
+            <TextBlock IsVisible="{Binding WaitingForSpeech}" Margin="16" TextWrapping="Wrap" FontStyle="Italic"
+                       VerticalAlignment="Top" Foreground="{DynamicResource SystemBaseMediumColor}"
+                       Text="Konuşma bekleniyor… Sessiz bölümler analiz edilmez; ilk satır, konuşma içeren ilk parça işlenince gelir." />
             <ItemsControl ItemsSource="{Binding Timeline}" Margin="8">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -279,6 +283,7 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
+            </Grid>
         </Border>
     </DockPanel>
     </ScrollViewer>

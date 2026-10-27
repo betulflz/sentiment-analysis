@@ -473,4 +473,42 @@ public class LiveViewModelTests
         Assert.Equal(string.Empty, vm.FaceContributionText);
         await vm.WaitForIdleAsync();
     }
+
+    /// <summary>İptal edilene kadar hiç parça üretmez — sessiz video gibi.</summary>
+    private sealed class SilentRunner : IAnalysisRunner
+    {
+        public async Task<MeetingSummary> RunAsync(IProgress<ChunkResult> progress, CancellationToken ct)
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+            throw new InvalidOperationException("ulaşılmaz");
+        }
+    }
+
+    [Fact]
+    public async Task SessizKosu_KonusmaBekleniyorGosterilir_IlkSatirdaKalkar()
+    {
+        var vm = new LiveViewModel(new SilentRunner());
+        Assert.False(vm.WaitingForSpeech);
+
+        vm.StartCommand.Execute(null);
+        Assert.True(vm.WaitingForSpeech);
+
+        vm.Report(Chunk(0, Emotion.Notr, 0));
+        Assert.False(vm.WaitingForSpeech);
+
+        vm.StopCommand.Execute(null);
+        await vm.WaitForIdleAsync();
+        Assert.False(vm.WaitingForSpeech);
+    }
+
+    [Fact]
+    public async Task YeniKosu_OncekiSatirlarVarken_YineKonusmaBekler()
+    {
+        var vm = new LiveViewModel(new SilentRunner());
+        vm.Report(Chunk(0, Emotion.Notr, 0)); // önceki koşudan kalan satır
+        vm.StartCommand.Execute(null);
+        Assert.True(vm.WaitingForSpeech);
+        vm.StopCommand.Execute(null);
+        await vm.WaitForIdleAsync();
+    }
 }
