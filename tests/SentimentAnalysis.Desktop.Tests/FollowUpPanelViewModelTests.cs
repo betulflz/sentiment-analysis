@@ -145,4 +145,15 @@ public class FollowUpPanelViewModelTests
         Assert.False(vm.HasDecision);
         Assert.Null(vm.Current);
     }
+
+    [Fact]
+    public void HasRanking_SiralamayaUyar()
+    {
+        var calm = Loaded(Session(Sakin));
+        Assert.False(calm.HasRanking);
+
+        var tense = Loaded(Session(Gergin));
+        Assert.NotEmpty(tense.Ranking);
+        Assert.True(tense.HasRanking);
+    }
 }

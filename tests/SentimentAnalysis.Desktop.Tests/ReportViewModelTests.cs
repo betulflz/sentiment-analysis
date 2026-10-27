@@ -240,4 +240,36 @@ public class ReportViewModelTests
         vm.SetDiarizationOutcome(DiarizationOutcome.Failed);
         Assert.Empty(vm.TalkBalance);
     }
+
+    // --- 11e final inceleme ---
+
+    [Fact]
+    public void LoadDecisions_HasCriticalMoments_ListeyleUyumlu()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.LoadDecisions(ThreeWindows());
+        Assert.True(vm.HasCriticalMoments);
+
+        vm.LoadDecisions(DecisionData(DW(0, 0.1, LiveAction.DevamEt)));
+        Assert.Empty(vm.CriticalMoments);
+        Assert.False(vm.HasCriticalMoments);
+    }
+
+    [Fact]
+    public void LoadSummary_OncekiGorusmeninKonusmaciVerisiniTemizler()
+    {
+        // Konuşmacı ayrımı sonraki koşuda kapalıysa geçiş hiç çalışmaz — eski görüşmenin satırları kalmamalı.
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.ApplySpeakers(Array.Empty<TranscriptSegment>(), new[] { Seg(0, 0, 60), Seg(1, 60, 90) }, 0.5);
+        vm.SetDiarizationOutcome(DiarizationOutcome.Completed);
+
+        vm.LoadSummary(new MeetingSummary(Emotion.Notr, new Dictionary<Emotion, double>(), 0, 0,
+            Array.Empty<ChunkResult>(), ValenceArousal.Neutral, 1.0, "özet"));
+
+        Assert.Empty(vm.TalkBalance);
+        Assert.Empty(vm.SpeakerLines);
+        Assert.Empty(vm.SpeakerEmotions);
+        Assert.False(vm.HasSpeakers);
+        Assert.Equal(string.Empty, vm.DiarizationStatus);
+    }
 }

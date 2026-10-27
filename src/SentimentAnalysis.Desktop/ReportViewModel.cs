@@ -156,6 +156,9 @@ public sealed partial class ReportViewModel : ObservableObject
 
     public IReadOnlyList<CriticalMomentVm> CriticalMoments { get; private set; } = System.Array.Empty<CriticalMomentVm>();
 
+    /// <summary>XAML dizinin <c>Count</c>'una bağlanamaz (dizide açık arayüz üyesi) — "kritik an yok" metni buradan.</summary>
+    public bool HasCriticalMoments => CriticalMoments.Count > 0;
+
     /// <summary>Konuşmacı başına konuşma süresi ve payı (11e). Diarization çalışmadıysa BOŞ.</summary>
     public IReadOnlyList<TalkShareVm> TalkBalance { get; private set; } = System.Array.Empty<TalkShareVm>();
 
@@ -193,18 +196,20 @@ public sealed partial class ReportViewModel : ObservableObject
             _ => string.Empty,
         };
 
-        if (outcome != DiarizationOutcome.Completed)
-        {
-            SpeakerLines = System.Array.Empty<SpeakerLineVm>();
-            HasSpeakers = false;
-            OnPropertyChanged(nameof(SpeakerLines));
+        if (outcome != DiarizationOutcome.Completed) ClearSpeakers();
+    }
 
-            SpeakerEmotions = System.Array.Empty<SpeakerEmotionVm>();
-            OnPropertyChanged(nameof(SpeakerEmotions));
+    private void ClearSpeakers()
+    {
+        SpeakerLines = System.Array.Empty<SpeakerLineVm>();
+        HasSpeakers = false;
+        OnPropertyChanged(nameof(SpeakerLines));
 
-            TalkBalance = System.Array.Empty<TalkShareVm>();
-            OnPropertyChanged(nameof(TalkBalance));
-        }
+        SpeakerEmotions = System.Array.Empty<SpeakerEmotionVm>();
+        OnPropertyChanged(nameof(SpeakerEmotions));
+
+        TalkBalance = System.Array.Empty<TalkShareVm>();
+        OnPropertyChanged(nameof(TalkBalance));
     }
 
     /// <summary>Zaman damgalı transkripti konuşmacı bölgeleriyle hizalayıp satırlara indirger.
@@ -248,6 +253,7 @@ public sealed partial class ReportViewModel : ObservableObject
         OnPropertyChanged(nameof(IndicatorTimeline));
         OnPropertyChanged(nameof(Recommendations));
         OnPropertyChanged(nameof(CriticalMoments));
+        OnPropertyChanged(nameof(HasCriticalMoments));
         FollowUp.Load(session);
     }
 
@@ -304,6 +310,9 @@ public sealed partial class ReportViewModel : ObservableObject
         AverageCongruence = s.AverageCongruence;
         TimeShare = s.TimeShareByEmotion.Select(kv => new TimeShareVm(kv.Key, kv.Value)).ToList();
         PeakMoments = s.PeakMoments.Select(c => new ChunkRowVm(c)).ToList();
+        // Yeni görüşme: önceki koşunun konuşmacıları sarkmasın (ayrım bu koşuda kapalıysa geçiş hiç çalışmaz).
+        DiarizationStatus = string.Empty;
+        ClearSpeakers();
         HasReport = true;
     }
 }

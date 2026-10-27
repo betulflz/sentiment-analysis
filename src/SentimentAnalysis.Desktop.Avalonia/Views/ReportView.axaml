@@ -76,7 +76,7 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
-                                    <StackPanel Spacing="4" IsVisible="{Binding !!Ranking.Count}">
+                                    <StackPanel Spacing="4" IsVisible="{Binding HasRanking}">
                                         <TextBlock Text="Takip seçenekleri sıralaması (TOPSIS yakınlığı)" FontSize="12" FontWeight="SemiBold" />
                                         <ItemsControl ItemsSource="{Binding Ranking}">
                                             <ItemsControl.ItemTemplate>
@@ -223,7 +223,7 @@
                     <StackPanel Spacing="6">
                         <TextBlock Text="Kritik Anlar" FontWeight="SemiBold" FontSize="16" />
                         <TextBlock Text="Belirgin bir kritik an yok." FontStyle="Italic" Opacity="0.7"
-                                   IsVisible="{Binding !CriticalMoments.Count}" />
+                                   IsVisible="{Binding !HasCriticalMoments}" />
                         <ItemsControl ItemsSource="{Binding CriticalMoments}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>

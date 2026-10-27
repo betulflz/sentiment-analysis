@@ -25,7 +25,9 @@ public sealed partial class FollowUpPanelViewModel : ObservableObject
     [ObservableProperty] private string _bestText = string.Empty;
     [ObservableProperty] private string _reasonText = string.Empty;
     [ObservableProperty] private IReadOnlyList<IndicatorBarVm> _meetingIndicators = Array.Empty<IndicatorBarVm>();
-    [ObservableProperty] private IReadOnlyList<RankingRowVm> _ranking = Array.Empty<RankingRowVm>();
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasRanking))]
+    private IReadOnlyList<RankingRowVm> _ranking = Array.Empty<RankingRowVm>();
     [ObservableProperty] private IReadOnlyList<SensitivityRowVm> _sensitivity = Array.Empty<SensitivityRowVm>();
     [ObservableProperty] private string _sensitivitySummary = string.Empty;
     [ObservableProperty] private FollowUpDecision? _current;
@@ -37,6 +39,10 @@ public sealed partial class FollowUpPanelViewModel : ObservableObject
     }
 
     public IReadOnlyList<WeightSliderVm> Weights { get; }
+
+    /// <summary>Kural yolunda (sakin görüşme vb.) sıralama boştur. XAML dizinin <c>Count</c>'una bağlanamaz
+    /// (dizide açık arayüz üyesi) — görünürlük buradan okunur.</summary>
+    public bool HasRanking => Ranking.Count > 0;
 
     public IReadOnlyList<double> CurrentWeights => Weights.Select(w => w.Value).ToArray();
 
