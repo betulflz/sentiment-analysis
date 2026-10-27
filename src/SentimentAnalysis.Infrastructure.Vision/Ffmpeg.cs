@@ -78,12 +78,15 @@ public static class FfmpegArgs
     public static string[] AudioFileRealtime(string path) =>
         ["-hide_banner", "-loglevel", "error", "-re", "-i", path, "-vn", "-ac", "1", "-ar", "16000", "-f", "s16le", "pipe:1"];
 
-    public static string ExplainExit(int exitCode, string stderr, bool camera)
+    /// <param name="video">Hata görüntü sürecinden mi geldi? "Stream yok" hatası o zaman görüntünün yokluğudur.</param>
+    public static string ExplainExit(int exitCode, string stderr, bool camera, bool video = false)
     {
         if (camera && stderr.Contains("Cannot use", StringComparison.OrdinalIgnoreCase))
             return "Kamera izni reddedildi. Sistem Ayarları › Gizlilik ve Güvenlik › Kamera'dan izin verin.";
         if (stderr.Contains("does not contain any stream", StringComparison.OrdinalIgnoreCase))
-            return "Bu videoda ses yok — yalnızca görüntü analiz edilecek.";
+            return video
+                ? "Bu dosyada görüntü yok — yalnızca ses analiz edilecek."
+                : "Bu videoda ses yok — yalnızca görüntü analiz edilecek.";
         if (stderr.Contains("No such file", StringComparison.OrdinalIgnoreCase))
             return "Video dosyası bulunamadı.";
         var first = stderr.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? "";

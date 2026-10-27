@@ -78,7 +78,7 @@ public sealed class FfmpegVideoCaptureSource : IVideoCaptureSource
                 {
                     await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
                     if (process.ExitCode != 0)
-                        throw new VideoSourceException(FfmpegArgs.ExplainExit(process.ExitCode, await stderr.ConfigureAwait(false), IsCamera));
+                        throw new VideoSourceException(FfmpegArgs.ExplainExit(process.ExitCode, await stderr.ConfigureAwait(false), IsCamera, video: true));
                     yield break;
                 }
 

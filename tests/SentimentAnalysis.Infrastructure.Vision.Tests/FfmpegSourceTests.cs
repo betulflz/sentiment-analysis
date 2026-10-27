@@ -87,6 +87,15 @@ public class FfmpegPureTests
             FfmpegArgs.ExplainExit(234, "[out#0/s16le @ 0x1] Output file does not contain any stream", camera: false));
 
     [Fact]
+    public void ExplainExit_GoruntuSureci_StreamYok_GoruntuYokDer()
+    {
+        // Yalnız-ses .mov: görüntü ffmpeg'i "stream yok" ile biter — "ses yok" demek yanlış olur (11b minor).
+        var m = FfmpegArgs.ExplainExit(234, "[out#0/rawvideo @ 0x1] Output file does not contain any stream", camera: false, video: true);
+        Assert.Contains("görüntü yok", m);
+        Assert.DoesNotContain("ses yok", m);
+    }
+
+    [Fact]
     public void ExplainExit_Missing() =>
         Assert.Contains("bulunamadı",
             FfmpegArgs.ExplainExit(254, "Error opening input: No such file or directory", camera: false));
