@@ -3,8 +3,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using SentimentAnalysis.Application.Abstractions;
 using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Application.Diarization;
+using SentimentAnalysis.Core;
 
 namespace SentimentAnalysis.Desktop;
 
@@ -14,6 +16,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly ISpeakerAnalysis? _speakers;
     private readonly AppConfig? _config;
     private readonly Action<Action> _dispatch;
+    private readonly IDecisionStore? _decisions;
 
     public LiveViewModel Live { get; }
     public ReportViewModel Report { get; }
@@ -24,6 +27,9 @@ public sealed partial class MainViewModel : ObservableObject
     /// Üretimde kimse beklemez (rapor hemen gelir, konuşmacılar sonra düşer).</summary>
     public Task? SpeakerAnalysisTask { get; private set; }
 
+    /// <summary>Karar kaydının (11e) arka plan görevi — testler bekler; üretimde kimse beklemez.</summary>
+    public Task? DecisionSaveTask { get; private set; }
+
     [ObservableProperty] private object _currentView;
 
     /// <param name="speakers">Konuşmacı ayrımı servisi (10b). <c>null</c> ise özellik hiç
@@ -32,19 +38,26 @@ public sealed partial class MainViewModel : ObservableObject
     /// satır-içi çalıştırmadır (testler); Avalonia katmanı <c>Dispatcher.UIThread.Post</c> geçer.
     /// Bu, 08e'de yaşanan "arka plan iş parçacığından UI koleksiyonuna yazma" hatasının
     /// tekrarlanmaması için EXPLICIT tutulur — <c>Desktop</c> projesi Avalonia'sız kalmalıdır.</param>
+    /// <param name="decisions">Karar verisinin kalıcı deposu (11e). <c>null</c> ise rapor yine gösterilir, kayıt denenmez.</param>
     public MainViewModel(LiveViewModel live, ReportViewModel report, HistoryViewModel history,
                          SettingsViewModel settings, ISpeakerAnalysis? speakers = null,
-                         AppConfig? config = null, Action<Action>? dispatch = null)
+                         AppConfig? config = null, Action<Action>? dispatch = null,
+                         IDecisionStore? decisions = null)
     {
         Live = live; Report = report; History = history; Settings = settings;
         _speakers = speakers;
         _config = config;
         _dispatch = dispatch ?? (a => a());
+        _decisions = decisions;
         _currentView = live;
 
         Live.Completed += s =>
         {
             Report.LoadSummary(s);
+            // Kopya alınır: rapor açıkken yeni koşu başlarsa canlı geçmiş temizlenir, rapor eskisini korur.
+            var decision = Live.Decision.Snapshot();
+            Report.LoadDecisions(decision);
+            if (_decisions is not null) DecisionSaveTask = SaveDecisionsAsync(_decisions, decision);
             History.RefreshCommand.Execute(null);
             CurrentView = Report;
 
@@ -53,6 +66,23 @@ public sealed partial class MainViewModel : ObservableObject
             // sonrası kullanıcıyı bekletme).
             SpeakerAnalysisTask = StartSpeakerAnalysisAsync();
         };
+    }
+
+    private async Task SaveDecisionsAsync(IDecisionStore store, DecisionSession session)
+    {
+        // Takip kararı LoadDecisions'ta görüşme sonu ağırlıklarıyla hesaplandı; kullanıcının raporda
+        // kaydırıcı oynatması ("ya şöyle olsaydı") saklanmaz — kayıt burada, beklemeden önce alınır.
+        if (Live.LastSessionId is not Guid sessionId || Report.FollowUp.Current is not { } followUp) return;
+        var record = new DecisionSessionRecord(session, followUp.Best, followUp.Reason);
+        try
+        {
+            await store.SaveDecisionSessionAsync(sessionId, record, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Kayıt hatası (DB kilitli/bozuk) raporu bozmaz; kullanıcıya kısa bir uyarı gösterilir.
+            _dispatch(() => Report.DecisionSaveStatus = $"Karar kaydı saklanamadı: {ex.Message}");
+        }
     }
 
     private async Task StartSpeakerAnalysisAsync()

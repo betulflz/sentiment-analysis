@@ -460,4 +460,17 @@ public class LiveViewModelTests
         await vm.WaitForIdleAsync();
         Assert.False(vm.Decision.IsLocked);
     }
+
+    [Fact]
+    public async Task Start_OncekiYuzDahilSatiriniTemizler()
+    {
+        var vm = new LiveViewModel(new FakeRunner());
+        var speech = Chunk(0, Emotion.Uzgun, -0.4);
+        vm.Report(speech with { Fused = speech.Fused with { SpeechVa = speech.Fused.Combined, FaceValence = 0.9, FaceWeight = 1.0 } });
+        Assert.NotEqual(string.Empty, vm.FaceContributionText);
+
+        vm.StartCommand.Execute(null);
+        Assert.Equal(string.Empty, vm.FaceContributionText);
+        await vm.WaitForIdleAsync();
+    }
 }

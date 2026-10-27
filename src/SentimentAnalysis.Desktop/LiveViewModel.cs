@@ -210,6 +210,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         IsCapturing = true;
         Decision.Start();
         Decision.IsLocked = true;
+        FaceContributionText = string.Empty; // önceki koşunun "Yüz dahil" satırı yeni oturumda sarkmasın
         DiarizationHint = _diarization?.Enabled == true
             ? "Konuşmacı ayrımı bu oturum için AÇIK — ses geçici olarak saklanacak, konuşmacılar Durdur sonrası Rapor'da görünür."
             : "Konuşmacı ayrımı KAPALI (Ayarlar'dan açıp Kaydet'e basarak bir sonraki oturumda etkinleştirebilirsiniz).";

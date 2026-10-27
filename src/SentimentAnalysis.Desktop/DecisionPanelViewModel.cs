@@ -91,12 +91,17 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
         foreach (var w in Weights) w.IdleNote = string.Empty;
     }
 
+    /// <summary>Bitmiş görüşmenin rapora (11e) giden kopyası: sonraki <see cref="Start"/> geçmişi temizlese de
+    /// rapor eski görüşmeyi göstermeye devam eder.</summary>
+    public DecisionSession Snapshot() =>
+        new(SelectedProfile, DecisionKnowledgeBase.DefaultWeights(SelectedProfile), CurrentWeights, _history.ToArray());
+
     public void OnWindow(ChunkResult chunk, IReadOnlyList<FaceWindowSummary> faces)
     {
         var indicators = IndicatorCalculator.Compute(chunk, faces, _valences, _cfg);
         _valences.Add(chunk.Fused.SpeechValence);
         var rec = _advisor.Next(indicators, CurrentWeights);
-        _history.Add(new DecisionWindow(chunk.TimeStart, chunk.TimeEnd, indicators, rec));
+        _history.Add(new DecisionWindow(chunk.TimeStart, chunk.TimeEnd, indicators, rec) { Faces = faces.ToArray() });
 
         Faces.Clear();
         foreach (var f in faces.OrderBy(f => f.FaceIndex))
@@ -133,8 +138,8 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
         }
         var needs = ind.Values.Select(v => v * ind.DataQuality).ToArray();
         // İhtiyaç-ağırlıklı TOPSIS'te (w·n) ihtiyacı 0 olan kriterin ağırlığı sıralamayı etkilemez;
-        // tüm ihtiyaçlar 0 ise motor saf ağırlıklara döner ve hepsi etkilidir.
-        bool anyNeed = needs.Any(n => n > 0);
+        // tüm ihtiyaçlar 0 ise motor saf ağırlıklara, tüm ağırlıklar 0 ise eşit ağırlığa döner — ikisinde de hepsi etkilidir.
+        bool anyNeed = needs.Any(n => n > 0) && Weights.Sum(w => Math.Max(0, w.Value)) > 0;
         foreach (var w in Weights)
             w.IdleNote = anyNeed && needs[(int)w.Criterion] <= 0 ? "şu an etkisiz — bu göstergede ihtiyaç yok" : string.Empty;
         Ranking = ActionRanker.Rank(DecisionKnowledgeBase.Get(SelectedProfile).Interventions,

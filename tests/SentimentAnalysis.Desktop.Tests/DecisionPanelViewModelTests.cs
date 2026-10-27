@@ -219,4 +219,37 @@ public class DecisionPanelViewModelTests
 
         Assert.Same(recorded, p.History[^1].Recommendation);
     }
+
+    [Fact]
+    public void Snapshot_GecmisinKopyasi_StartSonrasiDegismez()
+    {
+        var p = Panel();
+        p.Start();
+        var faces = new[] { new FaceWindowSummary(1, 1, 0.2, 0, 0.1, 0.3, 1) };
+        p.OnWindow(Tense(), faces);
+        p.OnWindow(Calm(10), NoFaces);
+        p.Weights[0].Value = 0.9;
+
+        var snap = p.Snapshot();
+        p.Start();
+
+        Assert.Equal(2, snap.Windows.Count);
+        Assert.Equal(MeetingProfile.Satis, snap.Profile);
+        Assert.Equal(DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis), snap.ProfileWeights);
+        Assert.Equal(p.CurrentWeights, snap.FinalWeights);
+        Assert.Equal(0.9, snap.FinalWeights[0]);
+        Assert.Equal(faces, snap.Windows[0].Faces);
+        Assert.Empty(snap.Windows[1].Faces);
+    }
+
+    [Fact]
+    public void TumAgirliklarSifir_EtkisizNotuYok()
+    {
+        // Tüm ağırlıklar 0 → motor eşit ağırlığa döner; ihtiyacı 0 olan kriter de "etkisiz" sayılmamalı (11d minor).
+        var p = Panel();
+        p.Start();
+        p.OnWindow(Tense(), NoFaces);
+        foreach (var w in p.Weights) w.Value = 0;
+        Assert.All(p.Weights, w => Assert.Equal(string.Empty, w.IdleNote));
+    }
 }
