@@ -156,4 +156,88 @@ public class ReportViewModelTests
         Assert.Equal("Konuşmacı A", vm.SpeakerLines[0].Label);
         Assert.True(vm.SpeakerLines[0].Uncertain);
     }
+
+    // --- 11e: karar bölümleri ---
+
+    private static DecisionWindow DW(double start, double k1, LiveAction shown) =>
+        new(TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(start + 10),
+            new Indicators(new[] { k1, 0, 0, 0, 0, 0 }, new int?[6], 0.8),
+            new Recommendation(shown, 0.6, Array.Empty<Ranked<LiveAction>>(), Array.Empty<Criterion>(), null,
+                shown == LiveAction.DevamEt ? Confidence.Orta : Confidence.Dusuk, $"neden {start}"));
+
+    private static DecisionSession DecisionData(params DecisionWindow[] windows) =>
+        new(MeetingProfile.Satis, Application.Decision.DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis),
+            Application.Decision.DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis), windows);
+
+    private static DecisionSession ThreeWindows() => DecisionData(
+        DW(0, 0.1, LiveAction.DevamEt), DW(10, 0.8, LiveAction.EmpatiKur), DW(20, 0.1, LiveAction.DevamEt));
+
+    [Fact]
+    public void LoadDecisions_ZamanCizelgesi6SatirPencereSayisiKadarDeger()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.LoadDecisions(ThreeWindows());
+
+        Assert.True(vm.HasDecisionData);
+        Assert.True(vm.FollowUp.HasDecision);
+        Assert.Equal(6, vm.IndicatorTimeline.Count);
+        Assert.Equal("Gerilim", vm.IndicatorTimeline[0].Name);
+        Assert.Equal(new[] { 0.1, 0.8, 0.1 }, vm.IndicatorTimeline[0].Values);
+        Assert.Equal("00:00–00:30", vm.TimelineRange);
+    }
+
+    [Fact]
+    public void LoadDecisions_OneriDegisimleriVeKritikAnlar()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.LoadDecisions(ThreeWindows());
+
+        Assert.Equal(3, vm.Recommendations.Count);
+        var r = vm.Recommendations[1];
+        Assert.Equal("00:10", r.Time);
+        Assert.Equal("Empati kur, sakinleştir", r.Action);
+        Assert.Equal("neden 10", r.Reason);
+        Assert.True(r.IsLowConfidence);
+
+        var m = Assert.Single(vm.CriticalMoments);
+        Assert.Equal("00:10–00:20", m.TimeRange);
+        Assert.Equal("Gerilim %64 — Görüşme geneli · gösterilen öneri: Empati kur, sakinleştir", m.Text);
+    }
+
+    [Fact]
+    public void LoadDecisions_PencereYok_HasDecisionDataFalse()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.LoadDecisions(ThreeWindows());
+        vm.LoadDecisions(DecisionData());
+
+        Assert.False(vm.HasDecisionData);
+        Assert.False(vm.FollowUp.HasDecision);
+        Assert.Empty(vm.CriticalMoments);
+    }
+
+    private static SpeakerSegment Seg(int speaker, double start, double end) =>
+        new(new SpeakerId(speaker), TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(end));
+
+    [Fact]
+    public void ApplySpeakers_KonusmaDengesiDoldurulur()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.ApplySpeakers(Array.Empty<TranscriptSegment>(), new[] { Seg(0, 0, 60), Seg(1, 60, 90) }, 0.5);
+
+        Assert.Equal(2, vm.TalkBalance.Count);
+        Assert.Equal("Konuşmacı A", vm.TalkBalance[0].Label);
+        Assert.Equal("1 dk 0 sn · %67", vm.TalkBalance[0].Text);
+        Assert.Equal(2 / 3.0, vm.TalkBalance[0].Share, 9);
+        Assert.Equal("30 sn · %33", vm.TalkBalance[1].Text);
+    }
+
+    [Fact]
+    public void SetDiarizationOutcome_Basarisiz_KonusmaDengesiTemizlenir()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.ApplySpeakers(Array.Empty<TranscriptSegment>(), new[] { Seg(0, 0, 60) }, 0.5);
+        vm.SetDiarizationOutcome(DiarizationOutcome.Failed);
+        Assert.Empty(vm.TalkBalance);
+    }
 }

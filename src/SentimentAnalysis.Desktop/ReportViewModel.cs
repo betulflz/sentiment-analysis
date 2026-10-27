@@ -3,6 +3,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SentimentAnalysis.Application.Abstractions;
 using SentimentAnalysis.Application.Configuration;
+using SentimentAnalysis.Application.Decision;
 using SentimentAnalysis.Application.Diarization;
 using SentimentAnalysis.Core;
 
@@ -138,10 +139,37 @@ public sealed partial class ReportViewModel : ObservableObject
     /// veya konuşmacı ayırt edilemediyse BOŞ kalır — uydurma özet üretilmez (master §12.2).</summary>
     public IReadOnlyList<SpeakerEmotionVm> SpeakerEmotions { get; private set; } = System.Array.Empty<SpeakerEmotionVm>();
 
+    /// <summary>Takip kararı + duyarlılık paneli (11e).</summary>
+    public FollowUpPanelViewModel FollowUp { get; }
+
+    /// <summary>Koşunun karar verisi var mı (en az bir pencere)? Yoksa karar bölümleri gizlenir.</summary>
+    [ObservableProperty] private bool _hasDecisionData;
+
+    /// <summary>Kriter başına pencere değerleri (0..1) — ısı şeridi.</summary>
+    public IReadOnlyList<IndicatorRowVm> IndicatorTimeline { get; private set; } = System.Array.Empty<IndicatorRowVm>();
+
+    /// <summary>Zaman çizelgesinin kapsadığı aralık ("00:00–04:30").</summary>
+    [ObservableProperty] private string _timelineRange = string.Empty;
+
+    /// <summary>Görüşme sırasında gösterilen önerinin değiştiği anlar.</summary>
+    public IReadOnlyList<RecommendationRowVm> Recommendations { get; private set; } = System.Array.Empty<RecommendationRowVm>();
+
+    public IReadOnlyList<CriticalMomentVm> CriticalMoments { get; private set; } = System.Array.Empty<CriticalMomentVm>();
+
+    /// <summary>Konuşmacı başına konuşma süresi ve payı (11e). Diarization çalışmadıysa BOŞ.</summary>
+    public IReadOnlyList<TalkShareVm> TalkBalance { get; private set; } = System.Array.Empty<TalkShareVm>();
+
+    /// <summary>Karar kaydı saklanamadıysa kısa uyarı; boşsa gösterilmez.</summary>
+    [ObservableProperty] private string _decisionSaveStatus = string.Empty;
+
+    private readonly DecisionConfig _decision;
+
     public ReportViewModel(IMeetingAggregator aggregator, AppConfig? config = null)
     {
         _aggregator = aggregator;
         var cfg = config ?? AppConfig.Default;
+        _decision = cfg.Decision;
+        FollowUp = new FollowUpPanelViewModel(cfg.Decision);
         _temperature = cfg.Fusion.DistributionTemperature;
         // Nötr yarıçapı canlı ekrandan geçirilir; buradan da geçmezsek rapor ile canlı ekran
         // farklı duygu etiketi gösterir (aynı VA'ya farklı yorum).
@@ -173,6 +201,9 @@ public sealed partial class ReportViewModel : ObservableObject
 
             SpeakerEmotions = System.Array.Empty<SpeakerEmotionVm>();
             OnPropertyChanged(nameof(SpeakerEmotions));
+
+            TalkBalance = System.Array.Empty<TalkShareVm>();
+            OnPropertyChanged(nameof(TalkBalance));
         }
     }
 
@@ -188,6 +219,46 @@ public sealed partial class ReportViewModel : ObservableObject
         SpeakerLines = SpeakerLineBuilder.Build(aligned).Select(l => new SpeakerLineVm(l)).ToList();
         HasSpeakers = SpeakerLines.Count > 0;
         OnPropertyChanged(nameof(SpeakerLines));
+
+        TalkBalance = Application.Diarization.TalkBalance.Compute(speakers)
+            .Select(t => new TalkShareVm(t.Speaker.DefaultLabel, t.Share, $"{Duration(t.Duration)} · {Percent(t.Share)}"))
+            .ToList();
+        OnPropertyChanged(nameof(TalkBalance));
+    }
+
+    /// <summary>Bitmiş görüşmenin karar verisini (11e) gösterir: zaman çizelgesi, verilen öneriler, kritik
+    /// anlar ve takip kararı. Saklanmış pencere göstergelerinden çalışır — yeniden hesaplamaz.</summary>
+    public void LoadDecisions(DecisionSession session)
+    {
+        var windows = session.Windows;
+        HasDecisionData = windows.Count > 0;
+        DecisionSaveStatus = string.Empty;
+        IndicatorTimeline = System.Enum.GetValues<Criterion>()
+            .Select(c => new IndicatorRowVm(DecisionPanelViewModel.Capitalize(DecisionText.Name(c)),
+                windows.Select(w => w.Indicators.Values[(int)c]).ToArray()))
+            .ToArray();
+        TimelineRange = windows.Count == 0 ? string.Empty : $"{Clock(windows[0].Start)}–{Clock(windows[^1].End)}";
+        Recommendations = DecisionReport.Changes(windows)
+            .Select(c => new RecommendationRowVm(Clock(c.At), DecisionText.Name(c.Action), c.Reason, c.Confidence == Confidence.Dusuk))
+            .ToArray();
+        CriticalMoments = DecisionReport.CriticalMoments(windows, _decision)
+            .Select(m => new CriticalMomentVm($"{Clock(m.Start)}–{Clock(m.End)}",
+                $"{DecisionPanelViewModel.Capitalize(DecisionText.Name(m.Criterion))} {Percent(m.Peak)} — {DecisionText.Subject(m.Face)} · gösterilen öneri: {DecisionText.Name(m.Shown)}"))
+            .ToArray();
+        OnPropertyChanged(nameof(IndicatorTimeline));
+        OnPropertyChanged(nameof(Recommendations));
+        OnPropertyChanged(nameof(CriticalMoments));
+        FollowUp.Load(session);
+    }
+
+    private static string Clock(System.TimeSpan t) => $"{(int)t.TotalMinutes:00}:{t.Seconds:00}";
+
+    private static string Percent(double x) => $"%{System.Math.Round(100 * x, System.MidpointRounding.AwayFromZero)}";
+
+    private static string Duration(System.TimeSpan t)
+    {
+        int total = (int)System.Math.Round(t.TotalSeconds, System.MidpointRounding.AwayFromZero);
+        return total < 60 ? $"{total} sn" : $"{total / 60} dk {total % 60} sn";
     }
 
     /// <summary>Chunk-düzeyi füzyon sonuçlarını konuşmacı bölgeleriyle hizalayıp konuşmacı-başına
@@ -236,3 +307,15 @@ public sealed partial class ReportViewModel : ObservableObject
         HasReport = true;
     }
 }
+
+/// <summary>Zaman çizelgesinde bir kriterin pencere değerleri (0..1).</summary>
+public sealed record IndicatorRowVm(string Name, IReadOnlyList<double> Values);
+
+/// <summary>Verilen öneri satırı: "00:40", eylem, gerekçe; düşük güvenli satır soluk gösterilir.</summary>
+public sealed record RecommendationRowVm(string Time, string Action, string Reason, bool IsLowConfidence);
+
+/// <summary>Kritik an: "01:10–01:40" ve "Gerilim %72 — Yüz 2 · gösterilen öneri: …".</summary>
+public sealed record CriticalMomentVm(string TimeRange, string Text);
+
+/// <summary>Konuşma dengesi satırı: etiket, pay (0..1) ve "2 dk 10 sn · %58".</summary>
+public sealed record TalkShareVm(string Label, double Share, string Text);
