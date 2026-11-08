@@ -15,10 +15,15 @@ namespace SentimentAnalysis.Infrastructure.Audio;
 /// <para><b>Neden üst sınır:</b> 16 kHz mono PCM16 ≈ 115 MB/saat. Sınırsız biriktirme uzun bir
 /// toplantıda M1 8GB'da uygulamayı şişirir. Sınır aşılırsa chunk akışı sürer (analiz kesilmez)
 /// ama biriktirme durur ve <see cref="LimitReached"/> true olur — sessizce kırpma yerine
-/// görünür bir durum (master §12.2, dürüstlük).</para></summary>
+/// görünür bir durum (master §12.2, dürüstlük).</para>
+/// <para><b>Zaman hizası:</b> akıştaki chunk'lar örtüşür (canlı/video 10 sn + 2 sn, dosya 30 sn + 5 sn).
+/// Kayıt, chunk'ların <see cref="AudioChunk.Start"/>/<see cref="AudioChunk.End"/> zamanlarına göre yalnızca
+/// henüz kaydedilmemiş kısmı ekler — kayıttaki konum = analiz zaman çizelgesindeki zaman. Aksi halde her
+/// chunk'ta örtüşme kadar kayan konuşmacı bölgeleri transkript satırlarını yanlış kişiye bağlıyordu.</para></summary>
 public sealed class RecordingCaptureSource(IAudioCaptureSource inner, int maxSamples) : IAudioCaptureSource
 {
     private readonly List<float> _pcm = new();
+    private TimeSpan _recordedUntil = TimeSpan.Zero; // kayıt bu mutlak zamana kadar dolu
 
     /// <summary>Üst sınır aşıldığı için sesin bir kısmı biriktirilmedi mi? Kullanıcıya
     /// bildirilmelidir — konuşmacı ayrımı yalnızca biriken kısmı kapsar.</summary>
@@ -38,18 +43,21 @@ public sealed class RecordingCaptureSource(IAudioCaptureSource inner, int maxSam
     {
         if (LimitReached) return;
 
+        // Örtüşen baş kısım zaten kayıtta; arada boşluk varsa sessizlikle doldurulur (hiza korunur).
+        int skip = (int)Math.Round((_recordedUntil - chunk.Start).TotalSeconds * chunk.SampleRate);
+        if (chunk.End > _recordedUntil) _recordedUntil = chunk.End;
+        if (skip >= chunk.Samples.Length) return;
+        var fresh = skip >= 0 ? chunk.Samples.AsSpan(skip) : chunk.Samples.AsSpan();
+        int gap = Math.Max(0, -skip);
+
         int room = maxSamples - _pcm.Count;
         if (room <= 0) { LimitReached = true; return; }
 
-        if (chunk.Samples.Length > room)
-        {
-            // Sığan kadarını al, sonra dur: yarım bir chunk sessizce atılmasın.
-            for (int i = 0; i < room; i++) _pcm.Add(chunk.Samples[i]);
-            LimitReached = true;
-            return;
-        }
-
-        _pcm.AddRange(chunk.Samples);
+        int take = Math.Min(room, gap + fresh.Length);
+        for (int i = 0; i < Math.Min(gap, take); i++) _pcm.Add(0f);
+        for (int i = 0; i < take - gap; i++) _pcm.Add(fresh[i]);
+        // Sığan kadarını aldık; sığmayan kısım varsa dur: yarım bir chunk sessizce atılmasın.
+        if (take < gap + fresh.Length) LimitReached = true;
     }
 
     /// <summary>Biriktirilen sesi 16-bit little-endian mono PCM olarak döndürür.
