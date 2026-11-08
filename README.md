@@ -218,6 +218,7 @@ Bu proje kesinlik gösterisi yerine dürüstlüğü tercih eder: sistem emin olm
 
 - [`docs/superpowers/specs/`](docs/superpowers/specs/) — master tasarım (kararlar kütüğü,
   riskler, ilkeler) ve alt-proje spec'leri
+  
 - [`docs/superpowers/plans/`](docs/superpowers/plans/) — uygulanmış TDD planları; her planın
   sonundaki "Post-Review Düzeltmeleri" bölümü uygulama sırasında alınan kararları anlatır
 - [`AGENT-CONVERSATION.md`](AGENT-CONVERSATION.md) — projenin tasarlandığı ilk planlama
