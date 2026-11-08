@@ -83,7 +83,8 @@ public class VisionAnalyzerTests
         var analyzer = new VisionAnalyzer(new FakeDetector(), new FakeExpression(), timeline, Cfg);
         await analyzer.RunAsync(new ListSource(10), CancellationToken.None);
         var s = Assert.Single(timeline.Summarize(TimeSpan.Zero, TimeSpan.FromSeconds(10)));
-        Assert.Equal(1.0, s.VisibleRatio, 1e-9);
+        // 5 analiz karesi; yeni yüz ikinci görülüşünde doğrulanır (FaceTracker), ilk kare sayılmaz → 4/5.
+        Assert.Equal(0.8, s.VisibleRatio, 1e-9);
     }
 
     [Fact]
