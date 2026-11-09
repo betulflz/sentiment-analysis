@@ -447,6 +447,32 @@ public class EmotionPipelineTests
         Assert.InRange(AppConfig.Default.Pipeline.DrainTimeBudgetSeconds, 5.0, 45.0);
     }
 
+    /// <summary>Gerçek zamanlı kaynak: chunk'lar arasında bekler (mikrofon gibi).</summary>
+    private sealed class PacedSource(int count, TimeSpan gap) : IAudioCaptureSource
+    {
+        public async IAsyncEnumerable<AudioChunk> CaptureAsync(
+            CaptureOptions options, [EnumeratorCancellation] CancellationToken ct)
+        {
+            for (int i = 0; i < count; i++) { await Task.Delay(gap, ct); yield return ChunkAt(i); }
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_GorusmeDrenajButcesindenUzunSurse_HicbirChunkAtlanmaz()
+    {
+        // Hata (2026-11-09 canlı test): bütçe koşunun BAŞINDA başlıyordu → 30 sn'den uzun her canlı
+        // görüşmede o andan sonraki chunk'lar atılıyordu (86 sn'lik görüşmeden yalnız 18 sn yazıldı).
+        // Bütçe yalnızca "Durdur" SONRASI drenajı sınırlamalı.
+        var store = new RecordingStore(); var agg = new FakeAggregator();
+        var pipeline = new EmotionPipeline(new GatedProcessor(ResultFor), store, agg, CfgWithDrainBudget(32, seconds: 1.0));
+
+        await pipeline.RunAsync(new PacedSource(8, TimeSpan.FromMilliseconds(250)), Opts, Guid.NewGuid(),
+            DateTimeOffset.UnixEpoch, DetectedLanguage.Turkish, null, CancellationToken.None);
+
+        Assert.Equal(8, pipeline.Timeline.Count); // 8 × 250 ms = 2 sn > 1 sn bütçe
+        Assert.Equal(0, pipeline.DrainSkippedCount);
+    }
+
     [Fact]
     public async Task RunAsync_DrenajButcesiDolunca_KalanlarSayilirVeOzetDoner()
     {

@@ -102,8 +102,10 @@ public sealed class EmotionPipeline
             }
         });
 
-        // Tüketici için config'ten gelen güvenlik bütçeli bağımsız token
-        using var processingCts = new CancellationTokenSource(_drainTimeBudget);
+        // Tüketici için bağımsız token: bütçe "Durdur" (ct) ANINDA başlar, koşunun başında değil —
+        // aksi halde bütçeden uzun her canlı görüşmenin geri kalanı atılırdı.
+        using var processingCts = new CancellationTokenSource();
+        using var startDrainBudget = ct.Register(() => processingCts.CancelAfter(_drainTimeBudget));
 
         try
         {
