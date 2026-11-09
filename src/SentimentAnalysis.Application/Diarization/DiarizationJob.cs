@@ -79,7 +79,9 @@ public sealed class DiarizationJob
 
         // Motorun keyfi küme kimlikleri KALICI veriye sızmasın: kanonik numaralar (ilk konuşan
         // A) burada, saklamadan önce verilir — böylece okuyan her yüzey aynı numarayı görür.
-        var canonical = SpeakerRenumberer.ByFirstAppearance(speakers);
+        // Hayalet kümeler (kırıntı) de saklamadan ÖNCE ayıklanır: kayıt, rapor ve ses tonu ölçümü tek
+        // numara uzayını paylaşır (ayrı bir sunum-zamanı yeniden numaralama kimlik ayrışması yaratırdı).
+        var canonical = GhostSpeakerFilter.Apply(speakers);
 
         // Boş liste de saklanır: "diarization çalıştı, konuşmacı ayırt edilemedi" ile
         // "diarization hiç çalışmadı" farklı durumlardır ve rapor bunları ayırt etmelidir.

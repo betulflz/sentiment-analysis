@@ -15,12 +15,15 @@ public static class GhostSpeakerFilter
 
     public static IReadOnlyList<SpeakerSegment> Apply(IReadOnlyList<SpeakerSegment> segments)
     {
-        var shares = TalkBalance.Compute(segments);
-        if (shares.Count <= 1) return segments;
-        var ghosts = shares.Where(s => s.Share < MinShare && s.Duration < MinDuration)
-            .Select(s => s.Speaker).ToHashSet();
-        if (ghosts.Count == 0) return segments;
-        var kept = segments.Select(s => ghosts.Contains(s.Speaker) ? s with { Speaker = SpeakerId.Unknown } : s).ToList();
-        return SpeakerRenumberer.ByFirstAppearance(kept);
+        var shares = TalkBalance.Compute(segments);          // süresiz bölgeler paya girmez
+        var measurable = shares.Select(s => s.Speaker).ToHashSet();
+        // Ölçülebilir süresi hiç olmayan kimlik de hayalettir; tek kişi varsa paya bakılmaz.
+        var ghosts = shares.Count <= 1
+            ? new HashSet<SpeakerId>()
+            : shares.Where(s => s.Share < MinShare && s.Duration < MinDuration).Select(s => s.Speaker).ToHashSet();
+        var cleaned = segments.Select(s =>
+            s.Speaker.Index >= 0 && (ghosts.Contains(s.Speaker) || !measurable.Contains(s.Speaker))
+                ? s with { Speaker = SpeakerId.Unknown } : s).ToList();
+        return SpeakerRenumberer.ByFirstAppearance(cleaned);  // her yolda kanonik numara
     }
 }

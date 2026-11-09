@@ -3,17 +3,24 @@ using SentimentAnalysis.Core;
 namespace SentimentAnalysis.Application.Diarization;
 
 /// <summary>Örtüşen ses parçalarından gelen tekrar satırları ayıklar. Parçalar 2 sn örtüştüğü için
-/// örtüşme bölgesi iki kez yazıya dökülür ("Hangi karta?" iki kez; "Bonus" / "Bones").
-/// <para>Kural: zamanları çakışan iki satırdan kısa olanın yazısı uzun olanın içinde en az %70
-/// oranında (harf sırasıyla) geçiyorsa kısa olan atılır. Zamanı çakışmayan aynı kelimeler
-/// ("Tamam." … "Tamam.") ayrı söylenmiştir, korunur. Saf; çıktı başlangıç zamanına göre sıralı.</para></summary>
+/// örtüşme bölgesi iki kez yazıya dökülür ("Hangi karta?" iki kez).
+/// <para>Muhafazakâr: yanlışlıkla gerçek bir cümleyi silmektense tekrarı bırakmak yeğdir. Yalnızca
+/// ikisi de en az <see cref="MinChars"/> harflik ve zamanı kısa olanın en az yarısı kadar çakışan
+/// satırlarda: (A) kısa olan uzun olanın içinde BİTİŞİK geçiyorsa, ya da (B) uzunlukları birbirine
+/// yakınsa (kısa ≥ yarısı) ve harf sırası örtüşmesi ≥ %70 ise kısa olan atılır. "Evet." gibi kısa
+/// cevaplar ve zamanı çakışmayan aynı kelimeler ("Tamam." … "Tamam.") korunur. Ham yazı kayıtta
+/// değişmez; bu yalnızca raporda gösterilen listeyi temizler. Saf; çıktı başlangıca göre sıralı.</para></summary>
 public static class TranscriptDeduper
 {
+    private const int MinChars = 8;
     private const double MinContainment = 0.7;
+    private const double MinLengthRatio = 0.5;
+    private const double MinTimeOverlap = 0.5;
 
     public static IReadOnlyList<TranscriptSegment> Dedupe(IReadOnlyList<TranscriptSegment> segments)
     {
         var ordered = segments.OrderBy(s => s.Start).ThenBy(s => s.End).ToList();
+        var norm = ordered.Select(s => Normalize(s.Text)).ToList();
         var dropped = new bool[ordered.Count];
         for (int i = 0; i < ordered.Count; i++)
         {
@@ -21,14 +28,26 @@ public static class TranscriptDeduper
             for (int j = i + 1; j < ordered.Count && ordered[j].Start < ordered[i].End; j++)
             {
                 if (dropped[j]) continue;
-                string a = Normalize(ordered[i].Text), b = Normalize(ordered[j].Text);
-                var (shortText, shortIndex, longText) = a.Length < b.Length ? (a, i, b) : (b, j, a);
-                if (shortText.Length == 0 || Lcs(shortText, longText) < MinContainment * shortText.Length) continue;
-                dropped[shortIndex] = true;
-                if (shortIndex == i) break;
+                var (shortIdx, longIdx) = norm[i].Length <= norm[j].Length ? (i, j) : (j, i);
+                if (!IsDuplicate(ordered[shortIdx], norm[shortIdx], ordered[longIdx], norm[longIdx])) continue;
+                dropped[shortIdx] = true;
+                if (shortIdx == i) break;
             }
         }
         return ordered.Where((_, k) => !dropped[k]).ToList();
+    }
+
+    private static bool IsDuplicate(TranscriptSegment shortSeg, string shortText, TranscriptSegment longSeg, string longText)
+    {
+        if (shortText.Length < MinChars) return false;
+        double shortDur = (shortSeg.End - shortSeg.Start).TotalSeconds;
+        var overlap = (TimeSpan.FromTicks(Math.Min(shortSeg.End.Ticks, longSeg.End.Ticks))
+                       - TimeSpan.FromTicks(Math.Max(shortSeg.Start.Ticks, longSeg.Start.Ticks))).TotalSeconds;
+        if (shortDur <= 0 || overlap < MinTimeOverlap * shortDur) return false;
+
+        if (longText.Contains(shortText, StringComparison.Ordinal)) return true;                    // (A)
+        return shortText.Length >= MinLengthRatio * longText.Length
+            && Lcs(shortText, longText) >= MinContainment * shortText.Length;                       // (B)
     }
 
     private static string Normalize(string text) =>

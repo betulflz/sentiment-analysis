@@ -73,6 +73,18 @@ public class DiarizationJobTests
     }
 
     [Fact]
+    public async Task RunAsync_HayaletKonusmaciKayittanOnceAyiklanir()
+    {
+        // 0 = 33,8 sn, 1 = 0,3 sn kırıntı, 2 = 36,3 sn → saklanan: 0, Bilinmeyen, 1 (tek numara uzayı).
+        var store = new FakeStore(new float[16000 * 71]);
+        var diarizer = new FakeDiarizer([S(0, 0, 33.8), S(1, 34, 34.3), S(2, 35, 71.3)]);
+
+        await new DiarizationJob(diarizer, store, AppConfig.Default).RunAsync(Guid.NewGuid(), 2, CancellationToken.None);
+
+        Assert.Equal(new[] { 0, -1, 1 }, store.Saved.Select(s => s.Speaker.Index));
+    }
+
+    [Fact]
     public async Task RunAsync_SesYoksa_NoAudioDoner_DiarizerCagrilmaz()
     {
         var store = new FakeStore(null);

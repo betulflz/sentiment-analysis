@@ -69,12 +69,11 @@ public sealed class SpeakerAnalysisService : ISpeakerAnalysis
         if (outcome != DiarizationOutcome.Completed)
             return new SpeakerAnalysisResult(outcome, Array.Empty<TranscriptSegment>(), Array.Empty<SpeakerSegment>());
 
-        // Rapor ve ses tonu ölçümü aynı temiz veriyi görür: örtüşmeden gelen tekrar satırlar ve
-        // hayalet konuşmacılar burada, tek yerde ayıklanır.
+        // Ham yazı kayıtta değişmez; örtüşmeden gelen tekrar satırlar yalnızca raporda gösterilirken
+        // ayıklanır. Hayalet konuşmacılar DiarizationJob'da kayıttan önce ayıklandı.
         var transcript = TranscriptDeduper.Dedupe(
             await _reader.GetTranscriptSegmentsAsync(sessionId, ct).ConfigureAwait(false));
-        var speakers = GhostSpeakerFilter.Apply(
-            await _reader.GetSpeakerSegmentsAsync(sessionId, ct).ConfigureAwait(false));
+        var speakers = await _reader.GetSpeakerSegmentsAsync(sessionId, ct).ConfigureAwait(false);
         var chunks = await _reader.GetChunkResultsAsync(sessionId, ct).ConfigureAwait(false);
 
         // Konuşmacı duygusu, kişinin KENDİ sesinden ölçülür (10d). outcome==Completed olduğu
