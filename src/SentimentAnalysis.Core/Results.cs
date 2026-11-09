@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace SentimentAnalysis.Core;
 
 /// <summary>Füzyon sonucu (chunk düzeyi). Her iki modelin ham VA'sı ve güveni saydamlık için
-/// taşınır — UI bunları "Metin Analizi" ve "Ses Analizi" sütunlarında ayrı ayrı gösterir.</summary>
+/// taşınır — UI bunları "Sözlere göre" ve "Ses tonuna göre" sütunlarında ayrı ayrı gösterir.</summary>
 public sealed record FusedResult(
     ValenceArousal Combined,
     Emotion PrimaryEmotion,

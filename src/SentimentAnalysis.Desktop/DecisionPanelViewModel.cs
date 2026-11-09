@@ -141,7 +141,7 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
         // tüm ihtiyaçlar 0 ise motor saf ağırlıklara, tüm ağırlıklar 0 ise eşit ağırlığa döner — ikisinde de hepsi etkilidir.
         bool anyNeed = needs.Any(n => n > 0) && Weights.Sum(w => Math.Max(0, w.Value)) > 0;
         foreach (var w in Weights)
-            w.IdleNote = anyNeed && needs[(int)w.Criterion] <= 0 ? "şu an etkisiz — bu göstergede ihtiyaç yok" : string.Empty;
+            w.IdleNote = anyNeed && needs[(int)w.Criterion] <= 0 ? "şu an sorun yok" : string.Empty;
         Ranking = ActionRanker.Rank(DecisionKnowledgeBase.Get(SelectedProfile).Interventions,
                 DecisionKnowledgeBase.LiveImpact, CurrentWeights, needs)
             .Take(3)
@@ -188,18 +188,20 @@ public sealed partial class WeightSliderVm : ObservableObject
     [ObservableProperty] private double _value;
     [ObservableProperty] private string _shareText = string.Empty;
 
-    /// <summary>Son pencerede bu kriterin ihtiyacı 0 ise kaydırıcının neden etkisiz olduğunu söyler.</summary>
+    /// <summary>Son pencerede bu kriterin ihtiyacı 0 ise söyler: kaydırıcı o an sıralamayı etkilemez.</summary>
     [ObservableProperty] private string _idleNote = string.Empty;
 
     public WeightSliderVm(Criterion criterion, Action changed)
     {
         Criterion = criterion;
         Name = DecisionPanelViewModel.Capitalize(DecisionText.Name(criterion));
+        Description = DecisionText.Description(criterion);
         _changed = changed;
     }
 
     public Criterion Criterion { get; }
     public string Name { get; }
+    public string Description { get; }
 
     partial void OnValueChanged(double value) => _changed();
 

@@ -11,10 +11,22 @@ public static class DecisionText
         Criterion.Gerilim => "gerilim",
         Criterion.IlgiKaybi => "ilgi kaybı",
         Criterion.OlumsuzDuygu => "olumsuz duygu",
-        Criterion.Uyumsuzluk => "söz–ton–yüz uyumsuzluğu",
+        Criterion.Uyumsuzluk => "söz ile his çelişkisi",
         Criterion.DusukEnerji => "düşük enerji",
         Criterion.Kotulesme => "kötüleşen gidişat",
         _ => c.ToString(),
+    };
+
+    /// <summary>Kriterin konuyu bilmeyen kullanıcıya tek satırlık açıklaması (göstergenin hesabına sadık).</summary>
+    public static string Description(Criterion c) => c switch
+    {
+        Criterion.Gerilim => "Ses gergin ve hızlı, yüz ifadesi olumsuz",
+        Criterion.IlgiKaybi => "Karşıdaki kişi başını sık sık başka yöne çeviriyor",
+        Criterion.OlumsuzDuygu => "Konuşmada ya da yüzde üzgün, kızgın, kaygılı bir hava var",
+        Criterion.Uyumsuzluk => "Söylenenle ses tonu ya da yüz birbirini tutmuyor (ör. \"iyiyim\" deyip üzgün görünmek)",
+        Criterion.DusukEnerji => "Ses durgun, konuşma yavaş ve az kelimeli",
+        Criterion.Kotulesme => "Görüşme ilerledikçe hava olumsuza dönüyor",
+        _ => string.Empty,
     };
 
     public static string Name(LiveAction a) => a switch

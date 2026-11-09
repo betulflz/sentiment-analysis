@@ -39,14 +39,14 @@ public sealed class SpeakerLineVm
     }
 }
 
-/// <summary>Konuşmacı-başına duygu özeti (10c): metin/ses/nihai üç sütun, "Metin Analizi" /
-/// "Ses Analizi" / "Nihai Karar" panelleriyle aynı görünüm modeli (<see cref="SourceAnalysisVm"/>)
+/// <summary>Konuşmacı-başına duygu özeti (10c): metin/ses/nihai üç sütun, "Sözlere göre" /
+/// "Ses tonuna göre" / "Genel sonuç" panelleriyle aynı görünüm modeli (<see cref="SourceAnalysisVm"/>)
 /// yeniden kullanılır. Üç panel de <c>neutralRadius</c>'u canlı ekrandan alır — aksi halde aynı
 /// VA noktası rapor ile canlı ekranda farklı duygu etiketiyle görünürdü.
-/// <para><b>"Nihai Karar" neden ham prozodi DEĞİL:</b> <c>s.Combined</c>, <c>EmotionFusion</c>'ın
+/// <para><b>"Genel sonuç" neden ham prozodi DEĞİL:</b> <c>s.Combined</c>, <c>EmotionFusion</c>'ın
 /// ürettiği füzyon sonucudur ve ses güvenilirliği düşükken (düşük SNR, 3 sn altı süre, sessizlik)
 /// bilinçli olarak nötr merkeze çekilir — "bu sese güvenmiyorum" demenin yoludur (düzeltme turu
-/// 1 / bulgu 1). "Nihai Karar" panelini ölçülmüş ham prozodiyle (<c>audioVa</c>) beslemek bu
+/// 1 / bulgu 1). "Genel sonuç" panelini ölçülmüş ham prozodiyle (<c>audioVa</c>) beslemek bu
 /// korumayı atlayıp güvenilmez seste uydurma bir sonuç gösterirdi; ayrıca canlı ekran
 /// <c>Fused.Combined</c> gösterdiği için rapor başka şey gösterirse iki yüzey ayrışırdı. "Ses
 /// Analizi" paneli ise KASITLI olarak ham ölçülmüş prozodiyi (<c>audioVa</c>) göstermeye devam
@@ -67,7 +67,7 @@ public sealed class SpeakerEmotionVm
     /// "sayı > 0" karşılaştırması yapılamaz).</summary>
     public bool HasAudioMeasurement => AnalyzedSeconds > 0;
 
-    /// <summary>"Ses Analizi" panelinin altındaki açıklama satırı — HER İKİ durumda da doludur.
+    /// <summary>"Ses tonuna göre" panelinin altındaki açıklama satırı — HER İKİ durumda da doludur.
     /// <para><b>Neden gizlenmiyor:</b> ölçüm yokken panel sessizce eski chunk-ortalaması değerine
     /// düşüyor ve açıklama satırı gizleniyordu; kullanıcı için "kişinin kendi sesinden ölçüldü"
     /// ile "ölçülemedi, tahmine düşüldü" tıpatıp aynı görünüyordu. Tasarım §3 bunu açıkça
@@ -97,11 +97,11 @@ public sealed class SpeakerEmotionVm
             : "Yeterli ses yok — chunk ortalamasına dayanıyor";
         UncertainChunkCount = s.UncertainChunkCount;
         UncertainChunkNote = $"{s.UncertainChunkCount} ölçüm belirsiz atamaya dayanıyor";
-        TextAnalysis = new SourceAnalysisVm("Metin Analizi", s.Text, temperature, neutralRadius);
-        AudioAnalysis = new SourceAnalysisVm("Ses Analizi", audioVa, temperature, neutralRadius);
+        TextAnalysis = new SourceAnalysisVm("Sözlere göre", s.Text, temperature, neutralRadius);
+        AudioAnalysis = new SourceAnalysisVm("Ses tonuna göre", audioVa, temperature, neutralRadius);
         // Bulgu 1: Nihai Karar füzyon sonucunu (s.Combined) gösterir, ham prozodiyi değil —
         // bkz. sınıf-üstü açıklama.
-        CombinedAnalysis = new SourceAnalysisVm("Nihai Karar", s.Combined, temperature, neutralRadius);
+        CombinedAnalysis = new SourceAnalysisVm("Genel sonuç", s.Combined, temperature, neutralRadius);
     }
 }
 

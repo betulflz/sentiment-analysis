@@ -198,7 +198,8 @@ public class DecisionPanelViewModelTests
         p.Start();
         Assert.All(p.Weights, w => Assert.Equal(string.Empty, w.IdleNote));
         p.OnWindow(Tense(), NoFaces);
-        Assert.NotEqual(string.Empty, p.Weights[(int)Criterion.IlgiKaybi].IdleNote);
+        Assert.Equal("şu an sorun yok", p.Weights[(int)Criterion.IlgiKaybi].IdleNote);
+        Assert.Equal(DecisionText.Description(Criterion.IlgiKaybi), p.Weights[(int)Criterion.IlgiKaybi].Description);
         Assert.Equal(string.Empty, p.Weights[(int)Criterion.Gerilim].IdleNote);
         p.Start();
         Assert.All(p.Weights, w => Assert.Equal(string.Empty, w.IdleNote));

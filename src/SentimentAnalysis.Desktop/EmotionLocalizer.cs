@@ -30,9 +30,9 @@ public static class EmotionLocalizer
     public static string Pattern(IncongruencePattern p) => p switch
     {
         IncongruencePattern.Yok => "Yok",
-        IncongruencePattern.Maskeleme => "Maskeleme",
-        IncongruencePattern.Saka => "Şaka",
-        IncongruencePattern.OlasiIroni => "Olası ironi",
+        IncongruencePattern.Maskeleme => "Sözler olumlu ama ses tonu olumsuz",
+        IncongruencePattern.Saka => "Sözler olumsuz ama ses tonu neşeli",
+        IncongruencePattern.OlasiIroni => "Sözler olumlu ama ses düz — iğneleme olabilir",
         _ => p.ToString(),
     };
 

@@ -7,7 +7,8 @@
         mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
         x:Class="SentimentAnalysis.Desktop.Avalonia.MainWindow"
         Title="SentimentAnalysis"
-        Width="960" Height="640" MinWidth="720" MinHeight="480">
+        Width="1040" Height="720" MinWidth="720" MinHeight="480"
+        Background="{DynamicResource PageBg}">
 
     <Window.DataTemplates>
         <DataTemplate DataType="vm:LiveViewModel">
@@ -26,9 +27,11 @@
 
     <DockPanel>
         <!-- Navigasyon -->
-        <Border DockPanel.Dock="Top" Padding="16,12" BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="0,0,0,1">
+        <Border DockPanel.Dock="Top" Padding="20,12" Background="{DynamicResource CardBg}"
+                BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,0,0,1">
             <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="SentimentAnalysis" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,24,0" />
+                <TextBlock Text="Sesli Duygu Analizi" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,24,0"
+                           Foreground="{DynamicResource SystemAccentColor}" />
                 <Button Content="Canlı" Command="{Binding ShowLiveCommand}" />
                 <Button Content="Rapor" Command="{Binding ShowReportCommand}" />
                 <Button Content="Geçmiş" Command="{Binding ShowHistoryCommand}" />
@@ -36,6 +39,6 @@
             </StackPanel>
         </Border>
 
-        <ContentControl Content="{Binding CurrentView}" Margin="16" />
+        <ContentControl Content="{Binding CurrentView}" Margin="20,16" />
     </DockPanel>
 </Window>

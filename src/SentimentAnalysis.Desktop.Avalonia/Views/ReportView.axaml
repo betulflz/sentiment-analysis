@@ -10,8 +10,7 @@
     <UserControl.Resources>
         <conv:UncertainOpacityConverter x:Key="UncertainOpacityConverter" />
         <DataTemplate x:Key="SourcePanel" DataType="desktop:SourceAnalysisVm">
-            <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1"
-                    CornerRadius="6" Padding="12" Margin="2" MinWidth="160">
+            <Border Background="{DynamicResource SubtleBg}" CornerRadius="10" Padding="12" Margin="2" MinWidth="160">
                 <StackPanel Spacing="8">
                     <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13"
                                Foreground="{DynamicResource SystemBaseMediumColor}" />
@@ -37,32 +36,32 @@
                    IsVisible="{Binding !HasReport}" FontStyle="Italic" Opacity="0.7" />
 
         <ScrollViewer Grid.Row="1" IsVisible="{Binding HasReport}">
-            <StackPanel Spacing="16">
-                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16">
+            <StackPanel Spacing="18" Margin="0,0,8,16">
+                <Border Classes="card">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Toplantı Özeti" FontWeight="SemiBold" FontSize="16" />
-                        <TextBlock Text="{Binding DominantEmotion, StringFormat='Baskın Duygu: {0}'}" />
-                        <TextBlock Text="{Binding ValenceTrend, StringFormat='Valence Eğilimi: {0:F2}'}" />
-                        <TextBlock Text="{Binding Volatility, StringFormat='Duygusal Oynaklık: {0:F2}'}" />
-                        <TextBlock Text="{Binding AverageCongruence, StringFormat='Ortalama Uyum: {0:F2}'}" />
+                        <TextBlock Text="Görüşme özeti" Classes="cardTitle" />
+                        <TextBlock Text="{Binding DominantEmotion, StringFormat='En çok görülen duygu: {0}'}" />
+                        <TextBlock Text="{Binding ValenceTrend, StringFormat='Gidişat: {0:F2}  (artı = olumluya, eksi = olumsuza gidiyor)'}" />
+                        <TextBlock Text="{Binding Volatility, StringFormat='Duygu iniş-çıkışı: {0:F2}  (0 = hep aynı, 1 = çok değişken)'}" />
+                        <TextBlock Text="{Binding AverageCongruence, StringFormat='Söz ile ses tonu uyumu: {0:F2}  (1 = tam uyumlu)'}" />
                         <TextBlock Text="{Binding TurkishSummary}" TextWrapping="Wrap" Margin="0,8,0,0" />
                     </StackPanel>
                 </Border>
 
                 <!-- 11e: görüşme sonrası karar bölümleri. Karar verisi yoksa (pencere yok) hiçbiri görünmez. -->
-                <Border BorderBrush="{DynamicResource SystemAccentColor}" BorderThickness="3,1,1,1" CornerRadius="6" Padding="16"
+                <Border Classes="card" BorderBrush="{DynamicResource SystemAccentColor}" BorderThickness="4,1,1,1"
                         IsVisible="{Binding HasDecisionData}">
                     <StackPanel Spacing="8">
                         <StackPanel Spacing="6" DataContext="{Binding FollowUp}">
-                            <TextBlock Text="Takip Kararı" FontWeight="SemiBold" FontSize="16" />
-                            <TextBlock Text="{Binding ProfileText}" FontSize="12"
-                                       Foreground="{DynamicResource SystemBaseMediumColor}" />
-                            <TextBlock Text="{Binding BestText}" FontSize="26" FontWeight="Bold" TextWrapping="Wrap" />
+                            <TextBlock Text="Görüşmeden sonra ne yapmalı?" Classes="cardTitle" />
+                            <TextBlock Text="{Binding ProfileText}" Classes="muted" />
+                            <TextBlock Text="{Binding BestText}" FontSize="26" FontWeight="Bold" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource SystemAccentColor}" />
                             <TextBlock Text="{Binding ReasonText}" TextWrapping="Wrap" />
 
-                            <Grid ColumnDefinitions="*,*" ColumnSpacing="16" Margin="0,8,0,0">
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="24" Margin="0,12,0,0">
                                 <StackPanel Spacing="8">
-                                    <TextBlock Text="Görüşme geneli göstergeler" FontWeight="SemiBold" />
+                                    <TextBlock Text="Görüşmede hangi sorunlar ne kadar görüldü?" Classes="sectionTitle" />
                                     <ItemsControl ItemsSource="{Binding MeetingIndicators}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -77,7 +76,8 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
                                     <StackPanel Spacing="4" IsVisible="{Binding HasRanking}">
-                                        <TextBlock Text="Takip seçenekleri sıralaması (TOPSIS yakınlığı)" FontSize="12" FontWeight="SemiBold" />
+                                        <TextBlock Text="Seçeneklerin uygunluk puanı" Classes="sectionTitle" Margin="0,8,0,0" />
+                                        <TextBlock Text="Puan yüksekse o seçenek bu görüşmeye daha uygun (TOPSIS yöntemiyle hesaplanır)." Classes="muted" />
                                         <ItemsControl ItemsSource="{Binding Ranking}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
@@ -92,25 +92,12 @@
                                     </StackPanel>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Spacing="8">
-                                    <TextBlock Text="Karar ağırlıkları" FontWeight="SemiBold" />
-                                    <ItemsControl ItemsSource="{Binding Weights}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <StackPanel>
-                                                    <Grid ColumnDefinitions="*,Auto">
-                                                        <TextBlock Text="{Binding Name}" FontSize="12" TextWrapping="Wrap" />
-                                                        <TextBlock Grid.Column="1" Text="{Binding ShareText}" FontSize="12" />
-                                                    </Grid>
-                                                    <Slider Minimum="0" Maximum="1" Value="{Binding Value, Mode=TwoWay}"
-                                                            SmallChange="0.01" LargeChange="0.1" AutomationProperties.Name="{Binding Name}" />
-                                                    <TextBlock Text="{Binding IdleNote}" FontSize="11" FontStyle="Italic"
-                                                               IsVisible="{Binding IdleNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                               Foreground="{DynamicResource SystemBaseMediumColor}" />
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                    <Button Content="Görüşme sonu ağırlıklarına dön" Command="{Binding ResetWeightsCommand}" />
+                                    <TextBlock Text="Neye ne kadar önem verilsin?" Classes="sectionTitle" />
+                                    <Border Classes="why">
+                                        <TextBlock Text="Sistem öneri verirken altı sorunu birlikte tartar. Bir sorunun kaydırıcısını sağa çekersen sistem o soruna daha çok önem verir ve önerisi buna göre değişebilir. Yüzdeler her sorunun toplam içindeki payıdır." />
+                                    </Border>
+                                    <ItemsControl ItemsSource="{Binding Weights}" ItemTemplate="{StaticResource WeightRow}" />
+                                    <Button Content="Görüşme sonundaki ayarlara dön" Command="{Binding ResetWeightsCommand}" />
                                 </StackPanel>
                             </Grid>
                         </StackPanel>
@@ -120,10 +107,10 @@
                     </StackPanel>
                 </Border>
 
-                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16"
+                <Border Classes="card"
                         IsVisible="{Binding HasDecisionData}">
                     <StackPanel Spacing="6" DataContext="{Binding FollowUp}">
-                        <TextBlock Text="Duyarlılık Analizi" FontWeight="SemiBold" FontSize="16" />
+                        <TextBlock Text="Duyarlılık Analizi" Classes="cardTitle" />
                         <TextBlock Text="Her kriterin ağırlığı ayrı ayrı değiştirildiğinde en iyi takip seçeneği değişiyor mu?"
                                    FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource SystemBaseMediumColor}" />
                         <Grid ColumnDefinitions="160,*,*,*,*" Margin="0,4,0,0">
@@ -159,10 +146,10 @@
                     </StackPanel>
                 </Border>
 
-                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16"
+                <Border Classes="card"
                         IsVisible="{Binding HasDecisionData}">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Gösterge Zaman Çizelgesi" FontWeight="SemiBold" FontSize="16" />
+                        <TextBlock Text="Gösterge Zaman Çizelgesi" Classes="cardTitle" />
                         <!-- Satır başına kriter; hücre başına analiz penceresi. Koyuluk = gösterge değeri (0..1). -->
                         <Grid ColumnDefinitions="130,*">
                             <ItemsControl Grid.Column="0" ItemsSource="{Binding IndicatorTimeline}">
@@ -199,10 +186,10 @@
                     </StackPanel>
                 </Border>
 
-                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16"
+                <Border Classes="card"
                         IsVisible="{Binding HasDecisionData}">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Verilen Öneriler" FontWeight="SemiBold" FontSize="16" />
+                        <TextBlock Text="Görüşme sırasında verilen öneriler" Classes="cardTitle" />
                         <ItemsControl ItemsSource="{Binding Recommendations}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -218,10 +205,10 @@
                     </StackPanel>
                 </Border>
 
-                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16"
+                <Border Classes="card"
                         IsVisible="{Binding HasDecisionData}">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Kritik Anlar" FontWeight="SemiBold" FontSize="16" />
+                        <TextBlock Text="Zorlu anlar" Classes="cardTitle" />
                         <TextBlock Text="Belirgin bir kritik an yok." FontStyle="Italic" Opacity="0.7"
                                    IsVisible="{Binding !HasCriticalMoments}" />
                         <ItemsControl ItemsSource="{Binding CriticalMoments}">
@@ -237,9 +224,9 @@
                     </StackPanel>
                 </Border>
 
-                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16">
+                <Border Classes="card">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Duygu Payları" FontWeight="SemiBold" FontSize="16" />
+                        <TextBlock Text="Duygu Payları" Classes="cardTitle" />
                         <ItemsControl ItemsSource="{Binding TimeShare}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -256,10 +243,10 @@
                 <!-- Konuşmacı ayrımı (10b). Durum şeridi, özellik hiç denenmediyse (boş metin)
                      görünmez; denendiyse sonucu DÜRÜSTÇE söyler — başarısızlık sessizce
                      gizlenmez (08e dersi: kullanıcı ne gördüğünü bilmeli). -->
-                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16"
+                <Border Classes="card"
                         IsVisible="{Binding DiarizationStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Konuşmacılar" FontWeight="SemiBold" FontSize="16" />
+                        <TextBlock Text="Konuşmacılar" Classes="cardTitle" />
                         <TextBlock Text="{Binding DiarizationStatus}" TextWrapping="Wrap" FontStyle="Italic" Opacity="0.8" />
 
                         <ItemsControl ItemsSource="{Binding SpeakerLines}" IsVisible="{Binding HasSpeakers}" Margin="0,8,0,0">
@@ -333,9 +320,9 @@
                     </StackPanel>
                 </Border>
 
-                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16">
+                <Border Classes="card">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Tepe Anlar" FontWeight="SemiBold" FontSize="16" />
+                        <TextBlock Text="Duygunun en yoğun olduğu anlar" Classes="cardTitle" />
                         <ItemsControl ItemsSource="{Binding PeakMoments}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>

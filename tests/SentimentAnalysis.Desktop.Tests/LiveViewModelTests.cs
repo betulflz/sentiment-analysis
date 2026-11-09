@@ -47,7 +47,7 @@ public class LiveViewModelTests
         Assert.Equal("Kızgın", vm.CurrentEmotion);
         Assert.Equal(-0.7, vm.CurrentValence, precision: 5);
         Assert.True(vm.Timeline[0].Flagged);
-        Assert.Contains("Maskeleme", vm.CongruenceBadge); // uyumsuzluk rozeti lokalize
+        Assert.Contains("Sözler olumlu ama ses tonu olumsuz", vm.CongruenceBadge); // uyumsuzluk rozeti günlük dilde
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public class LiveViewModelTests
         var runner = new GatedRunner();
         var vm = new LiveViewModel(runner);
         vm.Report(Chunk(0, Emotion.Kizgin, -0.7, flagged: true)); // önceki koşudan "Maskeleme" rozeti
-        Assert.Contains("Maskeleme", vm.CongruenceBadge);
+        Assert.Contains("Sözler olumlu", vm.CongruenceBadge);
 
         vm.StartCommand.Execute(null);
         await runner.Started.Task;
@@ -244,9 +244,9 @@ public class LiveViewModelTests
         Assert.False(vm.TextAnalysis.HasData);
         Assert.False(vm.AudioAnalysis.HasData);
         Assert.False(vm.FinalAnalysis.HasData);
-        Assert.Equal("Metin Analizi", vm.TextAnalysis.Title);
-        Assert.Equal("Ses Analizi", vm.AudioAnalysis.Title);
-        Assert.Equal("Nihai Karar", vm.FinalAnalysis.Title);
+        Assert.Equal("Sözlere göre", vm.TextAnalysis.Title);
+        Assert.Equal("Ses tonuna göre", vm.AudioAnalysis.Title);
+        Assert.Equal("Genel sonuç", vm.FinalAnalysis.Title);
     }
 
     [Fact]

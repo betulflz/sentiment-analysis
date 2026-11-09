@@ -266,4 +266,14 @@ public class LiveAdvisorTests
         Assert.Equal("Yüz 1", DecisionText.Subject(0));
         Assert.Equal("Görüşme geneli", DecisionText.Subject(null));
     }
+
+    [Fact]
+    public void DecisionText_CriteriaHavePlainNamesAndDescriptions()
+    {
+        // Konuyu bilmeyen kullanıcı için: teknik terim yok, her kriterin tek satırlık açıklaması var.
+        Assert.Equal("söz ile his çelişkisi", DecisionText.Name(Criterion.Uyumsuzluk));
+        Assert.All(Enum.GetValues<Criterion>(), c => Assert.False(string.IsNullOrWhiteSpace(DecisionText.Description(c))));
+        Assert.Equal(Enum.GetValues<Criterion>().Length,
+            Enum.GetValues<Criterion>().Select(DecisionText.Description).Distinct().Count());
+    }
 }

@@ -1,16 +1,127 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="using:SentimentAnalysis.Desktop.Avalonia.Converters"
+             xmlns:desktop="clr-namespace:SentimentAnalysis.Desktop;assembly=SentimentAnalysis.Desktop"
              x:Class="SentimentAnalysis.Desktop.Avalonia.App"
              RequestedThemeVariant="Default">
     <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
     <Application.Resources>
+      <ResourceDictionary>
         <conv:BoolToListeningTextConverter x:Key="BoolToListeningTextConverter" />
+
+        <!-- Ortak renkler: kart, "bu ne işe yarar?" kutusu ve durum etiketleri. Açık/koyu temada ayrı. -->
+        <ResourceDictionary.ThemeDictionaries>
+            <ResourceDictionary x:Key="Light">
+                <SolidColorBrush x:Key="PageBg" Color="#F6F5FB" />
+                <SolidColorBrush x:Key="CardBg" Color="#FFFFFF" />
+                <SolidColorBrush x:Key="CardBorder" Color="#E6E3F0" />
+                <SolidColorBrush x:Key="WhyBg" Color="#F1EDFF" />
+                <SolidColorBrush x:Key="WhyFg" Color="#4A3F75" />
+                <SolidColorBrush x:Key="MutedFg" Color="#6B6585" />
+                <SolidColorBrush x:Key="SubtleBg" Color="#FAF9FE" />
+                <SolidColorBrush x:Key="GoodBg" Color="#E3F7EC" />
+                <SolidColorBrush x:Key="GoodFg" Color="#17784A" />
+                <SolidColorBrush x:Key="BadBg" Color="#FDE6E8" />
+                <SolidColorBrush x:Key="BadFg" Color="#B0263A" />
+                <SolidColorBrush x:Key="WarnBg" Color="#FFF1DC" />
+                <SolidColorBrush x:Key="WarnFg" Color="#9A5A00" />
+            </ResourceDictionary>
+            <ResourceDictionary x:Key="Dark">
+                <SolidColorBrush x:Key="PageBg" Color="#16141F" />
+                <SolidColorBrush x:Key="CardBg" Color="#211E2D" />
+                <SolidColorBrush x:Key="CardBorder" Color="#332F45" />
+                <SolidColorBrush x:Key="WhyBg" Color="#2C2645" />
+                <SolidColorBrush x:Key="WhyFg" Color="#CFC6F5" />
+                <SolidColorBrush x:Key="MutedFg" Color="#A39DBD" />
+                <SolidColorBrush x:Key="SubtleBg" Color="#272336" />
+                <SolidColorBrush x:Key="GoodBg" Color="#173A2A" />
+                <SolidColorBrush x:Key="GoodFg" Color="#7BD9A6" />
+                <SolidColorBrush x:Key="BadBg" Color="#45202A" />
+                <SolidColorBrush x:Key="BadFg" Color="#FF9AA8" />
+                <SolidColorBrush x:Key="WarnBg" Color="#43321A" />
+                <SolidColorBrush x:Key="WarnFg" Color="#F5C27A" />
+            </ResourceDictionary>
+        </ResourceDictionary.ThemeDictionaries>
+        <!-- Ağırlık kaydırıcısı satırı: canlı ekran ve rapor aynı görünümü kullanır. -->
+        <DataTemplate x:Key="WeightRow" x:DataType="desktop:WeightSliderVm">
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" Margin="0,0,0,12">
+                <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="1" Text="{Binding ShareText, StringFormat='{}{0} önem'}" FontSize="12"
+                           Foreground="{DynamicResource WhyFg}" VerticalAlignment="Center" />
+                <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Description}" Classes="muted" />
+                <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto">
+                    <Slider Minimum="0" Maximum="1" Value="{Binding Value, Mode=TwoWay}"
+                            SmallChange="0.01" LargeChange="0.1" AutomationProperties.Name="{Binding Name}" />
+                    <Border Grid.Column="1" Classes="pill good" Margin="8,0,0,0"
+                            IsVisible="{Binding IdleNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                            ToolTip.Tip="Bu sorun şu an görülmediği için bu kaydırıcı öneriyi değiştirmez.">
+                        <TextBlock Text="{Binding IdleNote}" />
+                    </Border>
+                </Grid>
+            </Grid>
+        </DataTemplate>
+
+        <!-- Fluent'in vurgu rengi (kaydırıcı, ilerleme çubuğu, düğme) mor. -->
+        <Color x:Key="SystemAccentColor">#7C5CFF</Color>
+        <Color x:Key="SystemAccentColorDark1">#6A4AEE</Color>
+        <Color x:Key="SystemAccentColorLight1">#9479FF</Color>
+      </ResourceDictionary>
     </Application.Resources>
 
     <Application.Styles>
         <FluentTheme />
+
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="{DynamicResource CardBg}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Padding" Value="20,18" />
+            <Setter Property="BoxShadow" Value="0 1 3 0 #12281E50" />
+        </Style>
+        <Style Selector="TextBlock.cardTitle">
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.sectionTitle">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="Foreground" Value="{DynamicResource MutedFg}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <!-- "Bu ne işe yarar?" kutusu: her bölümün başında, konuyu bilmeyene düz dille açıklama. -->
+        <Style Selector="Border.why">
+            <Setter Property="Background" Value="{DynamicResource WhyBg}" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="Margin" Value="0,4,0,8" />
+        </Style>
+        <Style Selector="Border.why TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource WhyFg}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="LineHeight" Value="19" />
+        </Style>
+        <Style Selector="Border.pill">
+            <Setter Property="CornerRadius" Value="20" />
+            <Setter Property="Padding" Value="10,3" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.pill TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Border.pill.good"><Setter Property="Background" Value="{DynamicResource GoodBg}" /></Style>
+        <Style Selector="Border.pill.good TextBlock"><Setter Property="Foreground" Value="{DynamicResource GoodFg}" /></Style>
+        <Style Selector="Border.pill.bad"><Setter Property="Background" Value="{DynamicResource BadBg}" /></Style>
+        <Style Selector="Border.pill.bad TextBlock"><Setter Property="Foreground" Value="{DynamicResource BadFg}" /></Style>
+        <Style Selector="Border.pill.warn"><Setter Property="Background" Value="{DynamicResource WarnBg}" /></Style>
+        <Style Selector="Border.pill.warn TextBlock"><Setter Property="Foreground" Value="{DynamicResource WarnFg}" /></Style>
     </Application.Styles>
 
     <TrayIcon.Icons>

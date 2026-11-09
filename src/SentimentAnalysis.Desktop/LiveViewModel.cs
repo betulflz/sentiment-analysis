@@ -75,9 +75,9 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     public bool WaitingForSpeech => IsCapturing && !IsPreparingModels && !IsFinishing && !_receivedThisRun;
     [ObservableProperty] private string _selectedFile = "(dosya seçilmedi)";
     [ObservableProperty] private string _currentConfidence = "—";
-    [ObservableProperty] private SourceAnalysisVm _textAnalysis = SourceAnalysisVm.Empty("Metin Analizi");
-    [ObservableProperty] private SourceAnalysisVm _audioAnalysis = SourceAnalysisVm.Empty("Ses Analizi");
-    [ObservableProperty] private SourceAnalysisVm _finalAnalysis = SourceAnalysisVm.Empty("Nihai Karar");
+    [ObservableProperty] private SourceAnalysisVm _textAnalysis = SourceAnalysisVm.Empty("Sözlere göre");
+    [ObservableProperty] private SourceAnalysisVm _audioAnalysis = SourceAnalysisVm.Empty("Ses tonuna göre");
+    [ObservableProperty] private SourceAnalysisVm _finalAnalysis = SourceAnalysisVm.Empty("Genel sonuç");
 
     /// <summary>Canlı mikrofon mu kullanılsın (aksi halde seçili dosya)?</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsFileMode))] private bool _useMicrophone;
@@ -195,9 +195,9 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
         // Üç kaynak ayrı ayrı — söz-ton uyumsuzluğu böylece ekranda görünür hale gelir.
         CurrentConfidence = EmotionLocalizer.Confidence(r.Fused.Confidence);
-        TextAnalysis  = new SourceAnalysisVm("Metin Analizi", r.Fused.TextVa, _temperature, _neutralRadius);
-        AudioAnalysis = new SourceAnalysisVm("Ses Analizi", r.Fused.ProsodyVa, _temperature, _neutralRadius);
-        FinalAnalysis = new SourceAnalysisVm("Nihai Karar", r.Fused.Combined, _temperature, _neutralRadius);
+        TextAnalysis  = new SourceAnalysisVm("Sözlere göre", r.Fused.TextVa, _temperature, _neutralRadius);
+        AudioAnalysis = new SourceAnalysisVm("Ses tonuna göre", r.Fused.ProsodyVa, _temperature, _neutralRadius);
+        FinalAnalysis = new SourceAnalysisVm("Genel sonuç", r.Fused.Combined, _temperature, _neutralRadius);
     }
 
     private static string Signed(double v) =>

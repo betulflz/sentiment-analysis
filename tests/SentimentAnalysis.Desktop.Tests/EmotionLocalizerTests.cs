@@ -31,8 +31,9 @@ public class EmotionLocalizerTests
 
     [Theory]
     [InlineData(IncongruencePattern.Yok, "Yok")]
-    [InlineData(IncongruencePattern.Maskeleme, "Maskeleme")]
-    [InlineData(IncongruencePattern.OlasiIroni, "Olası ironi")]
+    [InlineData(IncongruencePattern.Maskeleme, "Sözler olumlu ama ses tonu olumsuz")]
+    [InlineData(IncongruencePattern.Saka, "Sözler olumsuz ama ses tonu neşeli")]
+    [InlineData(IncongruencePattern.OlasiIroni, "Sözler olumlu ama ses düz — iğneleme olabilir")]
     public void Pattern_LocalizesToTurkish(IncongruencePattern p, string expected)
         => Assert.Equal(expected, EmotionLocalizer.Pattern(p));
 
