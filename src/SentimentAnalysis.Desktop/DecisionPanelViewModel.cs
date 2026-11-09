@@ -23,6 +23,10 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
 
     [ObservableProperty] private string _actionText = Dash;
     [ObservableProperty] private string _reasonText = string.Empty;
+
+    /// <summary>"Neden bu öneri?": en çok sürükleyen sorunun açıklaması ve eylemin o soruna etkisi (bilgi tabanı).
+    /// Öneri kara kutu olmasın: hangi ölçüm, hangi eylem, ne kadar yardım. Sorun yoksa boş.</summary>
+    [ObservableProperty] private string _whyText = string.Empty;
     [ObservableProperty] private string _confidenceText = string.Empty;
     [ObservableProperty] private string _alternativeText = string.Empty;
     [ObservableProperty] private bool _isLowConfidence;
@@ -85,7 +89,7 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
         Faces.Clear();
         Indicators = EmptyBars();
         ActionText = Dash;
-        ReasonText = ConfidenceText = AlternativeText = string.Empty;
+        ReasonText = ConfidenceText = AlternativeText = WhyText = string.Empty;
         IsLowConfidence = false;
         Ranking = Array.Empty<RankingRowVm>();
         foreach (var w in Weights) w.IdleNote = string.Empty;
@@ -166,10 +170,21 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
     {
         ActionText = DecisionText.Name(r.Action);
         ReasonText = r.Reason;
+        WhyText = WhyFor(r);
         ConfidenceText = $"Güven: {EmotionLocalizer.Confidence(r.Confidence)}";
         IsLowConfidence = r.Confidence == Confidence.Dusuk;
         var alternative = r.Ranking.FirstOrDefault(x => x.Alternative != r.Action);
         AlternativeText = alternative is null ? string.Empty : $"Alternatif: {DecisionText.Name(alternative.Alternative)}";
+    }
+
+    private static string WhyFor(Recommendation r)
+    {
+        if (r.Action is LiveAction.BirAdimIlerlet or LiveAction.OlumluyuPekistir)
+            return "Neden bu öneri? Konuşma ve yüz ifadesi olumlu; bu iyi havayı bir sonraki adıma taşımak için uygun bir an.";
+        if (r.TopCriteria.Count == 0 || !DecisionKnowledgeBase.LiveImpact.TryGetValue(r.Action, out var impact)) return string.Empty;
+        var top = r.TopCriteria[0];
+        return $"Neden bu öneri? {Capitalize(DecisionText.Description(top))}. "
+             + $"Bu eylemin \"{DecisionText.Name(top)}\" sorununa etkisi: %{Math.Round(100 * impact[(int)top], MidpointRounding.AwayFromZero)} (uzman varsayımı).";
     }
 
     private static IReadOnlyList<IndicatorBarVm> EmptyBars() =>

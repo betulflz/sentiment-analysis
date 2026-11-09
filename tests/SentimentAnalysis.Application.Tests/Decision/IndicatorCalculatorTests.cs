@@ -175,4 +175,46 @@ public class IndicatorCalculatorTests
         Assert.All(ind.Values, x => Assert.InRange(x, 0.0, 1.0));
         Assert.InRange(ind.DataQuality, 0.0, 1.0);
     }
+
+    // ---- Olumluluk: sorun yokken "olumlu öneri" için; ses+söz valence'ı ve gülümseme ----
+
+    [Fact]
+    public void Olumluluk_YuzYoksa_KonusmaValenceidir()
+    {
+        var ind = IndicatorCalculator.Compute(Chunk(0.8, 0.6), NoFaces, NoHistory, Cfg);
+
+        Assert.Equal(0.8, ind.Positivity, 3);
+    }
+
+    [Fact]
+    public void Olumluluk_NegatifKonusma_Sifir()
+    {
+        var ind = IndicatorCalculator.Compute(Chunk(-0.6, 0.6), NoFaces, NoHistory, Cfg);
+
+        Assert.Equal(0.0, ind.Positivity, 3);
+    }
+
+    [Fact]
+    public void Olumluluk_GulumsemeKatkiVerir_VeEnGulenYuzAlinir()
+    {
+        var faces = new[]
+        {
+            new FaceWindowSummary(0, 1, 0, 0, 0, SmileRatio: 0.2, Reliability: 1),
+            new FaceWindowSummary(1, 1, 0, 0, 0, SmileRatio: 0.8, Reliability: 1),
+        };
+
+        var ind = IndicatorCalculator.Compute(Chunk(0.5, 0.6), faces, NoHistory, Cfg);
+
+        Assert.Equal(0.6 * 0.5 + 0.4 * 0.8, ind.Positivity, 3);
+    }
+
+    [Fact]
+    public void Olumluluk_GuvenilmezYuzdeGulumseme_Sayilmaz()
+    {
+        var faces = new[] { new FaceWindowSummary(0, 1, 0, 0, 0, SmileRatio: 1.0, Reliability: 0) };
+
+        var ind = IndicatorCalculator.Compute(Chunk(0.5, 0.6), faces, NoHistory, Cfg);
+
+        Assert.Equal(0.6 * 0.5, ind.Positivity, 3);
+    }
 }

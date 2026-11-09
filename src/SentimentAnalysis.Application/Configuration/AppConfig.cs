@@ -130,7 +130,10 @@ public sealed record DecisionConfig(
     double InsufficientQuality = 0.25,   // altı: veri yetersiz → "Devam et", güven Düşük
     double LowQuality = 0.4,             // altı: güven Düşük
     double HighQuality = 0.7,            // üstü: güven Yüksek
-    int TrendWindows = 6);               // K6 eğimi için son pencere sayısı (şimdiki dahil)
+    int TrendWindows = 6,                // K6 eğimi için son pencere sayısı (şimdiki dahil)
+    int RepeatLimit = 3,                 // aynı öneri art arda bu kadar pencere gösterilince yakın alternatife geçilir (çeşitlilik)
+    double DiversityMargin = 0.15,       // alternatifin yakınlığı birinciden en fazla bu kadar geride olabilir
+    double PositiveThreshold = 0.5);     // olumluluk bunun üstündeyse (ve sorun yoksa) olumlu öneri verilir
 
 /// <summary>Görüntü kanalı ayarları (spec 11 §6.2). Sayılar 11a spike'ında M1 Air 8 GB'ta ÖLÇÜLDÜ
 /// (bkz. <c>11a-goruntu-spike-olcumu.md</c>); yüz boyu eşikleri ise tahmindir.</summary>

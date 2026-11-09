@@ -57,7 +57,11 @@ public static class IndicatorCalculator
         double faceQ = faces.Count == 0 ? 0 : faces.Max(x => C01(x.VisibleRatio) * C01(x.Reliability));
         double quality = C01(0.6 * C01(aq) + 0.4 * faceQ);
 
-        return new Indicators(values.Select(C01).ToArray(), source, quality);
+        // Olumluluk: konuşma valence'ı (ses+söz) ve en çok gülümseyen güvenilir yüz. Yüz yoksa yalnız konuşma.
+        double smile = faces.Count == 0 ? 0 : faces.Max(x => C01(x.SmileRatio) * C01(x.Reliability));
+        double positivity = faces.Count == 0 ? C01(v) : 0.6 * C01(v) + 0.4 * smile;
+
+        return new Indicators(values.Select(C01).ToArray(), source, quality) { Positivity = C01(positivity) };
     }
 
     // Bir yüz, değeri NÖTR bir yüzün alacağı değeri en az bu kadar aşıyorsa kaynak olarak anılır.

@@ -8,7 +8,17 @@ public enum Criterion { Gerilim, IlgiKaybi, OlumsuzDuygu, Uyumsuzluk, DusukEnerj
 
 /// <summary>Görüşme sırasında önerilebilen eylemler. <see cref="DevamEt"/> kuralla seçilir;
 /// diğerleri TOPSIS ile sıralanan müdahalelerdir.</summary>
-public enum LiveAction { DevamEt, KonuyuDegistir, SoruSor, EmpatiKur, AraVer, KapanisaGec }
+public enum LiveAction
+{
+    DevamEt, KonuyuDegistir, SoruSor, EmpatiKur, AraVer, KapanisaGec,
+    // 2026-11-09 genişletme. Yeni değerler SONA eklenir: eylem tam sayı olarak saklanır, eski kayıtlar bozulmasın.
+    SakinOl, AciklayiciOl, OzetleDinle, TebessumEt, OrnekleAnlat, KisaTut, TereddudunuSor, YenidenAnlat,
+    EnerjiYukselt, OrtakNoktaHatirlat,
+    FaydayaDon,      // yalnız satış
+    KolaySoruSor,    // yalnız mülakat
+    SozVer,          // yalnız toplantı
+    BirAdimIlerlet, OlumluyuPekistir   // olumlu durum: TOPSIS müdahalesi değil, kuralla seçilir
+}
 
 /// <summary>Görüşme sonrası takip adımları (profile özgü alt kümeler). Mülakat seçenekleri SÜREÇ
 /// adımlarıdır — sistem işe alım kararı vermez (spec §4).</summary>
@@ -40,7 +50,12 @@ public sealed record FaceWindowSummary(
 public sealed record Indicators(
     IReadOnlyList<double> Values,
     IReadOnlyList<int?> SourceFace,
-    double DataQuality);
+    double DataQuality)
+{
+    /// <summary>Görüşmenin ne kadar olumlu gittiği (0..1): konuşma valence'ı ve gülümseme. Sorun yokken
+    /// "olumlu öneri" için kullanılır; saklanmaz (yalnız canlı öneri). Additive, varsayılan 0.</summary>
+    public double Positivity { get; init; }
+}
 
 /// <summary>TOPSIS sıralamasındaki bir seçenek ve onu en çok destekleyen iki kriter.</summary>
 public sealed record Ranked<T>(T Alternative, double Closeness, IReadOnlyList<Criterion> TopCriteria);

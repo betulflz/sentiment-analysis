@@ -155,6 +155,8 @@
                     <TextBlock Text="{Binding Decision.ActionText}" FontSize="26" FontWeight="Bold" TextWrapping="Wrap"
                                Foreground="{DynamicResource SystemAccentColor}" />
                     <TextBlock Text="{Binding Decision.ReasonText}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Decision.WhyText}" TextWrapping="Wrap" FontSize="12" Classes="muted"
+                               IsVisible="{Binding Decision.WhyText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     <TextBlock Text="{Binding Decision.ConfidenceText}" FontSize="12" />
                     <TextBlock Text="{Binding Decision.AlternativeText}" FontSize="12" TextWrapping="Wrap" />
                     <TextBlock Text="İlk analiz penceresi bekleniyor." IsVisible="{Binding Decision.ConfidenceText, Converter={x:Static StringConverters.IsNullOrEmpty}}" FontSize="12" />

@@ -16,6 +16,8 @@ public sealed class LiveAdvisor
     private int _pendingCount;
     private bool _insufficient;
     private bool _skipHysteresis;
+    private LiveAction? _lastShown;
+    private int _streak;   // _lastShown art arda kaç pencere gösterildi
 
     public LiveAdvisor(MeetingProfile profile, DecisionConfig cfg)
     {
@@ -25,6 +27,14 @@ public sealed class LiveAdvisor
 
     /// <param name="weights">Profil ya da kaydırıcı ağırlıkları; normalize edilmemiş olabilir.</param>
     public Recommendation Next(Indicators indicators, IReadOnlyList<double> weights)
+    {
+        var rec = NextCore(indicators, weights);
+        _streak = rec.Action == _lastShown ? _streak + 1 : 1;
+        _lastShown = rec.Action;
+        return rec;
+    }
+
+    private Recommendation NextCore(Indicators indicators, IReadOnlyList<double> weights)
     {
         // Bant: yetersiz duruma 0,25'in altında girilir, ancak 0,30'un üstünde çıkılır.
         _insufficient = indicators.DataQuality < (_insufficient ? _cfg.QualityRecovery : _cfg.InsufficientQuality);
@@ -46,11 +56,20 @@ public sealed class LiveAdvisor
         // ağırlık normalizasyonunda sadeleşir), yalnızca "müdahale gerekli mi" kuralını etkiler.
         var needs = indicators.Values.Select(v => v * indicators.DataQuality).ToArray();
         // Bant: müdahale 0,35'te başlar, ama gösterilen bir müdahale ancak 0,30'un altında "Devam et"e döner.
-        var intervening = _current is not null && _current != LiveAction.DevamEt;
+        var intervening = _current is { } shownNow && shownNow != LiveAction.DevamEt && !IsPositive(shownNow);
         if (needs.Max() < (intervening ? _cfg.InterventionExitThreshold : _cfg.InterventionThreshold))
         {
+            bool lowQualitySignal = indicators.Values.Max() >= _cfg.InterventionThreshold;
+            // Sorun yok ve görüşme gerçekten olumluysa olumlu bir öneri (sinyal düşük kaliteden gelmiyorsa).
+            if (!lowQualitySignal && indicators.Positivity >= _cfg.PositiveThreshold)
+            {
+                var positive = ChoosePositive();
+                Commit(positive);
+                return new Recommendation(positive, 1, Array.Empty<Ranked<LiveAction>>(),
+                    Array.Empty<Criterion>(), null, confidence, "Görüşme olumlu gidiyor.");
+            }
             Commit(LiveAction.DevamEt);
-            var reason = indicators.Values.Max() >= _cfg.InterventionThreshold
+            var reason = lowQualitySignal
                 ? "Sinyal var ama veri kalitesi düşük — öneri yapılmadı."
                 : "Belirgin bir sorun yok.";
             return new Recommendation(LiveAction.DevamEt, 1, Array.Empty<Ranked<LiveAction>>(),
@@ -80,6 +99,8 @@ public sealed class LiveAdvisor
     public void Reset()
     {
         _insufficient = false;
+        _lastShown = null;
+        _streak = 0;
         _current = null;
         _pending = null;
         _pendingCount = 0;
@@ -88,6 +109,16 @@ public sealed class LiveAdvisor
     private LiveAction Choose(IReadOnlyList<Ranked<LiveAction>> ranking)
     {
         var candidate = ranking[0];
+
+        // Çeşitlilik: aynı öneri art arda RepeatLimit pencere gösterildiyse ve birinciye yakın bir alternatif
+        // varsa ona geçilir; ekran hep aynı 2–3 öneriyi döndürmesin. Kaydırıcı oynatılınca (Rerank) uygulanmaz.
+        if (!_skipHysteresis && _current is { } cur && _lastShown == cur && _streak >= _cfg.RepeatLimit
+            && candidate.Alternative == cur)
+        {
+            var alternative = ranking.Skip(1).FirstOrDefault(r => candidate.Closeness - r.Closeness <= _cfg.DiversityMargin);
+            if (alternative is not null) return Commit(alternative.Alternative);
+        }
+
         if (_skipHysteresis || _current is null || candidate.Alternative == _current)
             return Commit(candidate.Alternative);
 
@@ -100,6 +131,17 @@ public sealed class LiveAdvisor
         else { _pending = candidate.Alternative; _pendingCount = 1; }
 
         return _pendingCount >= _cfg.SwitchPersistence ? Commit(candidate.Alternative) : _current.Value;
+    }
+
+    private static bool IsPositive(LiveAction a) => a is LiveAction.BirAdimIlerlet or LiveAction.OlumluyuPekistir;
+
+    /// <summary>İki olumlu öneri arasında dönüşümlü: biri art arda <see cref="DecisionConfig.RepeatLimit"/> pencere gösterildiyse diğeri.</summary>
+    private LiveAction ChoosePositive()
+    {
+        var shown = _lastShown is { } l && IsPositive(l) ? l : LiveAction.BirAdimIlerlet;
+        if (_lastShown == shown && _streak >= _cfg.RepeatLimit)
+            return shown == LiveAction.BirAdimIlerlet ? LiveAction.OlumluyuPekistir : LiveAction.BirAdimIlerlet;
+        return shown;
     }
 
     private LiveAction Commit(LiveAction action)

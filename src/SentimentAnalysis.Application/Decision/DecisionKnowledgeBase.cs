@@ -17,8 +17,17 @@ public sealed record ProfileDefinition(
 /// <see cref="Criterion"/> enum sırasıdır.</para></summary>
 public static class DecisionKnowledgeBase
 {
-    private static readonly LiveAction[] Interventions =
-        { LiveAction.KonuyuDegistir, LiveAction.SoruSor, LiveAction.EmpatiKur, LiveAction.AraVer, LiveAction.KapanisaGec };
+    // Her profilde ortak müdahaleler; her profile bir de kendine özel eylem eklenir (ilgi kaybında satışta
+    // "faydaya dön", mülakatta "daha kolay soru", toplantıda "sessiz kişiye söz ver").
+    private static readonly LiveAction[] Common =
+    {
+        LiveAction.KonuyuDegistir, LiveAction.SoruSor, LiveAction.EmpatiKur, LiveAction.AraVer, LiveAction.KapanisaGec,
+        LiveAction.SakinOl, LiveAction.AciklayiciOl, LiveAction.OzetleDinle, LiveAction.TebessumEt,
+        LiveAction.OrnekleAnlat, LiveAction.KisaTut, LiveAction.TereddudunuSor, LiveAction.YenidenAnlat,
+        LiveAction.EnerjiYukselt, LiveAction.OrtakNoktaHatirlat,
+    };
+
+    private static LiveAction[] For(LiveAction profileSpecific) => Common.Append(profileSpecific).ToArray();
 
     //                                                           K1   K2   K3   K4   K5   K6
     public static IReadOnlyDictionary<LiveAction, double[]> LiveImpact { get; } = new Dictionary<LiveAction, double[]>
@@ -28,6 +37,20 @@ public static class DecisionKnowledgeBase
         [LiveAction.EmpatiKur]      = new[] { 0.9, 0.2, 0.8, 0.4, 0.1, 0.5 },
         [LiveAction.AraVer]         = new[] { 0.6, 0.4, 0.2, 0.1, 0.9, 0.2 },
         [LiveAction.KapanisaGec]    = new[] { 0.2, 0.3, 0.3, 0.1, 0.3, 0.9 },
+        // 2026-11-09: yeni eylemler. Aynı varsayım: "bu eylem bu sorunu ne kadar giderir" (0..1), KALİBRE EDİLMEMİŞ.
+        [LiveAction.SakinOl]             = new[] { 0.9, 0.1, 0.6, 0.3, 0.1, 0.4 },
+        [LiveAction.AciklayiciOl]        = new[] { 0.4, 0.3, 0.5, 0.7, 0.2, 0.4 },
+        [LiveAction.OzetleDinle]         = new[] { 0.6, 0.3, 0.6, 0.4, 0.1, 0.5 },
+        [LiveAction.TebessumEt]          = new[] { 0.7, 0.3, 0.7, 0.2, 0.3, 0.4 },
+        [LiveAction.OrnekleAnlat]        = new[] { 0.1, 0.7, 0.2, 0.5, 0.6, 0.3 },
+        [LiveAction.KisaTut]             = new[] { 0.3, 0.7, 0.1, 0.1, 0.6, 0.3 },
+        [LiveAction.TereddudunuSor]      = new[] { 0.2, 0.3, 0.4, 0.9, 0.2, 0.3 },
+        [LiveAction.YenidenAnlat]        = new[] { 0.2, 0.4, 0.3, 0.8, 0.3, 0.4 },
+        [LiveAction.EnerjiYukselt]       = new[] { 0.1, 0.5, 0.1, 0.1, 0.9, 0.3 },
+        [LiveAction.OrtakNoktaHatirlat]  = new[] { 0.4, 0.3, 0.5, 0.4, 0.3, 0.9 },
+        [LiveAction.FaydayaDon]          = new[] { 0.1, 0.9, 0.3, 0.4, 0.5, 0.4 },
+        [LiveAction.KolaySoruSor]        = new[] { 0.5, 0.8, 0.4, 0.3, 0.4, 0.3 },
+        [LiveAction.SozVer]              = new[] { 0.1, 0.9, 0.1, 0.2, 0.6, 0.4 },
     };
 
     public static IReadOnlyDictionary<FollowUpAction, double[]> FollowUpImpact { get; } = new Dictionary<FollowUpAction, double[]>
@@ -48,17 +71,17 @@ public static class DecisionKnowledgeBase
         {
             [MeetingProfile.Satis] = new(MeetingProfile.Satis,
                 Reciprocal(1, 1 / 2.0, 3, 3, 1, 1 / 2.0, 2, 3, 1, 3, 4, 2, 2, 1 / 2.0, 1 / 3.0),
-                Interventions,
+                For(LiveAction.FaydayaDon),
                 new[] { FollowUpAction.IkinciGorusme, FollowUpAction.ItirazBilgisi, FollowUpAction.Beklet },
                 FollowUpAction.TeklifGonder),
             [MeetingProfile.Mulakat] = new(MeetingProfile.Mulakat,
                 Reciprocal(3, 2, 2, 5, 3, 1 / 2.0, 1 / 2.0, 2, 1, 1, 3, 2, 3, 2, 1 / 2.0),
-                Interventions,
+                For(LiveAction.KolaySoruSor),
                 new[] { FollowUpAction.EkGorusme, FollowUpAction.GorusmeyiTekrarla },
                 FollowUpAction.DegerlendirmeyeGec),
             [MeetingProfile.Toplanti] = new(MeetingProfile.Toplanti,
                 Reciprocal(1 / 3.0, 1, 2, 1 / 2.0, 2, 3, 4, 2, 3, 2, 1 / 2.0, 1, 1 / 3.0, 1 / 2.0, 2),
-                Interventions,
+                For(LiveAction.SozVer),
                 new[] { FollowUpAction.BireBirGorusme, FollowUpAction.TakipToplantisi },
                 FollowUpAction.KararEpostasi),
         };

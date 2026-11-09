@@ -62,6 +62,53 @@ public class DecisionPanelViewModelTests
     }
 
     [Fact]
+    public void OnWindow_Intervention_ExplainsWhyAndHowMuchActionHelps()
+    {
+        var p = Panel();
+        p.Start();
+        p.OnWindow(Tense(), NoFaces);
+
+        Assert.StartsWith("Neden bu öneri?", p.WhyText);
+        Assert.Contains("etkisi", p.WhyText);
+        Assert.Contains("%", p.WhyText);
+    }
+
+    [Fact]
+    public void OnWindow_DevamEt_HasNoWhyText()
+    {
+        var p = Panel();
+        p.Start();
+        p.OnWindow(Calm(), NoFaces);
+
+        Assert.Equal(string.Empty, p.WhyText);
+    }
+
+    [Fact]
+    public void OnWindow_PositiveSuggestion_ExplainsGoodMoment()
+    {
+        var p = Panel();
+        p.Start();
+        var words = string.Join(' ', Enumerable.Repeat("güzel", 20));   // sorun yok: düşük enerji de tetiklenmesin
+        p.OnWindow(Chunk(0, 0.8, 0.5, words), NoFaces);
+
+        Assert.Equal("Bu havayı kullan, bir adım ileri götür", p.ActionText);
+        Assert.StartsWith("Neden bu öneri?", p.WhyText);
+        Assert.Contains("olumlu", p.WhyText);
+    }
+
+    [Fact]
+    public void Start_ClearsWhyText()
+    {
+        var p = Panel();
+        p.Start();
+        p.OnWindow(Tense(), NoFaces);
+
+        p.Start();
+
+        Assert.Equal(string.Empty, p.WhyText);
+    }
+
+    [Fact]
     public void OnWindow_CalmChunk_ShowsDevamEt()
     {
         var p = Panel();

@@ -70,4 +70,57 @@ public class DecisionKnowledgeBaseTests
         Assert.Equal(0.35, AppConfig.Default.Decision.InterventionThreshold);
         Assert.Equal(2, AppConfig.Default.Decision.SwitchPersistence);
     }
+
+    private static readonly LiveAction[] Positive = { LiveAction.BirAdimIlerlet, LiveAction.OlumluyuPekistir };
+
+    [Theory]
+    [InlineData(MeetingProfile.Satis, LiveAction.FaydayaDon)]
+    [InlineData(MeetingProfile.Mulakat, LiveAction.KolaySoruSor)]
+    [InlineData(MeetingProfile.Toplanti, LiveAction.SozVer)]
+    public void Profil_GenisEylemListesiVeKendineOzelEylemi_Var(MeetingProfile p, LiveAction ozel)
+    {
+        var list = DecisionKnowledgeBase.Get(p).Interventions;
+
+        Assert.True(list.Count >= 15, $"{p}: {list.Count} eylem");
+        Assert.Contains(ozel, list);
+        Assert.Equal(list.Count, list.Distinct().Count());
+        // Başka profilin özel eylemi bu profilde yok.
+        var digerleri = new[] { LiveAction.FaydayaDon, LiveAction.KolaySoruSor, LiveAction.SozVer }.Where(a => a != ozel);
+        Assert.All(digerleri, a => Assert.DoesNotContain(a, list));
+    }
+
+    [Fact]
+    public void OlumluEylemler_MudahaleListesinde_DegilVeEtkiSatiriYok()
+    {
+        foreach (var p in Enum.GetValues<MeetingProfile>())
+            Assert.All(Positive, a => Assert.DoesNotContain(a, DecisionKnowledgeBase.Get(p).Interventions));
+        Assert.All(Positive, a => Assert.False(DecisionKnowledgeBase.LiveImpact.ContainsKey(a)));
+    }
+
+    [Fact]
+    public void HerEylemin_BenzersizTurkceAdiVar()
+    {
+        var names = Enum.GetValues<LiveAction>().Select(DecisionText.Name).ToArray();
+
+        Assert.All(names, n => Assert.False(string.IsNullOrWhiteSpace(n)));
+        Assert.Equal(names.Length, names.Distinct().Count());
+    }
+
+    [Theory]
+    [InlineData(LiveAction.SakinOl, "Sakin ol, tonunu düşür")]
+    [InlineData(LiveAction.AciklayiciOl, "Açıklayıcı ol, ayrıntıyı ver")]
+    [InlineData(LiveAction.TebessumEt, "Tebessüm et, yumuşak başla")]
+    [InlineData(LiveAction.FaydayaDon, "Fiyata değil faydaya dön")]
+    [InlineData(LiveAction.KolaySoruSor, "Adayı rahatlat, daha kolay bir soru sor")]
+    [InlineData(LiveAction.SozVer, "Katılımı sağla, sessiz kişiye söz ver")]
+    [InlineData(LiveAction.BirAdimIlerlet, "Bu havayı kullan, bir adım ileri götür")]
+    public void EylemAdlari_KonusmaDiliyle(LiveAction a, string expected) => Assert.Equal(expected, DecisionText.Name(a));
+
+    [Fact]
+    public void EskiEylemlerinTamSayiDegeri_Degismedi_KayitliVeriBozulmaz()
+    {
+        Assert.Equal(0, (int)LiveAction.DevamEt);
+        Assert.Equal(1, (int)LiveAction.KonuyuDegistir);
+        Assert.Equal(5, (int)LiveAction.KapanisaGec);
+    }
 }

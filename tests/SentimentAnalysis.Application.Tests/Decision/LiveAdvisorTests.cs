@@ -27,7 +27,7 @@ public class LiveAdvisorTests
     {
         var r = Once(MeetingProfile.Satis, Gergin);
         Assert.Equal(LiveAction.EmpatiKur, r.Action);
-        Assert.Equal(0.8790, r.Closeness, 1e-3);
+        Assert.Equal(0.8896, r.Closeness, 1e-3);
         Assert.Equal(new[] { Criterion.OlumsuzDuygu, Criterion.Gerilim }, r.TopCriteria);
     }
 
@@ -36,10 +36,11 @@ public class LiveAdvisorTests
         Assert.Equal(LiveAction.KonuyuDegistir, Once(MeetingProfile.Satis, Ilgisiz).Action);
 
     [Fact]
-    public void Satis_Uyumsuz_SoruSor()
+    public void Satis_Uyumsuz_TereddudunuSor()
     {
+        // Genişletilmiş eylem setinde saf söz–his çelişkisine en uygun eylem "açıkça tereddüdü sor".
         var r = Once(MeetingProfile.Satis, Uyumsuz);
-        Assert.Equal(LiveAction.SoruSor, r.Action);
+        Assert.Equal(LiveAction.TereddudunuSor, r.Action);
         Assert.Equal(Criterion.Uyumsuzluk, r.TopCriteria[0]);
     }
 
@@ -48,20 +49,25 @@ public class LiveAdvisorTests
     {
         var r = Once(MeetingProfile.Mulakat, Gergin);
         Assert.Equal(LiveAction.EmpatiKur, r.Action);
-        Assert.Equal(0.8894, r.Closeness, 1e-3);
+        Assert.Equal(0.9067, r.Closeness, 1e-3);
         Assert.Equal(new[] { Criterion.Gerilim, Criterion.OlumsuzDuygu }, r.TopCriteria);
     }
 
     [Fact]
-    public void Mulakat_Yorgun_EmpatiKur() =>
-        Assert.Equal(LiveAction.EmpatiKur, Once(MeetingProfile.Mulakat, Yorgun).Action);
+    public void Mulakat_Yorgun_AraVer_EmpatiKurlaNeredeyseBerabere()
+    {
+        // Yorgun durumda "kısa ara ver" (0,6054) ile "empati kur" (0,6045) neredeyse berabere; fark 0,01'in altında.
+        var r = Once(MeetingProfile.Mulakat, Yorgun);
+        Assert.Equal(LiveAction.AraVer, r.Action);
+        Assert.True(r.Closeness - r.Ranking.First(x => x.Alternative == LiveAction.EmpatiKur).Closeness < 0.01);
+    }
 
     [Fact]
     public void Toplanti_Ilgisiz_KonuyuDegistir()
     {
         var r = Once(MeetingProfile.Toplanti, Ilgisiz);
         Assert.Equal(LiveAction.KonuyuDegistir, r.Action);
-        Assert.Equal(0.8918, r.Closeness, 1e-3);
+        Assert.Equal(0.8966, r.Closeness, 1e-3);
         Assert.Equal(new[] { Criterion.IlgiKaybi, Criterion.DusukEnerji }, r.TopCriteria);
     }
 
@@ -234,7 +240,8 @@ public class LiveAdvisorTests
     [Fact]
     public void ThresholdBand_NoFlickerAroundThreshold()
     {
-        var advisor = new LiveAdvisor(MeetingProfile.Satis, Cfg);
+        // Eşik bandını izole eder: çeşitlilik kuralı (art arda aynı öneri) bu testin konusu değil, kapalı.
+        var advisor = new LiveAdvisor(MeetingProfile.Satis, Cfg with { RepeatLimit = 1000 });
         var w = DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis);
         double[] Need(double k1) => new[] { k1, .1, k1 * .9, .1, .1, .1 };
         // kalite 0,8 → ölçekli maks: 0,36 / 0,32 / 0,36 / 0,32
@@ -275,5 +282,153 @@ public class LiveAdvisorTests
         Assert.All(Enum.GetValues<Criterion>(), c => Assert.False(string.IsNullOrWhiteSpace(DecisionText.Description(c))));
         Assert.Equal(Enum.GetValues<Criterion>().Length,
             Enum.GetValues<Criterion>().Select(DecisionText.Description).Distinct().Count());
+    }
+
+    // ---- Çeşitlilik: aynı öneri art arda gösterilince yakın bir alternatife geçilir ----
+
+    private static LiveAction[] Run(DecisionConfig cfg, MeetingProfile p, double[] n, int windows)
+    {
+        var advisor = new LiveAdvisor(p, cfg);
+        return Enumerable.Range(0, windows)
+            .Select(_ => advisor.Next(Ind(n), DecisionKnowledgeBase.DefaultWeights(p)).Action).ToArray();
+    }
+
+    private static int LongestRun(LiveAction[] actions)
+    {
+        int best = 0, run = 0;
+        for (int i = 0; i < actions.Length; i++)
+        {
+            run = i > 0 && actions[i] == actions[i - 1] ? run + 1 : 1;
+            best = Math.Max(best, run);
+        }
+        return best;
+    }
+
+    [Fact]
+    public void Cesitlilik_AyniOneriArtArdaUcPenceredenFazlaGosterilmez()
+    {
+        var actions = Run(Cfg, MeetingProfile.Satis, Gergin, 12);
+
+        Assert.True(LongestRun(actions) <= Cfg.RepeatLimit, string.Join(",", actions));
+        Assert.True(actions.Distinct().Count() >= 2);
+    }
+
+    [Fact]
+    public void Cesitlilik_OnerilenAlternatif_BirinciyeYakinOlanlardanDir()
+    {
+        var advisor = new LiveAdvisor(MeetingProfile.Satis, Cfg);
+        var weights = DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis);
+        for (int i = 0; i < 12; i++)
+        {
+            var r = advisor.Next(Ind(Gergin), weights);
+            double top = r.Ranking[0].Closeness;
+            double shown = r.Ranking.First(x => x.Alternative == r.Action).Closeness;
+            Assert.True(top - shown <= Cfg.DiversityMargin + 1e-9, $"pencere {i}: {r.Action} birinciden fazla geride");
+        }
+    }
+
+    [Fact]
+    public void Cesitlilik_Kapatilinca_AyniOneriSurer()
+    {
+        var actions = Run(Cfg with { RepeatLimit = 1000 }, MeetingProfile.Satis, Gergin, 12);
+
+        Assert.Single(actions.Distinct());
+    }
+
+    [Fact]
+    public void Cesitlilik_YakinAlternatifYoksa_AyniOneriSurer()
+    {
+        var actions = Run(Cfg with { DiversityMargin = 0.0001 }, MeetingProfile.Satis, Gergin, 12);
+
+        Assert.Single(actions.Distinct());
+    }
+
+    [Fact]
+    public void Cesitlilik_AgirlikDegisimindeHemenEnIyiGosterilir()
+    {
+        var advisor = new LiveAdvisor(MeetingProfile.Satis, Cfg);
+        var weights = DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis);
+        Recommendation? last = null;
+        for (int i = 0; i < Cfg.RepeatLimit + 1; i++) last = advisor.Next(Ind(Gergin), weights);
+
+        var reranked = advisor.Rerank(Ind(Gergin), weights);
+
+        Assert.Equal(reranked.Ranking[0].Alternative, reranked.Action);   // kaydırıcı oynatınca çeşitlilik değil en iyi
+    }
+
+    // ---- Olumlu durum: sorun yokken ve görüşme gerçekten olumluysa olumlu öneri ----
+
+    private static readonly double[] Sakin = { .05, .05, .05, .05, .05, .05 };
+
+    private static Indicators Pos(double[] n, double positivity, double quality = 0.8) =>
+        new(n, new int?[6], quality) { Positivity = positivity };
+
+    private static LiveAction[] RunPos(double[] n, double positivity, int windows, DecisionConfig? cfg = null)
+    {
+        var advisor = new LiveAdvisor(MeetingProfile.Satis, cfg ?? Cfg);
+        var w = DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis);
+        return Enumerable.Range(0, windows).Select(_ => advisor.Next(Pos(n, positivity), w).Action).ToArray();
+    }
+
+    [Fact]
+    public void Olumlu_SorunYokVeOlumluysa_BirAdimIlerlet()
+    {
+        var r = new LiveAdvisor(MeetingProfile.Satis, Cfg).Next(Pos(Sakin, 0.8), DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis));
+
+        Assert.Equal(LiveAction.BirAdimIlerlet, r.Action);
+        Assert.Contains("olumlu", r.Reason);
+    }
+
+    [Fact]
+    public void Olumlu_SorunYokAmaOlumluDegilse_DevamEt()
+    {
+        var r = new LiveAdvisor(MeetingProfile.Satis, Cfg).Next(Pos(Sakin, 0.3), DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis));
+
+        Assert.Equal(LiveAction.DevamEt, r.Action);
+    }
+
+    [Fact]
+    public void Olumlu_SorunVarsa_OlumluOneriVerilmez()
+    {
+        var r = new LiveAdvisor(MeetingProfile.Satis, Cfg).Next(Pos(Gergin, 0.9), DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis));
+
+        Assert.NotEqual(LiveAction.BirAdimIlerlet, r.Action);
+        Assert.NotEqual(LiveAction.OlumluyuPekistir, r.Action);
+        Assert.NotEmpty(r.Ranking);
+    }
+
+    [Fact]
+    public void Olumlu_ArtArdaUcPenceredenFazlaAyniOlumluOneriYok_IkisiDeGorunur()
+    {
+        var actions = RunPos(Sakin, 0.8, 9);
+
+        Assert.True(LongestRun(actions) <= Cfg.RepeatLimit, string.Join(",", actions));
+        Assert.Contains(LiveAction.BirAdimIlerlet, actions);
+        Assert.Contains(LiveAction.OlumluyuPekistir, actions);
+    }
+
+    [Fact]
+    public void Olumlu_OlumluOneriMudahaleSayilmaz_MudahaleCikisBandiUygulanmaz()
+    {
+        // İhtiyaç 0,33: müdahale girişi 0,35'in altında. Olumlu öneri müdahale olsaydı çıkış eşiği 0,30 uygulanır
+        // ve 0,33 yeniden müdahaleye döndürürdü.
+        var advisor = new LiveAdvisor(MeetingProfile.Satis, Cfg);
+        var w = DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis);
+        Assert.Equal(LiveAction.BirAdimIlerlet, advisor.Next(Pos(Sakin, 0.8), w).Action);
+
+        var gri = new[] { .33, .05, .05, .05, .05, .05 };   // kalite 1,0 → ihtiyaç 0,33 (band: 0,30–0,35)
+        var r = advisor.Next(Pos(gri, 0.8, quality: 1.0), w);
+
+        Assert.Empty(r.Ranking);
+        Assert.True(r.Action is LiveAction.BirAdimIlerlet or LiveAction.OlumluyuPekistir);
+    }
+
+    [Fact]
+    public void Olumlu_VeriYetersizse_OlumluOneriYok()
+    {
+        var r = new LiveAdvisor(MeetingProfile.Satis, Cfg).Next(Pos(Sakin, 0.9, quality: 0.1), DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis));
+
+        Assert.Equal(LiveAction.DevamEt, r.Action);
+        Assert.Contains("Veri yetersiz", r.Reason);
     }
 }
