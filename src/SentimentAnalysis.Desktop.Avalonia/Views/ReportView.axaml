@@ -11,12 +11,12 @@
     <UserControl.Resources>
         <conv:UncertainOpacityConverter x:Key="UncertainOpacityConverter" />
         <conv:EmotionColorConverter x:Key="EmotionColor" />
+        <conv:SpeakerColorConverter x:Key="SpeakerColor" />
         <DataTemplate x:Key="SourcePanel" DataType="desktop:SourceAnalysisVm">
-            <Border Background="{DynamicResource SubtleBg}" CornerRadius="10" Padding="12" Margin="2" MinWidth="160">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13"
-                               Foreground="{DynamicResource SystemBaseMediumColor}" />
-                    <TextBlock Text="{Binding Emotion}" FontSize="18" FontWeight="Bold" />
+            <Border Background="{DynamicResource SubtleBg}" CornerRadius="10" Padding="10" Margin="0">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{Binding Title}" FontSize="12" Foreground="{DynamicResource MutedFg}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Emotion}" FontSize="16" FontWeight="Bold" />
                     <TextBlock FontSize="11" IsVisible="{Binding HasData}"
                                Foreground="{DynamicResource SystemBaseMediumColor}"
                                Text="{Binding AxisSummary}" TextWrapping="Wrap" />
@@ -24,6 +24,20 @@
             </Border>
         </DataTemplate>
     </UserControl.Resources>
+
+    <UserControl.Styles>
+        <!-- Sohbet balonu: A, C… solda; B, D… sağda. -->
+        <Style Selector="Border.bubble">
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Margin" Value="0,4" />
+            <Setter Property="MaxWidth" Value="560" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+        <Style Selector="Border.bubble.right">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+        </Style>
+    </UserControl.Styles>
 
     <Grid RowDefinitions="Auto,*">
         <TextBlock Grid.Row="0" Text="Rapor henüz yok. Bir oturum tamamlandığında veya Geçmiş'ten seçildiğinde burada görünür."
@@ -258,74 +272,96 @@
                 <Border Classes="card"
                         IsVisible="{Binding DiarizationStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Konuşmacılar" Classes="cardTitle" />
-                        <TextBlock Text="{Binding DiarizationStatus}" TextWrapping="Wrap" FontStyle="Italic" Opacity="0.8" />
+                        <TextBlock Text="Kim ne söyledi, nasıl hissetti?" Classes="cardTitle" />
+                        <Border Classes="why">
+                            <TextBlock Text="Sistem sesleri birbirinden ayırarak kimin konuştuğunu tahmin eder. Her kişinin ne kadar konuştuğunu, genel olarak nasıl hissettiğini ve konuşmanın akışını gösterir. Soluk ve '?' işaretli satırlarda konuşanın kim olduğu kesin değildir." />
+                        </Border>
+                        <TextBlock Text="{Binding DiarizationStatus}" Classes="muted" FontStyle="Italic" />
 
-                        <ItemsControl ItemsSource="{Binding SpeakerLines}" IsVisible="{Binding HasSpeakers}" Margin="0,8,0,0">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid ColumnDefinitions="110,120,*,20" Margin="0,4">
-                                        <TextBlock Grid.Column="0" Text="{Binding TimeRange}" Opacity="0.7" />
-                                        <TextBlock Grid.Column="1" Text="{Binding Label}" FontWeight="SemiBold" />
-                                        <TextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap"
-                                                   Opacity="{Binding Uncertain, Converter={StaticResource UncertainOpacityConverter}}" />
-                                        <TextBlock Grid.Column="3" Text="?" FontWeight="Bold" FontSize="12"
-                                                   IsVisible="{Binding Uncertain}"
-                                                   ToolTip.Tip="Bu satırın hangi konuşmacıya ait olduğu kesin değil."
-                                                   Foreground="{DynamicResource SystemAccentColor}"
-                                                   VerticalAlignment="Center" Margin="4,0,0,0" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <!-- Konuşma dengesi (11e): konuşmacı başına süre ve pay. -->
-                        <StackPanel Spacing="4" IsVisible="{Binding HasSpeakers}" Margin="0,12,0,0">
-                            <TextBlock Text="Konuşma dengesi" FontWeight="SemiBold" FontSize="14" />
+                        <!-- Konuşma dengesi (11e): konuşmacı başına pay, konuşmacı renginde tek şerit. -->
+                        <StackPanel Spacing="6" IsVisible="{Binding HasSpeakers}" Margin="0,6,0,0">
+                            <TextBlock Text="Kim ne kadar konuştu?" Classes="sectionTitle" />
+                            <ctl:ShareBar Items="{Binding TalkBalance}" Height="14" />
                             <ItemsControl ItemsSource="{Binding TalkBalance}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid ColumnDefinitions="120,*,140" Margin="0,2">
-                                            <TextBlock Grid.Column="0" Text="{Binding Label}" FontSize="12" VerticalAlignment="Center" />
-                                            <ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Share}" Height="8" VerticalAlignment="Center" />
-                                            <TextBlock Grid.Column="2" Text="{Binding Text}" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" />
-                                        </Grid>
+                                    <DataTemplate DataType="desktop:TalkShareVm">
+                                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,18,2">
+                                            <Ellipse Width="10" Height="10" VerticalAlignment="Center"
+                                                     Fill="{Binding SpeakerIndex, Converter={StaticResource SpeakerColor}}" />
+                                            <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding Text}" Classes="muted" VerticalAlignment="Center" />
+                                        </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </StackPanel>
 
-                        <!-- Konuşmacı-başına duygu ortalaması (10c): her konuşmacı için metin/ses/nihai. -->
-                        <ItemsControl ItemsSource="{Binding SpeakerEmotions}" IsVisible="{Binding HasSpeakers}" Margin="0,12,0,0">
+                        <!-- Kişi kartları (10c): her konuşmacı için sözlere / ses tonuna göre / genel sonuç. -->
+                        <ItemsControl ItemsSource="{Binding SpeakerEmotions}" IsVisible="{Binding HasSpeakers}" Margin="0,10,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><UniformGrid Columns="2" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="desktop:SpeakerEmotionVm">
-                                    <StackPanel Spacing="4" Margin="0,0,0,12">
-                                        <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="14" />
-                                        <!-- Ölçüm VARSA kaç saniyeye dayandığını, YOKSA "yeterli ses yok"u
-                                             söyler; satır hiçbir durumda gizlenmez — aksi halde iki durum
-                                             kullanıcı için tıpatıp aynı görünürdü. -->
-                                        <TextBlock FontSize="10" FontStyle="Italic"
-                                                   Foreground="{DynamicResource SystemBaseMediumColor}"
-                                                   TextWrapping="Wrap"
-                                                   Text="{Binding AudioMeasurementNote}" />
-                                        <!-- Belirsiz atamalar ortalamaya girdi; yalnızca varsa bildirilir. -->
-                                        <TextBlock FontSize="10" FontStyle="Italic"
-                                                   Foreground="{DynamicResource SystemBaseMediumColor}"
-                                                   TextWrapping="Wrap"
-                                                   Text="{Binding UncertainChunkNote}"
-                                                   IsVisible="{Binding HasUncertainChunks}" />
-                                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
-                                            <ContentControl Grid.Column="0" Content="{Binding TextAnalysis}"
-                                                            ContentTemplate="{StaticResource SourcePanel}"
-                                                            HorizontalContentAlignment="Stretch" />
-                                            <ContentControl Grid.Column="1" Content="{Binding AudioAnalysis}"
-                                                            ContentTemplate="{StaticResource SourcePanel}"
-                                                            HorizontalContentAlignment="Stretch" />
-                                            <ContentControl Grid.Column="2" Content="{Binding CombinedAnalysis}"
-                                                            ContentTemplate="{StaticResource SourcePanel}"
-                                                            HorizontalContentAlignment="Stretch" />
-                                        </Grid>
-                                    </StackPanel>
+                                    <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="12"
+                                            Padding="14" Margin="0,0,10,10">
+                                        <StackPanel Spacing="8">
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Border Width="38" Height="38" CornerRadius="19"
+                                                        Background="{Binding SpeakerIndex, Converter={StaticResource SpeakerColor}}">
+                                                    <TextBlock Text="{Binding Initial}" Foreground="White" FontWeight="Bold" FontSize="16"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="14" />
+                                                    <TextBlock Text="{Binding OverallText}" Classes="muted" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <!-- Ölçüm VARSA kaç saniyeye dayandığını, YOKSA yeterli ses olmadığını söyler;
+                                                 satır hiçbir durumda gizlenmez — aksi halde iki durum aynı görünürdü. -->
+                                            <TextBlock Text="{Binding AudioMeasurementNote}" Classes="muted" FontSize="11" />
+                                            <TextBlock Text="{Binding UncertainChunkNote}" Classes="muted" FontSize="11"
+                                                       IsVisible="{Binding HasUncertainChunks}" />
+                                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                                                <ContentControl Grid.Column="0" Content="{Binding TextAnalysis}"
+                                                                ContentTemplate="{StaticResource SourcePanel}"
+                                                                HorizontalContentAlignment="Stretch" />
+                                                <ContentControl Grid.Column="1" Content="{Binding AudioAnalysis}"
+                                                                ContentTemplate="{StaticResource SourcePanel}"
+                                                                HorizontalContentAlignment="Stretch" />
+                                                <ContentControl Grid.Column="2" Content="{Binding CombinedAnalysis}"
+                                                                ContentTemplate="{StaticResource SourcePanel}"
+                                                                HorizontalContentAlignment="Stretch" />
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Konuşma akışı (10b): sohbet balonları; belirsiz atama soluk + "?". -->
+                        <TextBlock Text="Konuşma akışı" Classes="sectionTitle" IsVisible="{Binding HasSpeakers}" Margin="0,6,0,0" />
+                        <ItemsControl ItemsSource="{Binding SpeakerLines}" IsVisible="{Binding HasSpeakers}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="desktop:SpeakerLineVm">
+                                    <Border Classes="bubble" Classes.right="{Binding IsRight}"
+                                            Background="{Binding SpeakerIndex, Converter={StaticResource SpeakerColor}, ConverterParameter=soft}"
+                                            Opacity="{Binding Uncertain, Converter={StaticResource UncertainOpacityConverter}}">
+                                        <StackPanel Spacing="2">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Text="{Binding Label}" FontWeight="Bold" FontSize="12"
+                                                           Foreground="{Binding SpeakerIndex, Converter={StaticResource SpeakerColor}}" />
+                                                <TextBlock Text="?" FontWeight="Bold" FontSize="12" IsVisible="{Binding Uncertain}"
+                                                           ToolTip.Tip="Bu satırın hangi konuşmacıya ait olduğu kesin değil."
+                                                           Foreground="{Binding SpeakerIndex, Converter={StaticResource SpeakerColor}}" />
+                                                <TextBlock Text="{Binding TimeRange}" Classes="muted" FontSize="11" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

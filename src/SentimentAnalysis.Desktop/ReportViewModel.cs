@@ -36,6 +36,13 @@ public sealed class TimeShareVm
 public sealed class SpeakerLineVm
 {
     public string Label { get; }
+
+    /// <summary>Renk seçimi için konuşmacı sırası (−1 = bilinmeyen) ve rozet harfi ("A", "?").</summary>
+    public int SpeakerIndex { get; }
+    public string Initial { get; }
+
+    /// <summary>Sohbet görünümü: tek sıradaki konuşmacılar (B, D…) sağda.</summary>
+    public bool IsRight => SpeakerIndex % 2 == 1;
     public string Text { get; }
     public string TimeRange { get; }
 
@@ -46,6 +53,8 @@ public sealed class SpeakerLineVm
     public SpeakerLineVm(SpeakerLine line, string? userGivenName = null)
     {
         Label = userGivenName ?? line.Speaker.DefaultLabel;
+        SpeakerIndex = line.Speaker.Index;
+        Initial = SpeakerBadge.Initial(line.Speaker);
         Text = line.Text;
         TimeRange = $"{line.Start:mm\\:ss}–{line.End:mm\\:ss}";
         Uncertain = line.Uncertain;
@@ -68,6 +77,11 @@ public sealed class SpeakerLineVm
 public sealed class SpeakerEmotionVm
 {
     public string Label { get; }
+    public int SpeakerIndex { get; }
+    public string Initial { get; }
+
+    /// <summary>Kartın başlığındaki tek satır: "Genel olarak: sakin" (füzyon sonucu).</summary>
+    public string OverallText { get; }
     public SourceAnalysisVm TextAnalysis { get; }
     public SourceAnalysisVm AudioAnalysis { get; }
     public SourceAnalysisVm CombinedAnalysis { get; }
@@ -105,17 +119,27 @@ public sealed class SpeakerEmotionVm
         Label = userGivenName ?? s.Speaker.DefaultLabel;
         var audioVa = prosody?.Va ?? s.Audio;
         AnalyzedSeconds = prosody?.AnalyzedSeconds ?? 0;
+        SpeakerIndex = s.Speaker.Index;
+        Initial = SpeakerBadge.Initial(s.Speaker);
         AudioMeasurementNote = prosody is not null
-            ? $"Ses ölçümü {prosody.AnalyzedSeconds:F0} sn konuşmaya dayanıyor"
-            : "Yeterli ses yok — chunk ortalamasına dayanıyor";
+            ? $"Ses tonu bu kişinin {prosody.AnalyzedSeconds:F0} sn konuşmasından ölçüldü"
+            : "Bu kişinin kendi sesinden ölçüm için yeterli ses yok; genel ortalama kullanıldı";
         UncertainChunkCount = s.UncertainChunkCount;
-        UncertainChunkNote = $"{s.UncertainChunkCount} ölçüm belirsiz atamaya dayanıyor";
+        UncertainChunkNote = $"{s.UncertainChunkCount} bölümde konuşanın bu kişi olduğu kesin değil";
         TextAnalysis = new SourceAnalysisVm("Sözlere göre", s.Text, temperature, neutralRadius);
         AudioAnalysis = new SourceAnalysisVm("Ses tonuna göre", audioVa, temperature, neutralRadius);
         // Bulgu 1: Nihai Karar füzyon sonucunu (s.Combined) gösterir, ham prozodiyi değil —
         // bkz. sınıf-üstü açıklama.
         CombinedAnalysis = new SourceAnalysisVm("Genel sonuç", s.Combined, temperature, neutralRadius);
+        OverallText = $"Genel olarak: {CombinedAnalysis.Emotion.ToLower(new System.Globalization.CultureInfo("tr-TR"))}";
     }
+}
+
+/// <summary>Konuşmacı rozetinin harfi: "Konuşmacı A" → "A", 26'dan sonra sayı, bilinmeyen → "?".</summary>
+public static class SpeakerBadge
+{
+    public static string Initial(SpeakerId id) =>
+        id.Index < 0 ? "?" : id.Index < 26 ? ((char)('A' + id.Index)).ToString() : (id.Index + 1).ToString();
 }
 
 /// <summary>Toplantı-sonu rapor VM'i: bir oturumu <see cref="IMeetingAggregator"/> ile özetler, lokalize sunar.</summary>
@@ -245,7 +269,7 @@ public sealed partial class ReportViewModel : ObservableObject
         OnPropertyChanged(nameof(SpeakerLines));
 
         TalkBalance = Application.Diarization.TalkBalance.Compute(speakers)
-            .Select(t => new TalkShareVm(t.Speaker.DefaultLabel, t.Share, $"{Duration(t.Duration)} · {Percent(t.Share)}"))
+            .Select(t => new TalkShareVm(t.Speaker.DefaultLabel, t.Share, $"{Duration(t.Duration)} · {Percent(t.Share)}", t.Speaker.Index))
             .ToList();
         OnPropertyChanged(nameof(TalkBalance));
     }
@@ -388,5 +412,5 @@ public sealed record RecommendationRowVm(string Time, string Action, string Reas
 /// <summary>Kritik an: "01:10–01:40" ve "Gerilim %72 — Yüz 2 · gösterilen öneri: …".</summary>
 public sealed record CriticalMomentVm(string TimeRange, string Text);
 
-/// <summary>Konuşma dengesi satırı: etiket, pay (0..1) ve "2 dk 10 sn · %58".</summary>
-public sealed record TalkShareVm(string Label, double Share, string Text);
+/// <summary>Konuşma dengesi satırı: etiket, pay (0..1), "2 dk 10 sn · %58" ve renk için konuşmacı sırası.</summary>
+public sealed record TalkShareVm(string Label, double Share, string Text, int SpeakerIndex = 0);

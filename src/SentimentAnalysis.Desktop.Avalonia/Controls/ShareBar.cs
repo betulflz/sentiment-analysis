@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+using System.Collections;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -6,16 +6,16 @@ using SentimentAnalysis.Core;
 
 namespace SentimentAnalysis.Desktop.Avalonia.Controls;
 
-/// <summary>Duygu paylarını tek yatay şerit olarak çizer; her parça payı kadar geniş, duygunun renginde.
-/// Yüzde ve süre şeridin altındaki açıklamada yazar.</summary>
+/// <summary>Payları tek yatay şerit olarak çizer; her parça payı kadar geniş. Duygu payı (<see cref="TimeShareVm"/>)
+/// duygunun, konuşma payı (<see cref="TalkShareVm"/>) konuşmacının renginde. Yüzde/süre altındaki açıklamada yazar.</summary>
 public sealed class ShareBar : Control
 {
-    public static readonly StyledProperty<IReadOnlyList<TimeShareVm>?> ItemsProperty =
-        AvaloniaProperty.Register<ShareBar, IReadOnlyList<TimeShareVm>?>(nameof(Items));
+    public static readonly StyledProperty<IEnumerable?> ItemsProperty =
+        AvaloniaProperty.Register<ShareBar, IEnumerable?>(nameof(Items));
 
     static ShareBar() => AffectsRender<ShareBar>(ItemsProperty);
 
-    public IReadOnlyList<TimeShareVm>? Items
+    public IEnumerable? Items
     {
         get => GetValue(ItemsProperty);
         set => SetValue(ItemsProperty, value);
@@ -25,16 +25,22 @@ public sealed class ShareBar : Control
     {
         var items = Items;
         double w = Bounds.Width, h = Bounds.Height;
-        if (items is null || items.Count == 0 || w <= 0 || h <= 0) return;
+        if (items is null || w <= 0 || h <= 0) return;
 
         using (context.PushClip(new RoundedRect(new Rect(0, 0, w, h), 8)))
         {
             double x = 0;
             foreach (var item in items)
             {
-                double width = item.Share * w;
-                context.FillRectangle(EmotionColors.Brush(item.Key), new Rect(x, 0, width, h));
-                x += width;
+                var (share, brush) = item switch
+                {
+                    TimeShareVm t => (t.Share, EmotionColors.Brush(t.Key)),
+                    TalkShareVm t => (t.Share, SpeakerColors.Brush(t.SpeakerIndex)),
+                    _ => (0.0, null),
+                };
+                if (brush is null) continue;
+                context.FillRectangle(brush, new Rect(x, 0, share * w, h));
+                x += share * w;
             }
         }
     }
@@ -54,4 +60,16 @@ public static class EmotionColors
         Emotion.Kizgin => "#E0485E",
         _ => "#B8B3C9",
     }));
+}
+
+/// <summary>Konuşmacı → renk (sıraya göre döner); bilinmeyen gri. <paramref name="soft"/>: balon zemini için açık ton.</summary>
+public static class SpeakerColors
+{
+    private static readonly string[] Palette = { "#7C5CFF", "#F08A5D", "#2FA3B5", "#D9A21B", "#C46BD6" };
+
+    public static IBrush Brush(int speakerIndex, bool soft = false)
+    {
+        var color = Color.Parse(speakerIndex < 0 ? "#A39DBD" : Palette[speakerIndex % Palette.Length]);
+        return new SolidColorBrush(color, soft ? 0.14 : 1.0);
+    }
 }

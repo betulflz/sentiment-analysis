@@ -21,6 +21,17 @@ public class SpeakerEmotionVmTests
         new(new SpeakerId(0), text, audio, combined, ChunkCount: 3);
 
     [Fact]
+    public void KisiKarti_HarfRenkVeGenelHava()
+    {
+        var s = Summary(RadiusSiniriNoktasi, RadiusSiniriNoktasi, RadiusSiniriNoktasi) with { Speaker = new SpeakerId(1) };
+        var vm = new SpeakerEmotionVm(s, Temperature, neutralRadius: 0.2);
+
+        Assert.Equal("B", vm.Initial);
+        Assert.Equal(1, vm.SpeakerIndex);
+        Assert.Equal("Genel olarak: sakin", vm.OverallText);
+    }
+
+    [Fact]
     public void NeutralRadiusVerilmezse_KlasikKuralaGoreNotrEtiketlenir()
     {
         var s = Summary(RadiusSiniriNoktasi, RadiusSiniriNoktasi, RadiusSiniriNoktasi);
@@ -100,7 +111,7 @@ public class SpeakerEmotionVmTests
 
         var vm = new SpeakerEmotionVm(s, Temperature, neutralRadius: 0.2, prosody);
 
-        Assert.Equal("Ses ölçümü 12 sn konuşmaya dayanıyor", vm.AudioMeasurementNote);
+        Assert.Equal("Ses tonu bu kişinin 12 sn konuşmasından ölçüldü", vm.AudioMeasurementNote);
     }
 
     [Fact]
@@ -112,7 +123,7 @@ public class SpeakerEmotionVmTests
 
         var vm = new SpeakerEmotionVm(s, Temperature, neutralRadius: 0.2, prosody: null);
 
-        Assert.Equal("Yeterli ses yok — chunk ortalamasına dayanıyor", vm.AudioMeasurementNote);
+        Assert.Equal("Bu kişinin kendi sesinden ölçüm için yeterli ses yok; genel ortalama kullanıldı", vm.AudioMeasurementNote);
     }
 
     [Fact]
@@ -126,7 +137,7 @@ public class SpeakerEmotionVmTests
         var vm = new SpeakerEmotionVm(s, Temperature, neutralRadius: 0.2);
 
         Assert.True(vm.HasUncertainChunks);
-        Assert.Equal("2 ölçüm belirsiz atamaya dayanıyor", vm.UncertainChunkNote);
+        Assert.Equal("2 bölümde konuşanın bu kişi olduğu kesin değil", vm.UncertainChunkNote);
     }
 
     [Fact]

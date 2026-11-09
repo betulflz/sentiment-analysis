@@ -91,6 +91,12 @@ public class ReportViewModelTests
         Assert.Equal("Merhaba nasılsın", vm.SpeakerLines[0].Text);
         Assert.Equal("Konuşmacı B", vm.SpeakerLines[1].Label);
         Assert.Equal("iyiyim", vm.SpeakerLines[1].Text);
+        // Sohbet balonu: harf rozeti, konuşmacı rengi; A solda, B sağda.
+        Assert.Equal("A", vm.SpeakerLines[0].Initial);
+        Assert.Equal(0, vm.SpeakerLines[0].SpeakerIndex);
+        Assert.False(vm.SpeakerLines[0].IsRight);
+        Assert.Equal("B", vm.SpeakerLines[1].Initial);
+        Assert.True(vm.SpeakerLines[1].IsRight);
         Assert.True(vm.HasSpeakers);
     }
 
@@ -103,6 +109,7 @@ public class ReportViewModelTests
 
         Assert.Single(vm.SpeakerLines);
         Assert.Equal("Bilinmeyen", vm.SpeakerLines[0].Label);
+        Assert.Equal("?", vm.SpeakerLines[0].Initial);
     }
 
     [Fact]
@@ -253,6 +260,8 @@ public class ReportViewModelTests
         Assert.Equal("1 dk 0 sn · %67", vm.TalkBalance[0].Text);
         Assert.Equal(2 / 3.0, vm.TalkBalance[0].Share, 9);
         Assert.Equal("30 sn · %33", vm.TalkBalance[1].Text);
+        Assert.Equal(0, vm.TalkBalance[0].SpeakerIndex);
+        Assert.Equal(1, vm.TalkBalance[1].SpeakerIndex);
     }
 
     [Fact]
