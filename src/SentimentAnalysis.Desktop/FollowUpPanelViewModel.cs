@@ -30,6 +30,23 @@ public sealed partial class FollowUpPanelViewModel : ObservableObject
     private IReadOnlyList<RankingRowVm> _ranking = Array.Empty<RankingRowVm>();
     [ObservableProperty] private IReadOnlyList<SensitivityRowVm> _sensitivity = Array.Empty<SensitivityRowVm>();
     [ObservableProperty] private string _sensitivitySummary = string.Empty;
+
+    /// <summary>Duyarlılığın tek satırlık hükmü ("Karar sağlam" …); tablo yalnız "Ayrıntı"da görünür.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SensitivityStable), nameof(SensitivityMostlyStable), nameof(SensitivityFragile))]
+    private string _sensitivityVerdict = string.Empty;
+
+    public bool SensitivityStable => SensitivityVerdict == Stable;
+    public bool SensitivityMostlyStable => SensitivityVerdict == MostlyStable;
+    public bool SensitivityFragile => SensitivityVerdict == Fragile;
+
+    private const string Stable = "Karar sağlam";
+    private const string MostlyStable = "Karar büyük ölçüde sağlam";
+    private const string Fragile = "Karar kırılgan";
+
+    /// <summary>Hiç değişmiyorsa sağlam, denemelerin en çok dörtte birinde değişiyorsa büyük ölçüde sağlam, fazlası kırılgan.</summary>
+    public static string Verdict(int changed, int total) =>
+        changed == 0 ? Stable : changed * 4 <= total ? MostlyStable : Fragile;
     [ObservableProperty] private FollowUpDecision? _current;
 
     public FollowUpPanelViewModel(DecisionConfig cfg)
@@ -54,7 +71,7 @@ public sealed partial class FollowUpPanelViewModel : ObservableObject
         {
             _meeting = null;
             Current = null;
-            BestText = ReasonText = ProfileText = SensitivitySummary = string.Empty;
+            BestText = ReasonText = ProfileText = SensitivitySummary = SensitivityVerdict = string.Empty;
             MeetingIndicators = Array.Empty<IndicatorBarVm>();
             Ranking = Array.Empty<RankingRowVm>();
             Sensitivity = Array.Empty<SensitivityRowVm>();
@@ -113,20 +130,22 @@ public sealed partial class FollowUpPanelViewModel : ObservableObject
             .ToArray();
 
         int changed = rows.Count(r => r.Changed);
+        SensitivityVerdict = Verdict(changed, rows.Count);
         if (decision.Ranking.Count == 0)
         {
             // Kural yolu (sakin görüşme, düşük veri kalitesi): TOPSIS hiç çalışmadı, ağırlıklar kullanılmadı.
-            SensitivitySummary = $"Karar ağırlıklardan değil kuraldan geliyor (gerekçeye bakın); {rows.Count} senaryonun hepsinde aynı kaldı.";
+            SensitivitySummary = "Bu öneri önem ayarlarına bağlı değil, görüşmenin genel durumundan geliyor (gerekçeye bakın).";
             return;
         }
+        const string tried = "Önem ayarlarını biraz artırıp azalttığımız";
         if (changed == 0)
         {
-            SensitivitySummary = $"{rows.Count} senaryonun hepsinde en iyi seçenek aynı kaldı — karar ağırlıklara duyarlı değil.";
+            SensitivitySummary = $"{tried} {rows.Count} denemenin hepsinde aynı öneri çıktı.";
             return;
         }
         var most = rows.Where(r => r.Changed).GroupBy(r => r.Criterion)
             .OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First().Key;
-        SensitivitySummary = $"{rows.Count} senaryonun {changed} tanesinde en iyi seçenek değişti — karar en çok {DecisionText.Name(most)} ağırlığına duyarlı.";
+        SensitivitySummary = $"{tried} {rows.Count} denemenin {changed} tanesinde öneri değişti; en çok \"{DecisionText.Name(most)}\" ayarına bağlı.";
     }
 }
 

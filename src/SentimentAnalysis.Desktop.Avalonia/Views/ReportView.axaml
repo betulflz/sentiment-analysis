@@ -23,14 +23,6 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <UserControl.Styles>
-        <!-- Duyarlılık tablosunda en iyi seçeneğin değiştiği hücre vurgulanır. -->
-        <Style Selector="TextBlock.changed">
-            <Setter Property="Foreground" Value="{DynamicResource SystemAccentColor}" />
-            <Setter Property="FontWeight" Value="Bold" />
-        </Style>
-    </UserControl.Styles>
-
     <Grid RowDefinitions="Auto,*">
         <TextBlock Grid.Row="0" Text="Rapor henüz yok. Bir oturum tamamlandığında veya Geçmiş'ten seçildiğinde burada görünür."
                    IsVisible="{Binding !HasReport}" FontStyle="Italic" Opacity="0.7" />
@@ -110,39 +102,51 @@
                 <Border Classes="card"
                         IsVisible="{Binding HasDecisionData}">
                     <StackPanel Spacing="6" DataContext="{Binding FollowUp}">
-                        <TextBlock Text="Duyarlılık Analizi" Classes="cardTitle" />
-                        <TextBlock Text="Her kriterin ağırlığı ayrı ayrı değiştirildiğinde en iyi takip seçeneği değişiyor mu?"
-                                   FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource SystemBaseMediumColor}" />
-                        <Grid ColumnDefinitions="160,*,*,*,*" Margin="0,4,0,0">
-                            <TextBlock Grid.Column="0" Text="Kriter" FontWeight="SemiBold" FontSize="12" />
-                            <TextBlock Grid.Column="1" Text="−%20" FontWeight="SemiBold" FontSize="12" />
-                            <TextBlock Grid.Column="2" Text="−%10" FontWeight="SemiBold" FontSize="12" />
-                            <TextBlock Grid.Column="3" Text="+%10" FontWeight="SemiBold" FontSize="12" />
-                            <TextBlock Grid.Column="4" Text="+%20" FontWeight="SemiBold" FontSize="12" />
+                        <!-- Duyarlılık analizi (KDS): tek satırlık hüküm; senaryo tablosu "Ayrıntı"da kapalı. -->
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Border Classes="pill" Classes.good="{Binding SensitivityStable}"
+                                    Classes.warn="{Binding SensitivityMostlyStable}" Classes.bad="{Binding SensitivityFragile}"
+                                    Padding="14,6" ToolTip.Tip="Duyarlılık analizi: önem ayarları biraz değişse öneri değişir miydi?">
+                                <TextBlock Text="{Binding SensitivityVerdict}" FontSize="14" />
+                            </Border>
+                            <TextBlock Grid.Column="1" Text="{Binding SensitivitySummary}" TextWrapping="Wrap" VerticalAlignment="Center" />
                         </Grid>
-                        <ItemsControl ItemsSource="{Binding Sensitivity}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid ColumnDefinitions="160,*" Margin="0,2">
-                                        <TextBlock Text="{Binding Criterion}" FontSize="12" />
-                                        <ItemsControl Grid.Column="1" ItemsSource="{Binding Cells}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <UniformGrid Rows="1" />
-                                                </ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock Text="{Binding Text}" FontSize="12" TextWrapping="Wrap"
-                                                               Classes.changed="{Binding Changed}" />
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <TextBlock Text="{Binding SensitivitySummary}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                        <Expander Header="Ayrıntıyı göster (duyarlılık analizi)" HorizontalAlignment="Stretch" Margin="0,6,0,0">
+                            <StackPanel Spacing="6">
+                                <TextBlock Classes="muted" Text="Her satırda bir sorunun önem ayarı biraz azaltılıp artırıldı. 'aynı' yazan yerde öneri değişmedi; değiştiği yerde yeni öneri vurgulu yazar." />
+                                <Grid ColumnDefinitions="160,*,*,*,*" Margin="0,4,0,0">
+                                    <TextBlock Grid.Column="0" Text="Sorun" FontWeight="SemiBold" FontSize="12" />
+                                    <TextBlock Grid.Column="1" Text="biraz azaltınca (−%20)" FontWeight="SemiBold" FontSize="12" />
+                                    <TextBlock Grid.Column="2" Text="−%10" FontWeight="SemiBold" FontSize="12" />
+                                    <TextBlock Grid.Column="3" Text="+%10" FontWeight="SemiBold" FontSize="12" />
+                                    <TextBlock Grid.Column="4" Text="biraz artırınca (+%20)" FontWeight="SemiBold" FontSize="12" />
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding Sensitivity}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid ColumnDefinitions="160,*" Margin="0,2">
+                                                <TextBlock Text="{Binding Criterion}" FontSize="12" />
+                                                <ItemsControl Grid.Column="1" ItemsSource="{Binding Cells}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <UniformGrid Rows="1" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Classes="pill" Classes.good="{Binding !Changed}" Classes.warn="{Binding Changed}"
+                                                                    HorizontalAlignment="Stretch" Margin="2" CornerRadius="8">
+                                                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" TextAlignment="Center" />
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Expander>
                     </StackPanel>
                 </Border>
 

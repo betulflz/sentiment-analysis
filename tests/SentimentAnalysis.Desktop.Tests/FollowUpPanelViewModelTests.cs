@@ -79,7 +79,9 @@ public class FollowUpPanelViewModelTests
         Assert.Empty(vm.Ranking);
         Assert.All(vm.Sensitivity.SelectMany(r => r.Cells), c => Assert.Equal("aynı", c.Text));
         // Karar kuraldan geldi (TOPSIS çalışmadı): "ağırlıklara duyarlı değil" demek yanıltır.
-        Assert.Equal("Karar ağırlıklardan değil kuraldan geliyor (gerekçeye bakın); 24 senaryonun hepsinde aynı kaldı.", vm.SensitivitySummary);
+        Assert.Equal("Bu öneri önem ayarlarına bağlı değil, görüşmenin genel durumundan geliyor (gerekçeye bakın).", vm.SensitivitySummary);
+        Assert.Equal("Karar sağlam", vm.SensitivityVerdict);
+        Assert.True(vm.SensitivityStable);
     }
 
     [Fact]
@@ -101,12 +103,15 @@ public class FollowUpPanelViewModelTests
 
         int changed = rows.Count(r => r.Changed);
         if (changed == 0)
-            Assert.StartsWith("24 senaryonun hepsinde", vm.SensitivitySummary);
+        {
+            Assert.Equal("Önem ayarlarını biraz artırıp azalttığımız 24 denemenin hepsinde aynı öneri çıktı.", vm.SensitivitySummary);
+            Assert.Equal("Karar sağlam", vm.SensitivityVerdict);
+        }
         else
         {
             var most = rows.Where(r => r.Changed).GroupBy(r => r.Criterion)
                 .OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First().Key;
-            Assert.Equal($"24 senaryonun {changed} tanesinde en iyi seçenek değişti — karar en çok {DecisionText.Name(most)} ağırlığına duyarlı.",
+            Assert.Equal($"Önem ayarlarını biraz artırıp azalttığımız 24 denemenin {changed} tanesinde öneri değişti; en çok \"{DecisionText.Name(most)}\" ayarına bağlı.",
                 vm.SensitivitySummary);
         }
     }
@@ -119,10 +124,21 @@ public class FollowUpPanelViewModelTests
         var vm = Loaded(s);
         var rows = Sensitivity.Analyze(s.FinalWeights, w => Expected(s, w.ToArray()).Best);
         Assert.Contains(rows, r => r.Changed);
-        Assert.StartsWith("24 senaryonun ", vm.SensitivitySummary);
-        Assert.Contains(" tanesinde en iyi seçenek değişti", vm.SensitivitySummary);
+        Assert.Contains("24 denemenin 4 tanesinde öneri değişti", vm.SensitivitySummary);
+        // 4/24 ≤ %25 → büyük ölçüde sağlam (sarı), kırılgan değil.
+        Assert.Equal("Karar büyük ölçüde sağlam", vm.SensitivityVerdict);
+        Assert.False(vm.SensitivityStable);
+        Assert.True(vm.SensitivityMostlyStable);
+        Assert.False(vm.SensitivityFragile);
         Assert.Equal(rows.Count(r => r.Changed), vm.Sensitivity.SelectMany(r => r.Cells).Count(c => c.Changed));
     }
+
+    [Theory]
+    [InlineData(0, 24, "Karar sağlam")]
+    [InlineData(6, 24, "Karar büyük ölçüde sağlam")]
+    [InlineData(7, 24, "Karar kırılgan")]
+    public void DuyarlilikHukmu_DegisenOranaGore(int changed, int total, string expected) =>
+        Assert.Equal(expected, FollowUpPanelViewModel.Verdict(changed, total));
 
     [Fact]
     public void TumAgirliklarSifir_CokmezEsitAgirlik()
