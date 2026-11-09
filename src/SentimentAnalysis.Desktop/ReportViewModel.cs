@@ -159,6 +159,9 @@ public sealed partial class ReportViewModel : ObservableObject
     public IReadOnlyList<TimeShareVm> TimeShare { get; private set; } = System.Array.Empty<TimeShareVm>();
 
     [ObservableProperty] private string _emotionMapSummary = string.Empty;
+
+    /// <summary>Özet kartının renkli etiketleri ("Hava: olumluya döndü" …) — sayı yerine.</summary>
+    public IReadOnlyList<SummaryTagVm> SummaryTags { get; private set; } = System.Array.Empty<SummaryTagVm>();
     public IReadOnlyList<ChunkRowVm> PeakMoments { get; private set; } = System.Array.Empty<ChunkRowVm>();
 
     /// <summary>Konuşmacı ayrımının kullanıcıya görünen durumu (10b). Boş = özellik kapalı
@@ -352,6 +355,8 @@ public sealed partial class ReportViewModel : ObservableObject
         ValenceTrend = s.ValenceTrend;
         Volatility = s.EmotionalVolatility;
         AverageCongruence = s.AverageCongruence;
+        SummaryTags = Application.Fusion.TurkishSummaryWriter.Tags(s).Select(t => new SummaryTagVm(t.Text, t.Tone)).ToList();
+        OnPropertyChanged(nameof(SummaryTags));
         LoadTimeShare(s);
         PeakMoments = s.PeakMoments.Select(c => new ChunkRowVm(c)).ToList();
         OnPropertyChanged(nameof(PeakMoments));
@@ -367,6 +372,8 @@ public sealed partial class ReportViewModel : ObservableObject
         ValenceTrend = s.ValenceTrend;
         Volatility = s.EmotionalVolatility;
         AverageCongruence = s.AverageCongruence;
+        SummaryTags = Application.Fusion.TurkishSummaryWriter.Tags(s).Select(t => new SummaryTagVm(t.Text, t.Tone)).ToList();
+        OnPropertyChanged(nameof(SummaryTags));
         LoadTimeShare(s);
         PeakMoments = s.PeakMoments.Select(c => new ChunkRowVm(c)).ToList();
         OnPropertyChanged(nameof(PeakMoments));
@@ -375,6 +382,15 @@ public sealed partial class ReportViewModel : ObservableObject
         ClearSpeakers();
         HasReport = true;
     }
+}
+
+/// <summary>Özet etiketi; renk sınıfı XAML'de bool'lara bağlanır.</summary>
+public sealed record SummaryTagVm(string Text, Application.Fusion.SummaryTone Tone)
+{
+    public bool Good => Tone == Application.Fusion.SummaryTone.Good;
+    public bool Warn => Tone == Application.Fusion.SummaryTone.Warn;
+    public bool Bad => Tone == Application.Fusion.SummaryTone.Bad;
+    public bool Neutral => Tone == Application.Fusion.SummaryTone.Neutral;
 }
 
 /// <summary>Zaman çizelgesinde bir kriterin pencere değerleri (0..1) ve baştan sona eğilimi.

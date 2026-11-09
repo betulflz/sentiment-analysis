@@ -48,11 +48,21 @@
                 <Border Classes="card">
                     <StackPanel Spacing="6">
                         <TextBlock Text="Görüşme özeti" Classes="cardTitle" />
-                        <TextBlock Text="{Binding DominantEmotion, StringFormat='En çok görülen duygu: {0}'}" />
-                        <TextBlock Text="{Binding ValenceTrend, StringFormat='Gidişat: {0:F2}  (artı = olumluya, eksi = olumsuza gidiyor)'}" />
-                        <TextBlock Text="{Binding Volatility, StringFormat='Duygu iniş-çıkışı: {0:F2}  (0 = hep aynı, 1 = çok değişken)'}" />
-                        <TextBlock Text="{Binding AverageCongruence, StringFormat='Söz ile ses tonu uyumu: {0:F2}  (1 = tam uyumlu)'}" />
-                        <TextBlock Text="{Binding TurkishSummary}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                        <TextBlock Text="{Binding TurkishSummary}" TextWrapping="Wrap" FontSize="16" LineHeight="24" Margin="0,4,0,4" />
+                        <ItemsControl ItemsSource="{Binding SummaryTags}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="desktop:SummaryTagVm">
+                                    <Border Classes="pill" Classes.good="{Binding Good}" Classes.warn="{Binding Warn}"
+                                            Classes.bad="{Binding Bad}" Classes.neutral="{Binding Neutral}"
+                                            Padding="12,5" Margin="0,0,8,6">
+                                        <TextBlock Text="{Binding Text}" FontSize="13" />
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </Border>
 

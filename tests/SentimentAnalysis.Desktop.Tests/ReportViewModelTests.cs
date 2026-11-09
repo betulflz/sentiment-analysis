@@ -45,6 +45,11 @@ public class ReportViewModelTests
         Assert.Contains(vm.TimeShare, s => s.Emotion == "Mutlu" && Math.Abs(s.Share - 0.6) < 1e-9);
         Assert.Single(vm.PeakMoments);
         Assert.Equal("merhaba", vm.PeakMoments[0].Transcript);
+        // Özet kartı: sayı yok, renkli etiketler (trend 0,25 / oynaklık 0,1 / uyum 0,8).
+        Assert.Equal(new[] { "Hava: olumluya döndü", "Duygular: genelde aynı kaldı", "Söz ve ses tonu: çoğunlukla uyumluydu" },
+            vm.SummaryTags.Select(t => t.Text));
+        Assert.True(vm.SummaryTags[0].Good);
+        Assert.True(vm.SummaryTags[1].Neutral);
     }
 
     [Fact]

@@ -51,6 +51,27 @@ public class TurkishSummaryWriterTests
     }
 
     [Fact]
+    public void Tags_CumleyleAyniIfadeler_RenkTonuyla()
+    {
+        var tags = TurkishSummaryWriter.Tags(Metrics(Emotion.Gergin, 0.2, 0.4, 0.5));
+        Assert.Equal(new[]
+        {
+            ("Hava: olumluya döndü", SummaryTone.Good),
+            ("Duygular: sık sık değişti", SummaryTone.Warn),
+            ("Söz ve ses tonu: kısmen uyumluydu", SummaryTone.Warn),
+        }, tags);
+    }
+
+    [Fact]
+    public void Tags_OlumsuzVeCelisik_Kirmizi()
+    {
+        var tags = TurkishSummaryWriter.Tags(Metrics(Emotion.Uzgun, -0.2, 0.05, 0.2));
+        Assert.Equal(SummaryTone.Bad, tags[0].Tone);
+        Assert.Equal(("Duygular: genelde aynı kaldı", SummaryTone.Neutral), tags[1]);
+        Assert.Equal(("Söz ve ses tonu: sık sık çelişti", SummaryTone.Bad), tags[2]);
+    }
+
+    [Fact]
     public void Write_IsNonEmpty()
     {
         var text = TurkishSummaryWriter.Write(Metrics(Emotion.Notr, 0.0, 0.0, 1.0));
