@@ -31,11 +31,56 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     public ObservableCollection<FaceBoxVm> PreviewFaces { get; } = new();
 
     /// <summary>Önizlenen son kare; <c>null</c> = görüntü yok (önizleme gizlenir).</summary>
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPreview))] private VideoFrame? _previewFrame;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPreview)), NotifyPropertyChangedFor(nameof(ShowSharedPreview))] private VideoFrame? _previewFrame;
 
     public bool HasPreview => PreviewFrame is not null;
 
     private IReadOnlyList<(int Index, FaceBox Box)>? _previewBoxes;
+
+    /// <summary>Mülakat/toplantıda yüz başına paneller (görünen yüzler); satışta boş kalır.</summary>
+    public ObservableCollection<FacePanelVm> FacePanels { get; } = new();
+
+    // Panel nesneleri yüz numarasına göre yaşar: yüz kaybolup dönünce ad ve göstergeler korunur.
+    private readonly Dictionary<int, FacePanelVm> _panelsByFace = new();
+
+    public bool ShowFacePanels => FacePanels.Count > 0;
+
+    /// <summary>Tek ortak kare: satışta her zaman; mülakat/toplantıda yüz görünene kadar.</summary>
+    public bool ShowSharedPreview => HasPreview && !ShowFacePanels;
+
+    /// <summary>Panel ızgarasının sütun sayısı: 1–2 yüz yan yana, sonra kareye yakın ızgara.</summary>
+    public int FacePanelColumns => Math.Max(1, (int)Math.Ceiling(Math.Sqrt(FacePanels.Count)));
+
+    private FacePanelVm PanelFor(int index) =>
+        _panelsByFace.TryGetValue(index, out var p) ? p : _panelsByFace[index] = new FacePanelVm(index);
+
+    /// <summary>Yeni koşuda adlar ve göstergeler sıfırlanır (yüz numaraları koşular arasında kişi değildir).</summary>
+    public void ResetFacePanels()
+    {
+        _panelsByFace.Clear();
+        _previewBoxes = null;   // sonraki yenileme, kutular aynı nesne olsa da panelleri yeniden kurar
+        SyncFacePanels(Array.Empty<(int, FaceBox)>());
+    }
+
+    private void SyncFacePanels(IReadOnlyList<(int Index, FaceBox Box)> boxes)
+    {
+        bool wantPanels = Decision.SelectedProfile != MeetingProfile.Satis;
+        var wanted = wantPanels ? boxes.OrderBy(b => b.Index).ToArray() : Array.Empty<(int Index, FaceBox Box)>();
+
+        bool sameSet = wanted.Length == FacePanels.Count
+            && wanted.Select(w => w.Index).SequenceEqual(FacePanels.Select(p => p.Index));
+        if (!sameSet)
+        {
+            FacePanels.Clear();
+            foreach (var (index, _) in wanted) FacePanels.Add(PanelFor(index));
+        }
+        foreach (var (index, box) in wanted)
+            PanelFor(index).Box = new FaceBoxVm(box.X, box.Y, box.W, box.H, PanelFor(index).DefaultName);
+
+        OnPropertyChanged(nameof(ShowFacePanels));
+        OnPropertyChanged(nameof(ShowSharedPreview));
+        OnPropertyChanged(nameof(FacePanelColumns));
+    }
 
     /// <summary>Runner'ın son karesini ve yüz kutularını okur (UI zamanlayıcısı ~5 Hz çağırır).
     /// Kare ve kutular değişmediyse hiçbir özellik değişmez.</summary>
@@ -46,6 +91,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         if (!ReferenceEquals(frame, PreviewFrame)) PreviewFrame = frame;
         if (ReferenceEquals(boxes, _previewBoxes)) return;
         _previewBoxes = boxes;
+        SyncFacePanels(boxes);
         if (boxes.Count == 0 && PreviewFaces.Count == 0) return;
         PreviewFaces.Clear();
         foreach (var (index, box) in boxes)
@@ -161,6 +207,12 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         _neutralRadius = fusion.NeutralRadius;
         _captureMode = captureMode;
         _diarization = diarization;
+        // Profil değişince (satış ↔ mülakat/toplantı) paneller ve ortak kare yeniden belirlenir.
+        Decision.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(Decision.SelectedProfile) && _previewBoxes is not null)
+                SyncFacePanels(_previewBoxes);
+        };
     }
 
     partial void OnUseMicrophoneChanged(bool value)
@@ -196,6 +248,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
             OnPropertyChanged(nameof(WaitingForSpeech));
         }
         Decision.OnWindow(r, faces);
+        foreach (var f in faces) PanelFor(f.FaceIndex).Apply(f);
         Timeline.Add(row);
         CurrentEmotion = row.Emotion;
         CurrentValence = row.Valence;
@@ -233,6 +286,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         _receivedThisRun = false;
         IsCapturing = true;
         Decision.Start();
+        ResetFacePanels();
         Decision.IsLocked = true;
         FaceContributionText = string.Empty; // önceki koşunun "Yüz dahil" satırı yeni oturumda sarkmasın
         DiarizationHint = _diarization?.Enabled == true

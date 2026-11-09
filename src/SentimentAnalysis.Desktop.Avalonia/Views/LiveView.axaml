@@ -4,7 +4,9 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:desktop="clr-namespace:SentimentAnalysis.Desktop;assembly=SentimentAnalysis.Desktop"
              xmlns:conv="using:SentimentAnalysis.Desktop.Avalonia.Converters"
+             xmlns:ctl="using:SentimentAnalysis.Desktop.Avalonia.Controls"
              mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="500"
+             x:Name="Root"
              x:Class="SentimentAnalysis.Desktop.Avalonia.Views.LiveView">
 
     <UserControl.Resources>
@@ -93,7 +95,34 @@
                        IsVisible="{Binding DiarizationHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                        Foreground="{DynamicResource SystemBaseMediumColor}" FontStyle="Italic" />
 
-            <Border IsVisible="{Binding HasPreview}" Background="#15191F" CornerRadius="6" ClipToBounds="True">
+            <!-- Mülakat/toplantı: her yüz kendi panelinde; satış (ve yüz görünmeyince): tek ortak kare. -->
+            <ItemsControl ItemsSource="{Binding FacePanels}" IsVisible="{Binding ShowFacePanels}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><UniformGrid Columns="{Binding FacePanelColumns}" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="desktop:FacePanelVm">
+                        <Border Classes="card" Margin="4" Padding="10">
+                            <StackPanel Spacing="6">
+                                <ctl:FaceCropImage Source="{Binding #Root.PreviewBitmap}" Box="{Binding Box}"
+                                                   HorizontalAlignment="Center" />
+                                <TextBox Text="{Binding Name, Mode=TwoWay}" Watermark="Kişinin adı" FontWeight="SemiBold"
+                                         AutomationProperties.Name="Kişinin adı"
+                                         ToolTip.Tip="Bu yüze bir ad ver. Yüz numaraları kişi değil sıradır; biri çıkıp girerse karışabilir." />
+                                <TextBlock Text="{Binding Emotion}" FontSize="18" FontWeight="Bold" />
+                                <TextBlock Text="Başını çevirme" FontSize="11" />
+                                <ProgressBar Minimum="0" Maximum="1" Value="{Binding LookAway}" Height="6" />
+                                <TextBlock Text="Olumsuz ifade" FontSize="11" />
+                                <ProgressBar Minimum="0" Maximum="1" Value="{Binding Negative}" Height="6" />
+                                <TextBlock Text="Gülümseme" FontSize="11" />
+                                <ProgressBar Minimum="0" Maximum="1" Value="{Binding Smile}" Height="6" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Border IsVisible="{Binding ShowSharedPreview}" Background="#15191F" CornerRadius="6" ClipToBounds="True">
                 <Viewbox Stretch="Uniform" MaxHeight="360" HorizontalAlignment="Center">
                     <Grid Width="{Binding PreviewFrame.Width}" Height="{Binding PreviewFrame.Height}">
                         <Image x:Name="PreviewImage" Stretch="Fill" />

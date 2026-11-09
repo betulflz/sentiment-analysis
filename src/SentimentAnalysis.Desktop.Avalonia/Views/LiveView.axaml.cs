@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using SentimentAnalysis.Core;
@@ -14,6 +15,16 @@ public partial class LiveView : UserControl
     private readonly VideoFrameToBitmapConverter _converter = new();
     private VideoFrame? _displayedFrame;
     private WriteableBitmap? _bitmap;
+
+    /// <summary>Önizleme karesinin bitmap'i; yüz panelleri (<see cref="Controls.FaceCropImage"/>) bundan kırpar.</summary>
+    public static readonly StyledProperty<IImage?> PreviewBitmapProperty =
+        AvaloniaProperty.Register<LiveView, IImage?>(nameof(PreviewBitmap));
+
+    public IImage? PreviewBitmap
+    {
+        get => GetValue(PreviewBitmapProperty);
+        private set => SetValue(PreviewBitmapProperty, value);
+    }
 
     public LiveView()
     {
@@ -47,12 +58,14 @@ public partial class LiveView : UserControl
         _bitmap = next;
         _displayedFrame = frame;
         PreviewImage.Source = next;
+        PreviewBitmap = next;
         previous?.Dispose();
     }
 
     private void ClearBitmap()
     {
         PreviewImage.Source = null;
+        PreviewBitmap = null;
         _bitmap?.Dispose();
         _bitmap = null;
         _displayedFrame = null;
