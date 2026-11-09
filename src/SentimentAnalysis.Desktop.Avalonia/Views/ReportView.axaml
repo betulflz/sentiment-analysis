@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:desktop="clr-namespace:SentimentAnalysis.Desktop;assembly=SentimentAnalysis.Desktop"
              xmlns:conv="using:SentimentAnalysis.Desktop.Avalonia.Converters"
+             xmlns:ctl="using:SentimentAnalysis.Desktop.Avalonia.Controls"
              mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="500"
              x:Class="SentimentAnalysis.Desktop.Avalonia.Views.ReportView">
 
@@ -153,40 +154,35 @@
                 <Border Classes="card"
                         IsVisible="{Binding HasDecisionData}">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Gösterge Zaman Çizelgesi" Classes="cardTitle" />
-                        <!-- Satır başına kriter; hücre başına analiz penceresi. Koyuluk = gösterge değeri (0..1). -->
-                        <Grid ColumnDefinitions="130,*">
-                            <ItemsControl Grid.Column="0" ItemsSource="{Binding IndicatorTimeline}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Name}" FontSize="11" Height="16" VerticalAlignment="Center"
-                                                   TextTrimming="CharacterEllipsis" />
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                                <ItemsControl ItemsSource="{Binding IndicatorTimeline}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <ItemsControl ItemsSource="{Binding Values}" Height="16">
-                                                <ItemsControl.ItemsPanel>
-                                                    <ItemsPanelTemplate>
-                                                        <StackPanel Orientation="Horizontal" Spacing="1" />
-                                                    </ItemsPanelTemplate>
-                                                </ItemsControl.ItemsPanel>
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Border Width="10" Height="14" Background="{DynamicResource SystemAccentColor}"
-                                                                Opacity="{Binding}" />
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
+                        <TextBlock Text="Görüşme boyunca ne değişti?" Classes="cardTitle" />
+                        <Border Classes="why">
+                            <TextBlock Text="Her satır bir sorunun görüşme boyunca nasıl seyrettiğini gösterir. Çizgi yükseliyorsa sorun büyüyor, alçalıyorsa azalıyor. Sağdaki etiket görüşmenin başını ve sonunu karşılaştırır: kırmızı kötüleşme, yeşil iyileşme, gri belirgin değişim yok." />
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding IndicatorTimeline}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="desktop:IndicatorRowVm">
+                                    <Grid ColumnDefinitions="150,*,210" ColumnSpacing="12" Height="44">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                   TextWrapping="Wrap" />
+                                        <Border Grid.Column="1" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,0,0,1">
+                                            <ctl:Sparkline Values="{Binding Values}" Classes.up="{Binding TrendUp}"
+                                                           Classes.down="{Binding TrendDown}" Classes.flat="{Binding TrendFlat}" />
+                                        </Border>
+                                        <Border Grid.Column="2" Classes="pill" Classes.bad="{Binding TrendUp}"
+                                                Classes.good="{Binding TrendDown}" Classes.neutral="{Binding TrendFlat}">
+                                            <TextBlock Text="{Binding TrendText}" />
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Grid ColumnDefinitions="150,*,210" ColumnSpacing="12">
+                            <Grid Grid.Column="1" ColumnDefinitions="*,*">
+                                <TextBlock Text="{Binding TimelineStart, StringFormat='{}{0} başlangıç'}" Classes="muted" FontSize="11" />
+                                <TextBlock Grid.Column="1" Text="{Binding TimelineEnd, StringFormat='son {0}'}" Classes="muted" FontSize="11"
+                                           HorizontalAlignment="Right" />
+                            </Grid>
                         </Grid>
-                        <TextBlock Text="{Binding TimelineRange}" FontSize="11" Foreground="{DynamicResource SystemBaseMediumColor}" />
                     </StackPanel>
                 </Border>
 

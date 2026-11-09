@@ -151,6 +151,10 @@ public sealed partial class ReportViewModel : ObservableObject
     /// <summary>Zaman çizelgesinin kapsadığı aralık ("00:00–04:30").</summary>
     [ObservableProperty] private string _timelineRange = string.Empty;
 
+    /// <summary>Grafiğin altındaki zaman ekseninin iki ucu.</summary>
+    [ObservableProperty] private string _timelineStart = string.Empty;
+    [ObservableProperty] private string _timelineEnd = string.Empty;
+
     /// <summary>Görüşme sırasında gösterilen önerinin değiştiği anlar.</summary>
     public IReadOnlyList<RecommendationRowVm> Recommendations { get; private set; } = System.Array.Empty<RecommendationRowVm>();
 
@@ -242,7 +246,9 @@ public sealed partial class ReportViewModel : ObservableObject
             .Select(c => new IndicatorRowVm(DecisionPanelViewModel.Capitalize(DecisionText.Name(c)),
                 windows.Select(w => w.Indicators.Values[(int)c]).ToArray()))
             .ToArray();
-        TimelineRange = windows.Count == 0 ? string.Empty : $"{Clock(windows[0].Start)}–{Clock(windows[^1].End)}";
+        TimelineStart = windows.Count == 0 ? string.Empty : Clock(windows[0].Start);
+        TimelineEnd = windows.Count == 0 ? string.Empty : Clock(windows[^1].End);
+        TimelineRange = windows.Count == 0 ? string.Empty : $"{TimelineStart}–{TimelineEnd}";
         Recommendations = DecisionReport.Changes(windows)
             .Select(c => new RecommendationRowVm(Clock(c.At), DecisionText.Name(c.Action), c.Reason, c.Confidence == Confidence.Dusuk))
             .ToArray();
@@ -317,8 +323,34 @@ public sealed partial class ReportViewModel : ObservableObject
     }
 }
 
-/// <summary>Zaman çizelgesinde bir kriterin pencere değerleri (0..1).</summary>
-public sealed record IndicatorRowVm(string Name, IReadOnlyList<double> Values);
+/// <summary>Zaman çizelgesinde bir kriterin pencere değerleri (0..1) ve baştan sona eğilimi.
+/// Eğilim ilk ve son üçte birin ORTALAMASIYLA ölçülür — tek pencerelik sıçrama "arttı" demesin.
+/// Kriterlerin hepsi sorun olduğundan artış kötü (kırmızı), azalış iyi (yeşil) gösterilir.</summary>
+public sealed record IndicatorRowVm(string Name, IReadOnlyList<double> Values)
+{
+    private const double FlatBand = 0.1;
+
+    private (double Start, double End) Ends
+    {
+        get
+        {
+            int n = System.Math.Max(1, Values.Count / 3);
+            return (Values.Take(n).Average(), Values.Skip(Values.Count - n).Average());
+        }
+    }
+
+    public bool TrendUp => Values.Count > 1 && Ends.End - Ends.Start >= FlatBand;
+    public bool TrendDown => Values.Count > 1 && Ends.Start - Ends.End >= FlatBand;
+    public bool TrendFlat => !TrendUp && !TrendDown;
+
+    public string TrendText =>
+        Values.Count == 0 ? string.Empty
+        : TrendUp ? $"↑ arttı {Pct(Ends.Start)} → {Pct(Ends.End)}"
+        : TrendDown ? $"↓ azaldı {Pct(Ends.Start)} → {Pct(Ends.End)}"
+        : $"→ belirgin değişim yok (ortalama {Pct(Values.Average())})";
+
+    private static string Pct(double x) => $"%{System.Math.Round(100 * x, System.MidpointRounding.AwayFromZero)}";
+}
 
 /// <summary>Verilen öneri satırı: "00:40", eylem, gerekçe; düşük güvenli satır soluk gösterilir.</summary>
 public sealed record RecommendationRowVm(string Time, string Action, string Reason, bool IsLowConfidence);

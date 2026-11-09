@@ -184,6 +184,8 @@ public class ReportViewModelTests
         Assert.Equal("Gerilim", vm.IndicatorTimeline[0].Name);
         Assert.Equal(new[] { 0.1, 0.8, 0.1 }, vm.IndicatorTimeline[0].Values);
         Assert.Equal("00:00–00:30", vm.TimelineRange);
+        Assert.Equal("00:00", vm.TimelineStart);
+        Assert.Equal("00:30", vm.TimelineEnd);
     }
 
     [Fact]

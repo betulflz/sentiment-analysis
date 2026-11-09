@@ -1,6 +1,7 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="using:SentimentAnalysis.Desktop.Avalonia.Converters"
+             xmlns:ctl="using:SentimentAnalysis.Desktop.Avalonia.Controls"
              xmlns:desktop="clr-namespace:SentimentAnalysis.Desktop;assembly=SentimentAnalysis.Desktop"
              x:Class="SentimentAnalysis.Desktop.Avalonia.App"
              RequestedThemeVariant="Default">
@@ -122,6 +123,13 @@
         <Style Selector="Border.pill.bad TextBlock"><Setter Property="Foreground" Value="{DynamicResource BadFg}" /></Style>
         <Style Selector="Border.pill.warn"><Setter Property="Background" Value="{DynamicResource WarnBg}" /></Style>
         <Style Selector="Border.pill.warn TextBlock"><Setter Property="Foreground" Value="{DynamicResource WarnFg}" /></Style>
+        <Style Selector="Border.pill.neutral"><Setter Property="Background" Value="{DynamicResource SubtleBg}" /></Style>
+        <Style Selector="Border.pill.neutral TextBlock"><Setter Property="Foreground" Value="{DynamicResource MutedFg}" /></Style>
+
+        <!-- Eğilim çizgisi: sorun arttı = kırmızı, azaldı = yeşil, değişmedi = gri. -->
+        <Style Selector="ctl|Sparkline.up"><Setter Property="Stroke" Value="#E0485E" /></Style>
+        <Style Selector="ctl|Sparkline.down"><Setter Property="Stroke" Value="#2F9E64" /></Style>
+        <Style Selector="ctl|Sparkline.flat"><Setter Property="Stroke" Value="#8A84A3" /></Style>
     </Application.Styles>
 
     <TrayIcon.Icons>
