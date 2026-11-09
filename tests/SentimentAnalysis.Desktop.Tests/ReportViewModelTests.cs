@@ -19,7 +19,7 @@ public class ReportViewModelTests
             ValenceTrend: 0.25, EmotionalVolatility: 0.1,
             PeakMoments: s.Chunks.Take(1).ToList(),
             AverageVa: new ValenceArousal(0.2, 0.5), AverageCongruence: 0.8,
-            TurkishSummary: "Toplantı olumlu geçti.");
+            TurkishSummary: "Toplantı olumlu geçti.") { AnalyzedDuration = TimeSpan.FromSeconds(100) };
     }
 
     private static MeetingSession Session() => new(Guid.NewGuid(), DateTimeOffset.UnixEpoch, DetectedLanguage.Turkish,
@@ -45,6 +45,27 @@ public class ReportViewModelTests
         Assert.Contains(vm.TimeShare, s => s.Emotion == "Mutlu" && Math.Abs(s.Share - 0.6) < 1e-9);
         Assert.Single(vm.PeakMoments);
         Assert.Equal("merhaba", vm.PeakMoments[0].Transcript);
+    }
+
+    [Fact]
+    public void DuyguHaritasi_BuyuktenKucugeSureVeOzet()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.Load(Session());
+
+        Assert.Equal(new[] { "Mutlu", "Üzgün" }, vm.TimeShare.Select(t => t.Emotion));
+        Assert.Equal(Emotion.Mutlu, vm.TimeShare[0].Key);
+        Assert.Equal("%60 · yaklaşık 1 dk 0 sn", vm.TimeShare[0].Text);
+        Assert.Equal("%40 · yaklaşık 40 sn", vm.TimeShare[1].Text);
+        Assert.Equal("Konuşmanın en büyük kısmı (%60) mutlu bir havada geçti.", vm.EmotionMapSummary);
+    }
+
+    [Fact]
+    public void DuyguHaritasi_SureYoksaYalnizYuzde()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.LoadSummary(new FakeAggregator().Aggregate(Session()) with { AnalyzedDuration = TimeSpan.Zero });
+        Assert.Equal("%60", vm.TimeShare[0].Text);
     }
 
     // --- 10b: konuşmacı etiketli transkript ---

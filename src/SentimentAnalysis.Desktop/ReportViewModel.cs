@@ -14,9 +14,22 @@ namespace SentimentAnalysis.Desktop;
 /// bu tip <c>TimeShareVm</c> olarak adlandırıldı.</remarks>
 public sealed class TimeShareVm
 {
+    public Emotion Key { get; }
     public string Emotion { get; }
     public double Share { get; }
-    public TimeShareVm(Emotion e, double share) { Emotion = EmotionLocalizer.Emotion(e); Share = share; }
+
+    /// <summary>"%42 · yaklaşık 1 dk 53 sn"; toplam süre bilinmiyorsa yalnız yüzde. Süre paydan
+    /// türetildiği için "yaklaşık" denir.</summary>
+    public string Text { get; }
+
+    public TimeShareVm(Emotion e, double share, System.TimeSpan total = default)
+    {
+        Key = e;
+        Emotion = EmotionLocalizer.Emotion(e);
+        Share = share;
+        var pct = $"%{System.Math.Round(100 * share, System.MidpointRounding.AwayFromZero)}";
+        Text = total > System.TimeSpan.Zero ? $"{pct} · yaklaşık {ReportViewModel.Duration(total * share)}" : pct;
+    }
 }
 
 /// <summary>Konuşmacı etiketli transkript satırı (10b): "Konuşmacı A: merhaba nasılsın".</summary>
@@ -120,6 +133,8 @@ public sealed partial class ReportViewModel : ObservableObject
     [ObservableProperty] private double _averageCongruence;
 
     public IReadOnlyList<TimeShareVm> TimeShare { get; private set; } = System.Array.Empty<TimeShareVm>();
+
+    [ObservableProperty] private string _emotionMapSummary = string.Empty;
     public IReadOnlyList<ChunkRowVm> PeakMoments { get; private set; } = System.Array.Empty<ChunkRowVm>();
 
     /// <summary>Konuşmacı ayrımının kullanıcıya görünen durumu (10b). Boş = özellik kapalı
@@ -267,7 +282,7 @@ public sealed partial class ReportViewModel : ObservableObject
 
     private static string Percent(double x) => $"%{System.Math.Round(100 * x, System.MidpointRounding.AwayFromZero)}";
 
-    private static string Duration(System.TimeSpan t)
+    internal static string Duration(System.TimeSpan t)
     {
         int total = (int)System.Math.Round(t.TotalSeconds, System.MidpointRounding.AwayFromZero);
         return total < 60 ? $"{total} sn" : $"{total / 60} dk {total % 60} sn";
@@ -292,6 +307,19 @@ public sealed partial class ReportViewModel : ObservableObject
         OnPropertyChanged(nameof(SpeakerEmotions));
     }
 
+    /// <summary>Duygu haritası: paylar büyükten küçüğe, süre ve tek cümlelik özet.</summary>
+    private void LoadTimeShare(MeetingSummary s)
+    {
+        TimeShare = s.TimeShareByEmotion
+            .OrderByDescending(kv => kv.Value).ThenBy(kv => (int)kv.Key)
+            .Select(kv => new TimeShareVm(kv.Key, kv.Value, s.AnalyzedDuration))
+            .ToList();
+        EmotionMapSummary = TimeShare.Count == 0 ? string.Empty
+            : $"Konuşmanın en büyük kısmı (%{System.Math.Round(100 * TimeShare[0].Share, System.MidpointRounding.AwayFromZero)}) "
+              + $"{TimeShare[0].Emotion.ToLower(new System.Globalization.CultureInfo("tr-TR"))} bir havada geçti.";
+        OnPropertyChanged(nameof(TimeShare));
+    }
+
     public void Load(MeetingSession session)
     {
         var s = _aggregator.Aggregate(session);
@@ -300,8 +328,9 @@ public sealed partial class ReportViewModel : ObservableObject
         ValenceTrend = s.ValenceTrend;
         Volatility = s.EmotionalVolatility;
         AverageCongruence = s.AverageCongruence;
-        TimeShare = s.TimeShareByEmotion.Select(kv => new TimeShareVm(kv.Key, kv.Value)).ToList();
+        LoadTimeShare(s);
         PeakMoments = s.PeakMoments.Select(c => new ChunkRowVm(c)).ToList();
+        OnPropertyChanged(nameof(PeakMoments));
         HasReport = true;
     }
 
@@ -314,8 +343,9 @@ public sealed partial class ReportViewModel : ObservableObject
         ValenceTrend = s.ValenceTrend;
         Volatility = s.EmotionalVolatility;
         AverageCongruence = s.AverageCongruence;
-        TimeShare = s.TimeShareByEmotion.Select(kv => new TimeShareVm(kv.Key, kv.Value)).ToList();
+        LoadTimeShare(s);
         PeakMoments = s.PeakMoments.Select(c => new ChunkRowVm(c)).ToList();
+        OnPropertyChanged(nameof(PeakMoments));
         // Yeni görüşme: önceki koşunun konuşmacıları sarkmasın (ayrım bu koşuda kapalıysa geçiş hiç çalışmaz).
         DiarizationStatus = string.Empty;
         ClearSpeakers();

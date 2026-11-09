@@ -45,6 +45,17 @@ public class MeetingAggregatorTests
     }
 
     [Fact]
+    public void AnalyzedDuration_OrtusenParcalarIkiKezSayilmaz()
+    {
+        // 0–10 ve 8–18 örtüşür (birleşim 18 sn), 30–40 ayrı (10 sn) → 28 sn; aradaki sessizlik sayılmaz.
+        var s = Agg.Aggregate(Session(
+            Chunk(0, 10, 0.8, 0.5, Emotion.Mutlu),
+            Chunk(8, 18, 0.8, 0.5, Emotion.Mutlu),
+            Chunk(30, 40, -0.6, 0.3, Emotion.Uzgun)));
+        Assert.Equal(TimeSpan.FromSeconds(28), s.AnalyzedDuration);
+    }
+
+    [Fact]
     public void TimeShare_SumsToOne()
     {
         var s = Agg.Aggregate(Session(

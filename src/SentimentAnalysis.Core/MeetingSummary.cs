@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace SentimentAnalysis.Core;
@@ -25,6 +26,10 @@ public sealed record MeetingSummary(
     string TurkishSummary,
     AnalysisOutcome Outcome = AnalysisOutcome.Success)
 {
+    /// <summary>Analiz edilen konuşmanın süresi: parça aralıklarının BİRLEŞİMİ (örtüşme iki kez
+    /// sayılmaz, parçalar arası sessizlik sayılmaz). Duygu paylarını süreye çevirmek için.</summary>
+    public TimeSpan AnalyzedDuration { get; init; }
+
     public static MeetingSummary CreateEmpty(AnalysisOutcome outcome, string summaryText = "") => new(
         DominantEmotion: Emotion.Notr,
         TimeShareByEmotion: new Dictionary<Emotion, double>(),

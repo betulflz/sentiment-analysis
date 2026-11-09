@@ -56,7 +56,7 @@ public sealed class MeetingAggregator : IMeetingAggregator
             AverageVa: averageVa,
             AverageCongruence: avgCongruence,
             TurkishSummary: string.Empty);
-        return summary with { TurkishSummary = TurkishSummaryWriter.Write(summary) };
+        return summary with { TurkishSummary = TurkishSummaryWriter.Write(summary), AnalyzedDuration = Union(chunks) };
     }
 
     /// <summary>Kritiklik: yüksek arousal + düşük valence = en kritik an.</summary>
@@ -87,6 +87,25 @@ public sealed class MeetingAggregator : IMeetingAggregator
     }
 
     /// <summary>Chunk ağırlığı: pozitif süre; sıfır/negatifse 1.0 (dejenere veriyi eşit say).</summary>
+    private static TimeSpan Union(IReadOnlyList<ChunkResult> chunks)
+    {
+        var total = TimeSpan.Zero;
+        TimeSpan? start = null, end = null;
+        foreach (var c in chunks.OrderBy(c => c.TimeStart))
+        {
+            if (end is { } e && c.TimeStart <= e)
+            {
+                if (c.TimeEnd > e) end = c.TimeEnd;
+                continue;
+            }
+            if (start is { } s0) total += end!.Value - s0;
+            start = c.TimeStart;
+            end = c.TimeEnd;
+        }
+        if (start is { } s1) total += end!.Value - s1;
+        return total;
+    }
+
     private static double Weight(ChunkResult c)
     {
         double seconds = (c.TimeEnd - c.TimeStart).TotalSeconds;

@@ -23,19 +23,20 @@ public static class TurkishSummaryWriter
 
     public static string Write(MeetingSummary m)
     {
-        string dominant = Adlar[m.DominantEmotion];
-        string trend = m.ValenceTrend > 0.05 ? "ısındı"
-                     : m.ValenceTrend < -0.05 ? "soğudu"
-                     : "sabit kaldı";
-        string volatilite = m.EmotionalVolatility > 0.35 ? "yüksek"
-                          : m.EmotionalVolatility > 0.15 ? "orta"
-                          : "düşük";
-        string congruence = m.AverageCongruence >= 0.7 ? "yüksek"
-                          : m.AverageCongruence >= 0.4 ? "orta"
-                          : "düşük";
+        // Konuyu bilmeyen kullanıcı için düz dil: "baskın", "oynaklık", "örtüşme" gibi terimler yok.
+        string dominant = Adlar[m.DominantEmotion].ToLower(new System.Globalization.CultureInfo("tr-TR"));
+        string trend = m.ValenceTrend > 0.05 ? "olumluya döndü"
+                     : m.ValenceTrend < -0.05 ? "olumsuza döndü"
+                     : "pek değişmedi";
+        string volatilite = m.EmotionalVolatility > 0.35 ? "sık sık değişti"
+                          : m.EmotionalVolatility > 0.15 ? "ara ara değişti"
+                          : "genelde aynı kaldı";
+        string congruence = m.AverageCongruence >= 0.7 ? "çoğunlukla uyumluydu"
+                          : m.AverageCongruence >= 0.4 ? "kısmen uyumluydu"
+                          : "sık sık çelişti";
 
-        return $"Toplantının baskın duygusu {dominant}. "
-             + $"Genel hava {trend}, duygusal oynaklık {volatilite}. "
-             + $"Söz-ton örtüşmesi {congruence}.";
+        return $"Görüşmede en çok {dominant} bir hava vardı. "
+             + $"Görüşme ilerledikçe hava {trend}; duygular {volatilite}. "
+             + $"Söylenenlerle ses tonu {congruence}.";
     }
 }

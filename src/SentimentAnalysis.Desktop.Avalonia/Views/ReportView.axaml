@@ -10,6 +10,7 @@
 
     <UserControl.Resources>
         <conv:UncertainOpacityConverter x:Key="UncertainOpacityConverter" />
+        <conv:EmotionColorConverter x:Key="EmotionColor" />
         <DataTemplate x:Key="SourcePanel" DataType="desktop:SourceAnalysisVm">
             <Border Background="{DynamicResource SubtleBg}" CornerRadius="10" Padding="12" Margin="2" MinWidth="160">
                 <StackPanel Spacing="8">
@@ -226,17 +227,28 @@
 
                 <Border Classes="card">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Duygu Payları" Classes="cardTitle" />
-                        <ItemsControl ItemsSource="{Binding TimeShare}">
+                        <TextBlock Text="Görüşmenin duygu haritası" Classes="cardTitle" />
+                        <Border Classes="why">
+                            <TextBlock Text="Konuşmanın ne kadarının hangi duygu içinde geçtiğini gösterir. Şerit ne kadar geniş bir renkle doluysa görüşmenin o kadarı o duyguda geçti; görüşmenin genel havasını tek bakışta anlatır." />
+                        </Border>
+                        <ctl:ShareBar Items="{Binding TimeShare}" Height="30" />
+                        <ItemsControl ItemsSource="{Binding TimeShare}" Margin="0,6,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid ColumnDefinitions="150,*">
-                                        <TextBlock Grid.Column="0" Text="{Binding Emotion}" />
-                                        <TextBlock Grid.Column="1" Text="{Binding Share, StringFormat='{}{0:P1}'}" />
-                                    </Grid>
+                                <DataTemplate DataType="desktop:TimeShareVm">
+                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,18,4">
+                                        <Border Width="12" Height="12" CornerRadius="3" VerticalAlignment="Center"
+                                                Background="{Binding Key, Converter={StaticResource EmotionColor}}" />
+                                        <TextBlock Text="{Binding Emotion}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding Text}" Classes="muted" VerticalAlignment="Center" />
+                                    </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <TextBlock Text="{Binding EmotionMapSummary}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,4,0,0"
+                                   IsVisible="{Binding EmotionMapSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     </StackPanel>
                 </Border>
 
