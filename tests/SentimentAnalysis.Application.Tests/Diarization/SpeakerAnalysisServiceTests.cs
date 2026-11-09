@@ -42,10 +42,10 @@ public class SpeakerAnalysisServiceTests
         }
     }
 
-    private sealed class FakeReader(IReadOnlyList<SpeakerSegment> speakers) : ISpeakerDataReader
+    private sealed class FakeReader(IReadOnlyList<SpeakerSegment> speakers, IReadOnlyList<TranscriptSegment>? transcript = null) : ISpeakerDataReader
     {
         public Task<IReadOnlyList<TranscriptSegment>> GetTranscriptSegmentsAsync(Guid id, CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<TranscriptSegment>>(Array.Empty<TranscriptSegment>());
+            Task.FromResult(transcript ?? Array.Empty<TranscriptSegment>());
         public Task<IReadOnlyList<SpeakerSegment>> GetSpeakerSegmentsAsync(Guid id, CancellationToken ct) =>
             Task.FromResult(speakers);
         public Task<IReadOnlyList<ChunkResult>> GetChunkResultsAsync(Guid id, CancellationToken ct) =>
@@ -77,6 +77,33 @@ public class SpeakerAnalysisServiceTests
         Assert.Equal(DiarizationOutcome.Completed, result.Outcome);
         Assert.Equal(2, result.SpeakerProsody.Count);
         Assert.Equal(0.6, result.SpeakerProsody[0].Va.Valence, precision: 3);
+    }
+
+    [Fact]
+    public async Task RunAsync_TekrarSatirlarVeHayaletKonusmacilarTemizlenir()
+    {
+        static TimeSpan Sec(double s) => TimeSpan.FromSeconds(s);
+        var speakers = new[]
+        {
+            new SpeakerSegment(new SpeakerId(0), Sec(0), Sec(30)),
+            new SpeakerSegment(new SpeakerId(1), Sec(30), Sec(30.5)),   // hayalet kırıntı
+            new SpeakerSegment(new SpeakerId(2), Sec(31), Sec(60)),
+        };
+        var transcript = new[]
+        {
+            new TranscriptSegment("Hangi karta?", Sec(55.56), Sec(56.78)),
+            new TranscriptSegment("Hangi karta?", Sec(56), Sec(56.78)),
+        };
+        var audio = new float[60 * 16000];
+        var job = new DiarizationJob(new FakeDiarizer(speakers), new FakeStore(audio, speakers), AppConfig.Default);
+        var analyzer = new SpeakerProsodyAnalyzer(new FakeProsody(), AppConfig.Default);
+        var service = new SpeakerAnalysisService(job, new FakeReader(speakers, transcript), new FakeState(), analyzer);
+
+        var result = await service.RunAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Single(result.Transcript);
+        Assert.Equal(new[] { 0, -1, 1 }, result.Speakers.Select(s => s.Speaker.Index));
+        Assert.Equal(2, result.SpeakerProsody.Count); // ses tonu ölçümü de hayaleti görmez
     }
 
     [Fact]

@@ -82,7 +82,7 @@ public class ReportViewModelTests
         new(new SpeakerId(spk), TimeSpan.FromSeconds(s), TimeSpan.FromSeconds(e));
 
     [Fact]
-    public void ApplySpeakers_ArdisikAyniKonusmaci_TekSatirdaBirlesir()
+    public void ApplySpeakers_HerCumleAyriBalon()
     {
         var vm = new ReportViewModel(new FakeAggregator());
 
@@ -91,17 +91,18 @@ public class ReportViewModelTests
             [S(0, 0, 4), S(1, 4, 6)],
             minOverlapRatio: 0.5);
 
-        Assert.Equal(2, vm.SpeakerLines.Count);
+        Assert.Equal(3, vm.SpeakerLines.Count);
         Assert.Equal("Konuşmacı A", vm.SpeakerLines[0].Label);
-        Assert.Equal("Merhaba nasılsın", vm.SpeakerLines[0].Text);
-        Assert.Equal("Konuşmacı B", vm.SpeakerLines[1].Label);
-        Assert.Equal("iyiyim", vm.SpeakerLines[1].Text);
+        Assert.Equal("Merhaba", vm.SpeakerLines[0].Text);
+        Assert.Equal("nasılsın", vm.SpeakerLines[1].Text);
+        Assert.Equal("Konuşmacı B", vm.SpeakerLines[2].Label);
+        Assert.Equal("iyiyim", vm.SpeakerLines[2].Text);
         // Sohbet balonu: harf rozeti, konuşmacı rengi; A solda, B sağda.
         Assert.Equal("A", vm.SpeakerLines[0].Initial);
         Assert.Equal(0, vm.SpeakerLines[0].SpeakerIndex);
         Assert.False(vm.SpeakerLines[0].IsRight);
-        Assert.Equal("B", vm.SpeakerLines[1].Initial);
-        Assert.True(vm.SpeakerLines[1].IsRight);
+        Assert.Equal("B", vm.SpeakerLines[2].Initial);
+        Assert.True(vm.SpeakerLines[2].IsRight);
         Assert.True(vm.HasSpeakers);
     }
 
