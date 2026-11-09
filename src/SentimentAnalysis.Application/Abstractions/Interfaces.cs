@@ -178,7 +178,10 @@ public interface IDecisionStore
 public interface IDiarizer
 {
     /// <param name="mono16k">16 kHz mono, oturumun tamamı.</param>
-    Task<IReadOnlyList<SpeakerSegment>> DiarizeAsync(float[] mono16k, CancellationToken ct);
+    /// <param name="expectedSpeakers">Kullanıcının söylediği kişi sayısı; 0 = bilinmiyor (küme sayısı
+    /// eşikle bulunur). Bilinirse ses tam o sayıda kişiye bölünür — benzer sesler eşikte tek kişi
+    /// sayılmaz (2026-11-09 ölçümü).</param>
+    Task<IReadOnlyList<SpeakerSegment>> DiarizeAsync(float[] mono16k, int expectedSpeakers, CancellationToken ct);
 }
 
 /// <summary>Oturumun ham sesini saklar — arka plan konuşmacı ayrımının (Alt-proje 10b) girdisi.

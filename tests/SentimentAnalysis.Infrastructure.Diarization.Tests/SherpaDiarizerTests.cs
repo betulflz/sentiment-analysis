@@ -30,7 +30,7 @@ public class SherpaDiarizerTests
         // Model yokken bile geçmeli: boş ses kısa devre yapar.
         using var sut = new SherpaDiarizer(Cfg(), new FakeModels());
 
-        var segments = await sut.DiarizeAsync(Array.Empty<float>(), CancellationToken.None);
+        var segments = await sut.DiarizeAsync(Array.Empty<float>(), 0, CancellationToken.None);
 
         Assert.Empty(segments);
     }
@@ -43,7 +43,7 @@ public class SherpaDiarizerTests
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => sut.DiarizeAsync(new float[16000], cts.Token));
+            () => sut.DiarizeAsync(new float[16000], 0, cts.Token));
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public class SherpaDiarizerTests
         using var sut = new SherpaDiarizer(Cfg(), new FakeModels());
 
         await Assert.ThrowsAsync<FileNotFoundException>(
-            () => sut.DiarizeAsync(new float[16000], CancellationToken.None));
+            () => sut.DiarizeAsync(new float[16000], 0, CancellationToken.None));
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public class SherpaDiarizerTests
         sut.Dispose();
 
         await Assert.ThrowsAsync<ObjectDisposedException>(
-            () => sut.DiarizeAsync(new float[16000], CancellationToken.None));
+            () => sut.DiarizeAsync(new float[16000], 0, CancellationToken.None));
     }
 
     [SkippableFact]
@@ -83,7 +83,7 @@ public class SherpaDiarizerTests
         Skip.If(rate != 16000, $"16 kHz bekleniyor, {rate} geldi.");
 
         using var sut = new SherpaDiarizer(Cfg(), new FileDiarizationModelProvider(Cfg()));
-        var segments = await sut.DiarizeAsync(samples, CancellationToken.None);
+        var segments = await sut.DiarizeAsync(samples, 0, CancellationToken.None);
 
         Assert.NotEmpty(segments);
         Assert.All(segments, s => Assert.True(s.End > s.Start, "bölge uzunluğu pozitif olmalı"));

@@ -103,7 +103,7 @@ public sealed partial class MainViewModel : ObservableObject
         SpeakerAnalysisResult result;
         try
         {
-            result = await _speakers.RunAsync(sessionId, CancellationToken.None).ConfigureAwait(false);
+            result = await _speakers.RunAsync(sessionId, Live.LastSpeakerCount, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception)
         {

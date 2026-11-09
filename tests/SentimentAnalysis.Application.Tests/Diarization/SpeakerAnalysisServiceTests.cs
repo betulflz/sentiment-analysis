@@ -17,8 +17,12 @@ public class SpeakerAnalysisServiceTests
 
     private sealed class FakeDiarizer(IReadOnlyList<SpeakerSegment> result) : IDiarizer
     {
-        public Task<IReadOnlyList<SpeakerSegment>> DiarizeAsync(float[] mono16k, CancellationToken ct) =>
-            Task.FromResult(result);
+        public int SeenExpected = -1;
+        public Task<IReadOnlyList<SpeakerSegment>> DiarizeAsync(float[] mono16k, int expectedSpeakers, CancellationToken ct)
+        {
+            SeenExpected = expectedSpeakers;
+            return Task.FromResult(result);
+        }
     }
 
     private sealed class FakeStore(float[]? audio, IReadOnlyList<SpeakerSegment> saved) : IDiarizationStore
@@ -72,7 +76,7 @@ public class SpeakerAnalysisServiceTests
         var analyzer = new SpeakerProsodyAnalyzer(new FakeProsody(), AppConfig.Default);
         var service = new SpeakerAnalysisService(job, new FakeReader(speakers), new FakeState(), analyzer);
 
-        var result = await service.RunAsync(Guid.NewGuid(), CancellationToken.None);
+        var result = await service.RunAsync(Guid.NewGuid(), 0, CancellationToken.None);
 
         Assert.Equal(DiarizationOutcome.Completed, result.Outcome);
         Assert.Equal(2, result.SpeakerProsody.Count);
@@ -99,11 +103,25 @@ public class SpeakerAnalysisServiceTests
         var analyzer = new SpeakerProsodyAnalyzer(new FakeProsody(), AppConfig.Default);
         var service = new SpeakerAnalysisService(job, new FakeReader(speakers, transcript), new FakeState(), analyzer);
 
-        var result = await service.RunAsync(Guid.NewGuid(), CancellationToken.None);
+        var result = await service.RunAsync(Guid.NewGuid(), 0, CancellationToken.None);
 
         Assert.Single(result.Transcript);
         Assert.Equal(new[] { 0, -1, 1 }, result.Speakers.Select(s => s.Speaker.Index));
         Assert.Equal(2, result.SpeakerProsody.Count); // ses tonu ölçümü de hayaleti görmez
+    }
+
+    [Fact]
+    public async Task RunAsync_BeklenenKisiSayisiAyiriciyaKadarIner()
+    {
+        var speakers = new[] { new SpeakerSegment(new SpeakerId(0), TimeSpan.Zero, TimeSpan.FromSeconds(4)) };
+        var diarizer = new FakeDiarizer(speakers);
+        var job = new DiarizationJob(diarizer, new FakeStore(new float[4 * 16000], speakers), AppConfig.Default);
+        var service = new SpeakerAnalysisService(job, new FakeReader(speakers), new FakeState(),
+            new SpeakerProsodyAnalyzer(new FakeProsody(), AppConfig.Default));
+
+        await service.RunAsync(Guid.NewGuid(), 3, CancellationToken.None);
+
+        Assert.Equal(3, diarizer.SeenExpected);
     }
 
     [Fact]
@@ -123,7 +141,7 @@ public class SpeakerAnalysisServiceTests
         var analyzer = new SpeakerProsodyAnalyzer(new FakeProsody(), AppConfig.Default);
         var service = new SpeakerAnalysisService(job, new FakeReader(speakers), new FakeState(), analyzer);
 
-        await service.RunAsync(Guid.NewGuid(), CancellationToken.None);
+        await service.RunAsync(Guid.NewGuid(), 0, CancellationToken.None);
 
         Assert.Equal(1, store.GetSessionAudioCalls);
     }
@@ -144,7 +162,7 @@ public class SpeakerAnalysisServiceTests
         var analyzer = new SpeakerProsodyAnalyzer(new FakeProsody(), AppConfig.Default);
         var service = new SpeakerAnalysisService(job, new FakeReader(Array.Empty<SpeakerSegment>()), new FakeState(), analyzer);
 
-        var result = await service.RunAsync(Guid.NewGuid(), CancellationToken.None);
+        var result = await service.RunAsync(Guid.NewGuid(), 0, CancellationToken.None);
 
         Assert.Equal(DiarizationOutcome.NoAudio, result.Outcome);
         Assert.Empty(result.SpeakerProsody);

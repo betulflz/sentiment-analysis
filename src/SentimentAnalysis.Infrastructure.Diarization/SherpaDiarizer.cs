@@ -13,7 +13,9 @@ namespace SentimentAnalysis.Infrastructure.Diarization;
 /// kümelerden biri 1,9 sn'lik kırıntıydı. (Önceki
 /// 3dspeaker/zh-cn embedding modeliyle ölçülen 0,8 bu embedding uzayına taşınmaz — eşik,
 /// kullanılan embedding modeline özgüdür.)
-/// <c>NumClusters = 0</c>: gerçek toplantıda kaç kişi olduğunu bilmeyiz, küme sayısı eşikle bulunur.</para>
+/// Kişi sayısı biliniyorsa (<c>expectedSpeakers</c> &gt; 0) <c>NumClusters</c> o sayıya sabitlenir;
+/// bilinmiyorsa (0) küme sayısı eşikle bulunur. 2026-11-09'da 9 iki kişilik oturumda hiçbir eşik
+/// hepsini doğru saymadı (0,7 benzer iki sesi tek kişi, 0,6 bir oturumu üç kişi saydı).</para>
 /// <para><b>Hız:</b> 10a'da RTF ≈ 0,44 ölçüldü (120 sn ses → ~54 sn işlem). Bu yüzden canlı
 /// hatta değil, oturum sonrası arka plan geçişinde çalışır.</para></summary>
 public sealed class SherpaDiarizer : IDiarizer, IDisposable
@@ -30,7 +32,7 @@ public sealed class SherpaDiarizer : IDiarizer, IDisposable
         _models = models;
     }
 
-    public Task<IReadOnlyList<SpeakerSegment>> DiarizeAsync(float[] mono16k, CancellationToken ct)
+    public Task<IReadOnlyList<SpeakerSegment>> DiarizeAsync(float[] mono16k, int expectedSpeakers, CancellationToken ct)
     {
         // Boş ses: modeli hiç yükleme. Modelsiz ortamda da çalışır ve gereksiz ~700 MB
         // yükleme maliyeti ödenmez.
@@ -47,6 +49,8 @@ public sealed class SherpaDiarizer : IDiarizer, IDisposable
             {
                 ObjectDisposedException.ThrowIf(_disposed, this);
                 _sd ??= Create();
+                // Model bir kez yüklenir; kişi sayısı her oturumda SetConfig ile güncellenir.
+                _sd.SetConfig(Config(Math.Max(0, expectedSpeakers)));
 
                 var raw = _sd.Process(mono16k);
                 var list = new List<SpeakerSegment>(raw.Length);
@@ -74,12 +78,17 @@ public sealed class SherpaDiarizer : IDiarizer, IDisposable
         RequireFile(segmentation, "pyannote segmentation modeli");
         RequireFile(embedding, "konuşmacı embedding modeli");
 
+        return new SherpaOnnx.OfflineSpeakerDiarization(Config(0));
+    }
+
+    private SherpaOnnx.OfflineSpeakerDiarizationConfig Config(int expectedSpeakers)
+    {
         var cfg = new SherpaOnnx.OfflineSpeakerDiarizationConfig();
-        cfg.Segmentation.Pyannote.Model = segmentation;
-        cfg.Embedding.Model = embedding;
-        cfg.Clustering.NumClusters = 0;                            // bilinmiyor → eşikle bul
+        cfg.Segmentation.Pyannote.Model = _models.SegmentationModelPath;
+        cfg.Embedding.Model = _models.EmbeddingModelPath;
+        cfg.Clustering.NumClusters = expectedSpeakers;             // 0 = bilinmiyor → eşikle bul
         cfg.Clustering.Threshold = (float)_cfg.ClusteringThreshold;
-        return new SherpaOnnx.OfflineSpeakerDiarization(cfg);
+        return cfg;
     }
 
     private static void RequireFile(string path, string what)

@@ -39,8 +39,9 @@ public sealed class DiarizationJob
         _config = config;
     }
 
-    public async Task<DiarizationOutcome> RunAsync(Guid sessionId, CancellationToken ct) =>
-        (await RunWithAudioAsync(sessionId, ct).ConfigureAwait(false)).Outcome;
+    /// <param name="expectedSpeakers">Kullanıcının söylediği kişi sayısı; 0 = bilinmiyor.</param>
+    public async Task<DiarizationOutcome> RunAsync(Guid sessionId, int expectedSpeakers, CancellationToken ct) =>
+        (await RunWithAudioAsync(sessionId, expectedSpeakers, ct).ConfigureAwait(false)).Outcome;
 
     /// <summary>Aynı işi yapar (bkz. <see cref="RunAsync"/>) ama okuduğu ham sesi de dışarı verir.
     /// <para><b>Neden:</b> 10d'de konuşmacı prozodisi (<see cref="SpeakerProsodyAnalyzer"/>) aynı
@@ -53,7 +54,7 @@ public sealed class DiarizationJob
     /// aşağıdaki mantık sesi yalnızca dolu olduğunda Completed döndürür. Diğer tüm durumlarda
     /// (NoAudio/Failed) Audio boş dizidir; çağıran ekstra bir null/boş kontrolüne gerek duymadan
     /// bu değişmeze güvenebilir.</para></summary>
-    public async Task<(DiarizationOutcome Outcome, float[] Audio)> RunWithAudioAsync(Guid sessionId, CancellationToken ct)
+    public async Task<(DiarizationOutcome Outcome, float[] Audio)> RunWithAudioAsync(Guid sessionId, int expectedSpeakers, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
 
@@ -63,7 +64,7 @@ public sealed class DiarizationJob
         IReadOnlyList<SpeakerSegment> speakers;
         try
         {
-            speakers = await _diarizer.DiarizeAsync(audio, ct).ConfigureAwait(false);
+            speakers = await _diarizer.DiarizeAsync(audio, expectedSpeakers, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {

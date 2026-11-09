@@ -30,7 +30,8 @@ public interface ISpeakerAnalysis
     /// <summary>Özellik açık mı? Kapalıyken UI hiçbir konuşmacı durumu göstermemelidir.</summary>
     bool Enabled { get; }
 
-    Task<SpeakerAnalysisResult> RunAsync(Guid sessionId, CancellationToken ct);
+    /// <param name="expectedSpeakers">Görüşme başında seçilen kişi sayısı; 0 = bilinmiyor.</param>
+    Task<SpeakerAnalysisResult> RunAsync(Guid sessionId, int expectedSpeakers, CancellationToken ct);
 }
 
 /// <inheritdoc cref="ISpeakerAnalysis"/>
@@ -58,11 +59,11 @@ public sealed class SpeakerAnalysisService : ISpeakerAnalysis
     // etkili olmalı.
     public bool Enabled => _state.Enabled;
 
-    public async Task<SpeakerAnalysisResult> RunAsync(Guid sessionId, CancellationToken ct)
+    public async Task<SpeakerAnalysisResult> RunAsync(Guid sessionId, int expectedSpeakers, CancellationToken ct)
     {
         // Ses BURADA değil, RunWithAudioAsync içinde okunur — tek okuma, iki tüketici (diarizer +
         // prozodi analizörü). Bkz. DiarizationJob.RunWithAudioAsync dokümantasyonu (bulgu 3).
-        var (outcome, audio) = await _job.RunWithAudioAsync(sessionId, ct).ConfigureAwait(false);
+        var (outcome, audio) = await _job.RunWithAudioAsync(sessionId, expectedSpeakers, ct).ConfigureAwait(false);
 
         // Başarısızlıkta segment okumaya gerek yok: rapor konuşmacısız gösterilecek.
         if (outcome != DiarizationOutcome.Completed)

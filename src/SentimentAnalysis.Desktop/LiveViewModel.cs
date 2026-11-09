@@ -59,6 +59,17 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     /// oturum üretmedi → konuşmacı ayrımı denenmez.</summary>
     public Guid? LastSessionId { get; private set; }
 
+    /// <summary>"Kaç kişi konuşacak?" seçenekleri; 0 = bilinmiyor (ayrım kişi sayısını kendisi tahmin eder).</summary>
+    public IReadOnlyList<SpeakerCountOption> SpeakerCountOptions { get; } =
+        new[] { 2, 3, 4, 5 }.Select(n => new SpeakerCountOption(n, $"{n} kişi"))
+            .Append(new SpeakerCountOption(0, "Bilmiyorum")).ToArray();
+
+    [ObservableProperty] private SpeakerCountOption _selectedSpeakerCount = null!;
+
+    /// <summary>Görüşme BAŞINDA seçilen kişi sayısı — Durdur sonrası seçim değişse de konuşmacı
+    /// ayrımı bu değerle çalışır.</summary>
+    public int LastSpeakerCount { get; private set; } = 2;
+
     [ObservableProperty] private string _currentEmotion = "—";
     [ObservableProperty] private double _currentValence;
     [ObservableProperty] private double _currentArousal;
@@ -140,6 +151,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
                          ISelectedAudio? selected = null, AppConfig? config = null,
                          ICaptureModeState? captureMode = null, IDiarizationState? diarization = null)
     {
+        _selectedSpeakerCount = SpeakerCountOptions[0];
         _runner = runner;
         _picker = picker;
         _selected = selected;
@@ -226,6 +238,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         DiarizationHint = _diarization?.Enabled == true
             ? "Konuşmacı ayrımı bu oturum için AÇIK — ses geçici olarak saklanacak, konuşmacılar Durdur sonrası Rapor'da görünür."
             : "Konuşmacı ayrımı KAPALI (Ayarlar'dan açıp Kaydet'e basarak bir sonraki oturumda etkinleştirebilirsiniz).";
+        LastSpeakerCount = SelectedSpeakerCount?.Value ?? 2;
         StartCommand.NotifyCanExecuteChanged();
         StopCommand.NotifyCanExecuteChanged();
         _cts = new CancellationTokenSource();
@@ -305,3 +318,6 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     /// <summary>Test yardımcısı: aktif koşu görevini bekler (yoksa hemen döner).</summary>
     public Task WaitForIdleAsync() => _run ?? Task.CompletedTask;
 }
+
+/// <summary>Kişi sayısı seçeneği: <paramref name="Value"/> 0 ise "Bilmiyorum".</summary>
+public sealed record SpeakerCountOption(int Value, string Text);

@@ -77,6 +77,16 @@
                         <DataTemplate><TextBlock Text="{Binding Converter={StaticResource ProfileName}}" /></DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
+                <!-- Konuşmacı ayrımı kişi sayısını bilirse benzer sesleri tek kişi saymaz (2026-11-09 ölçümü). -->
+                <TextBlock Text="Kaç kişi konuşacak?" VerticalAlignment="Center" Margin="8,0,4,0" />
+                <ComboBox ItemsSource="{Binding SpeakerCountOptions}" SelectedItem="{Binding SelectedSpeakerCount, Mode=TwoWay}"
+                          IsEnabled="{Binding !IsCapturing}" MinWidth="110" VerticalAlignment="Center"
+                          AutomationProperties.Name="Kaç kişi konuşacak"
+                          ToolTip.Tip="Görüşmede kaç kişi konuşacağını seçersen konuşmacılar daha doğru ayrılır. Emin değilsen 'Bilmiyorum' seç.">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate><TextBlock Text="{Binding Text}" /></DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
             </WrapPanel>
 
             <TextBlock Text="{Binding DiarizationHint}" FontSize="11" TextWrapping="Wrap"

@@ -49,7 +49,7 @@ public class ThresholdSweepTests
             var cfg = baseCfg with { Diarization = baseCfg.Diarization with { ClusteringThreshold = threshold } };
             using var sut = new SherpaDiarizer(cfg, models);
 
-            var segments = await sut.DiarizeAsync(samples, CancellationToken.None);
+            var segments = await sut.DiarizeAsync(samples, 0, CancellationToken.None);
             var distinctSpeakers = segments.Select(s => s.Speaker.Index).Distinct().Count();
             var totalSpeechSeconds = segments.Sum(s => (s.End - s.Start).TotalSeconds);
 

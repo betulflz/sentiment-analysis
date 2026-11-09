@@ -33,12 +33,14 @@ public class MainViewModelSpeakerWiringTests
     {
         public bool WasCalled;
         public Guid? SeenSessionId;
+        public int SeenExpected = -1;
         public bool Enabled => enabled;
 
-        public Task<SpeakerAnalysisResult> RunAsync(Guid sessionId, CancellationToken ct)
+        public Task<SpeakerAnalysisResult> RunAsync(Guid sessionId, int expectedSpeakers, CancellationToken ct)
         {
             WasCalled = true;
             SeenSessionId = sessionId;
+            SeenExpected = expectedSpeakers;
             return Task.FromResult(result);
         }
     }
@@ -46,7 +48,7 @@ public class MainViewModelSpeakerWiringTests
     private sealed class ThrowingSpeakers : ISpeakerAnalysis
     {
         public bool Enabled => true;
-        public Task<SpeakerAnalysisResult> RunAsync(Guid id, CancellationToken ct)
+        public Task<SpeakerAnalysisResult> RunAsync(Guid id, int expectedSpeakers, CancellationToken ct)
             => throw new InvalidOperationException("patladı");
     }
 
@@ -98,9 +100,33 @@ public class MainViewModelSpeakerWiringTests
 
         Assert.True(speakers.WasCalled, "konuşmacı geçişi hiç tetiklenmedi");
         Assert.Equal(id, speakers.SeenSessionId);
+        Assert.Equal(2, speakers.SeenExpected); // varsayılan: 2 kişi
         Assert.Equal(2, report.SpeakerLines.Count);
         Assert.Equal("Konuşmacı A", report.SpeakerLines[0].Label);
         Assert.Equal("Konuşmacılar hazır.", report.DiarizationStatus);
+    }
+
+    [Fact]
+    public async Task SecilenKisiSayisi_GorusmeBasindakiDegerIletilir()
+    {
+        var speakers = new FakeSpeakers(SpeakerAnalysisResult.Disabled);
+        var vm = Build(speakers, Guid.NewGuid(), out _);
+        vm.Live.SelectedSpeakerCount = vm.Live.SpeakerCountOptions.Single(o => o.Value == 3);
+        vm.Live.StartCommand.Execute(null);
+        vm.Live.SelectedSpeakerCount = vm.Live.SpeakerCountOptions.Single(o => o.Value == 0); // görüşme sürerken değişse de
+        await vm.Live.WaitForIdleAsync();
+        await (vm.SpeakerAnalysisTask ?? Task.CompletedTask);
+
+        Assert.Equal(3, speakers.SeenExpected);
+    }
+
+    [Fact]
+    public void KisiSayisiSecenekleri_Varsayilan2_BilmiyorumDahil()
+    {
+        var vm = Build(null, null, out _);
+        Assert.Equal(new[] { 2, 3, 4, 5, 0 }, vm.Live.SpeakerCountOptions.Select(o => o.Value));
+        Assert.Equal("Bilmiyorum", vm.Live.SpeakerCountOptions[^1].Text);
+        Assert.Equal(2, vm.Live.SelectedSpeakerCount.Value);
     }
 
     [Fact]
@@ -177,7 +203,7 @@ public class MainViewModelSpeakerWiringTests
     private sealed class SlowSpeakers(TaskCompletionSource gate) : ISpeakerAnalysis
     {
         public bool Enabled => true;
-        public async Task<SpeakerAnalysisResult> RunAsync(Guid id, CancellationToken ct)
+        public async Task<SpeakerAnalysisResult> RunAsync(Guid id, int expectedSpeakers, CancellationToken ct)
         {
             await gate.Task.ConfigureAwait(false);
             return SpeakerAnalysisResult.Disabled;
