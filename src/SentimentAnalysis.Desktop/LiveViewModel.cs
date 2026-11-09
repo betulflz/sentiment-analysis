@@ -43,6 +43,16 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     // Panel nesneleri yüz numarasına göre yaşar: yüz kaybolup dönünce ad ve göstergeler korunur.
     private readonly Dictionary<int, FacePanelVm> _panelsByFace = new();
 
+    private readonly List<ChunkResult> _runChunks = new();
+
+    /// <summary>Bu koşuda raporlanan parçalar (yüzsüz değerleriyle); rapor, konuşmacıya özel duyguyu bunlardan kurar.</summary>
+    public IReadOnlyList<ChunkResult> RunChunks => _runChunks;
+
+    /// <summary>Kullanıcının panellere yazdığı adlar (yüz numarası → ad); varsayılan "Yüz N" olanlar yok.</summary>
+    public IReadOnlyDictionary<int, string> UserFaceNames => _panelsByFace.Values
+        .Where(p => !string.IsNullOrWhiteSpace(p.Name) && p.Name.Trim() != p.DefaultName)
+        .ToDictionary(p => p.Index, p => p.Name.Trim());
+
     public bool ShowFacePanels => FacePanels.Count > 0;
 
     /// <summary>Tek ortak kare: satışta her zaman; mülakat/toplantıda yüz görünene kadar.</summary>
@@ -58,6 +68,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     public void ResetFacePanels()
     {
         _panelsByFace.Clear();
+        _runChunks.Clear();
         _previewBoxes = null;   // sonraki yenileme, kutular aynı nesne olsa da panelleri yeniden kurar
         SyncFacePanels(Array.Empty<(int, FaceBox)>());
     }
@@ -241,6 +252,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     public void Report(ChunkResult r)
     {
         var faces = _runner.FacesFor(r);
+        _runChunks.Add(r);
         var row = new ChunkRowVm(r, faces);
         if (!_receivedThisRun)
         {

@@ -58,6 +58,8 @@ public sealed partial class MainViewModel : ObservableObject
             // Kopya alınır: rapor açıkken yeni koşu başlarsa canlı geçmiş temizlenir, rapor eskisini korur.
             var decision = Live.Decision.Snapshot();
             Report.LoadDecisions(decision);
+            // Konuşmacı kartından yüz seçilebilsin: yüzsüz değerli parçalar + panelde yazılan adlar (kopya).
+            Report.SetFaceContext(Live.RunChunks.ToArray(), Live.UserFaceNames);
             var generation = ++_reportGeneration;
             if (_decisions is not null) DecisionSaveTask = SaveDecisionsAsync(_decisions, decision, generation);
             History.RefreshCommand.Execute(null);

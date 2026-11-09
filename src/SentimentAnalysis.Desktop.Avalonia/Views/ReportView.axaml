@@ -309,6 +309,33 @@
                             </ItemsControl>
                         </StackPanel>
 
+                        <!-- Kim hangi yüz? Konuşma payındaki her konuşmacı için; az konuşan (duygu kartı almayan) kişi de seçilebilir. -->
+                        <StackPanel IsVisible="{Binding HasFaceMappings}" Spacing="6" Margin="0,10,0,0">
+                            <TextBlock Text="Kim hangi yüz?" Classes="sectionTitle" />
+                            <TextBlock Text="{Binding FaceMappingHint}" Classes="muted" FontSize="12" TextWrapping="Wrap"
+                                       IsVisible="{Binding FaceMappingHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <ItemsControl ItemsSource="{Binding FaceMappings}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="desktop:SpeakerFaceRowVm">
+                                        <Grid ColumnDefinitions="38,160,Auto,260" Margin="0,3" ColumnSpacing="10">
+                                            <Border Width="30" Height="30" CornerRadius="15"
+                                                    Background="{Binding SpeakerIndex, Converter={StaticResource SpeakerColor}}">
+                                                <TextBlock Text="{Binding Initial}" Foreground="White" FontWeight="Bold"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <TextBlock Grid.Column="1" Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2" Text="Bu kişinin yüzü:" FontSize="12" VerticalAlignment="Center" />
+                                            <ComboBox Grid.Column="3" ItemsSource="{Binding FaceOptions}"
+                                                      SelectedItem="{Binding SelectedFace, Mode=TwoWay}"
+                                                      HorizontalAlignment="Stretch"
+                                                      AutomationProperties.Name="Bu kişinin yüzü"
+                                                      ToolTip.Tip="Hangi yüzün bu konuşmacıya ait olduğunu seç. Seçince ad ve (varsa) kişiye özel duygu buna göre güncellenir." />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
                         <!-- Kişi kartları (10c): her konuşmacı için sözlere / ses tonuna göre / genel sonuç. -->
                         <ItemsControl ItemsSource="{Binding SpeakerEmotions}" IsVisible="{Binding HasSpeakers}" Margin="0,10,0,0">
                             <ItemsControl.ItemsPanel>
@@ -330,6 +357,8 @@
                                                     <TextBlock Text="{Binding OverallText}" Classes="muted" />
                                                 </StackPanel>
                                             </StackPanel>
+                                            <TextBlock Text="{Binding FaceNote}" Classes="muted" FontSize="11" TextWrapping="Wrap"
+                                                       IsVisible="{Binding HasFaceNote}" />
                                             <!-- Ölçüm VARSA kaç saniyeye dayandığını, YOKSA yeterli ses olmadığını söyler;
                                                  satır hiçbir durumda gizlenmez — aksi halde iki durum aynı görünürdü. -->
                                             <TextBlock Text="{Binding AudioMeasurementNote}" Classes="muted" FontSize="11" />

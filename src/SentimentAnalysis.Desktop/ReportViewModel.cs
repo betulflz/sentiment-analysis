@@ -112,10 +112,64 @@ public sealed class SpeakerEmotionVm
     /// <see cref="HasUncertainChunks"/> true iken gösterilir.</summary>
     public string UncertainChunkNote { get; }
 
+    /// <summary>"Bu kişinin yüzü" seçenekleri (ilki "Eşleştirme yok") ve seçili olan.</summary>
+    public IReadOnlyList<FaceOptionVm> FaceOptions { get; }
+
+    private readonly System.Action<int, int?>? _onFaceSelected;
+
+    /// <summary>Kullanıcının bu konuşmacıya eşlediği yüz. Değişince rapor, kişiye özel duyguyu yeniden kurar.</summary>
+    public FaceOptionVm? SelectedFace
+    {
+        get => _selectedFace;
+        set
+        {
+            if (value is null || value.FaceIndex == _selectedFace?.FaceIndex) return;
+            _selectedFace = value;
+            _onFaceSelected?.Invoke(SpeakerIndex, value.FaceIndex);
+        }
+    }
+    private FaceOptionVm? _selectedFace;
+
+    /// <summary>Eşleştirilmişse "yüz kaç bölümde katıldı" açıklaması.</summary>
+    public string FaceNote { get; } = string.Empty;
+    public bool HasFaceNote => FaceNote.Length > 0;
+
+    /// <summary>Seçilebilecek bir yüz var mı ("Eşleştirme yok"tan başka)? Yoksa seçim kutusu gizlenir.</summary>
+    public bool HasFaceChoices => FaceOptions.Count > 1;
+
+    private const double SmallEffect = 0.05;
+
+    /// <summary>Yüzün ifadesini ve duyguya etkisini açıkça söyler; etki küçükse bunu da — kullanıcı "hiçbir şey olmadı" sanmasın.</summary>
+    private static string FaceNoteText(PersonEmotion p)
+    {
+        if (p.AverageFace is not { } face || p.FaceChunkCount == 0)
+            return "Yüzü bu bölümlerde görünmedi; yalnızca ses ve sözlere göre hesaplandı";
+        var tr = new System.Globalization.CultureInfo("tr-TR");
+        double delta = p.Combined.Valence - p.WithoutFace.Valence;
+        string effect = System.Math.Abs(delta) < SmallEffect
+            ? $"çok küçük ({delta.ToString("+0.00;-0.00;0.00", tr)})"
+            : delta.ToString("+0.00;-0.00;0.00", tr);
+        return $"Sesi, sözleri ve yüzü birlikte hesaplandı ({p.FaceChunkCount}/{p.ChunkCount} bölümde yüz görüldü). "
+             + $"Yüzü çoğunlukla {FacePanelVm.EmotionText(face).ToLower(tr)} "
+             + $"(gülümseme %{System.Math.Round(100 * face.SmileRatio, System.MidpointRounding.AwayFromZero)}, "
+             + $"olumsuz ifade %{System.Math.Round(100 * face.NegativeExpression, System.MidpointRounding.AwayFromZero)}); "
+             + $"duyguya etkisi {effect}.";
+    }
+
     public SpeakerEmotionVm(
         SpeakerEmotionSummary s, double temperature, double? neutralRadius,
-        SpeakerProsodySummary? prosody = null, string? userGivenName = null)
+        SpeakerProsodySummary? prosody = null, string? userGivenName = null,
+        PersonEmotion? person = null, IReadOnlyList<FaceOptionVm>? faceOptions = null,
+        int? selectedFace = null, System.Action<int, int?>? onFaceSelected = null)
     {
+        FaceOptions = faceOptions ?? new[] { FaceOptionVm.None };
+        _selectedFace = FaceOptions.FirstOrDefault(o => o.FaceIndex == selectedFace) ?? FaceOptions[0];
+        _onFaceSelected = onFaceSelected;
+        if (person is not null)
+        {
+            s = s with { Combined = person.Combined };
+            FaceNote = FaceNoteText(person);
+        }
         Label = userGivenName ?? s.Speaker.DefaultLabel;
         var audioVa = prosody?.Va ?? s.Audio;
         AnalyzedSeconds = prosody?.AnalyzedSeconds ?? 0;
@@ -133,6 +187,48 @@ public sealed class SpeakerEmotionVm
         CombinedAnalysis = new SourceAnalysisVm("Genel sonuç", s.Combined, temperature, neutralRadius);
         OverallText = $"Genel olarak: {CombinedAnalysis.Emotion.ToLower(new System.Globalization.CultureInfo("tr-TR"))}";
     }
+}
+
+/// <summary>"Kim hangi yüz?" satırı: konuşma payındaki HER konuşmacı için bir yüz seçimi. Duygu kartından bağımsızdır —
+/// az konuşan kişi hiçbir parçayı kazanamayıp kart almasa da yüzü ve adı seçilebilir.</summary>
+public sealed class SpeakerFaceRowVm
+{
+    private readonly System.Action<int, int?>? _onSelected;
+    private FaceOptionVm? _selectedFace;
+
+    public SpeakerFaceRowVm(int speakerIndex, string label, IReadOnlyList<FaceOptionVm> faceOptions,
+                            int? selectedFace, System.Action<int, int?>? onSelected)
+    {
+        SpeakerIndex = speakerIndex;
+        Label = label;
+        Initial = SpeakerBadge.Initial(new SpeakerId(speakerIndex));
+        FaceOptions = faceOptions;
+        _selectedFace = faceOptions.FirstOrDefault(o => o.FaceIndex == selectedFace) ?? faceOptions[0];
+        _onSelected = onSelected;
+    }
+
+    public int SpeakerIndex { get; }
+    public string Label { get; }
+    public string Initial { get; }
+    public IReadOnlyList<FaceOptionVm> FaceOptions { get; }
+
+    public FaceOptionVm? SelectedFace
+    {
+        get => _selectedFace;
+        set
+        {
+            if (value is null || value.FaceIndex == _selectedFace?.FaceIndex) return;
+            _selectedFace = value;
+            _onSelected?.Invoke(SpeakerIndex, value.FaceIndex);
+        }
+    }
+}
+
+/// <summary>Konuşmacı kartındaki yüz seçeneği. <see cref="FaceIndex"/> null = eşleştirme yok.</summary>
+public sealed record FaceOptionVm(int? FaceIndex, string Text)
+{
+    public static FaceOptionVm None { get; } = new(null, "Eşleştirme yok");
+    public override string ToString() => Text;
 }
 
 /// <summary>Konuşmacı rozetinin harfi: "Konuşmacı A" → "A", 26'dan sonra sayı, bilinmeyen → "?".</summary>
@@ -212,12 +308,23 @@ public sealed partial class ReportViewModel : ObservableObject
     [ObservableProperty] private string _decisionSaveStatus = string.Empty;
 
     private readonly DecisionConfig _decision;
+    private readonly FusionConfig _fusion;
+
+    // Konuşmacı–yüz eşlemesi (kullanıcı seçer): yüz numarası → panelde yazdığı ad; canlı parçalar yüzsüz
+    // değerleriyle (SpeakerVa) kişiye özel duygu için; pencereler yüz özetleriyle.
+    private IReadOnlyList<ChunkResult> _liveChunks = System.Array.Empty<ChunkResult>();
+    private IReadOnlyDictionary<int, string> _faceNames = new Dictionary<int, string>();
+    private IReadOnlyList<FaceWindow> _faceWindows = System.Array.Empty<FaceWindow>();
+    private readonly Dictionary<SpeakerId, int> _faceBySpeaker = new();
+    private (IReadOnlyList<TranscriptSegment> Transcript, IReadOnlyList<SpeakerSegment> Speakers, double MinOverlap)? _lastSpeakerInput;
+    private (IReadOnlyList<ChunkResult> Chunks, IReadOnlyList<SpeakerSegment> Speakers, double MinOverlap, IReadOnlyList<SpeakerProsodySummary> Prosody)? _lastEmotionInput;
 
     public ReportViewModel(IMeetingAggregator aggregator, AppConfig? config = null)
     {
         _aggregator = aggregator;
         var cfg = config ?? AppConfig.Default;
         _decision = cfg.Decision;
+        _fusion = cfg.Fusion;
         FollowUp = new FollowUpPanelViewModel(cfg.Decision);
         _temperature = cfg.Fusion.DistributionTemperature;
         // Nötr yarıçapı canlı ekrandan geçirilir; buradan da geçmezsek rapor ile canlı ekran
@@ -253,9 +360,15 @@ public sealed partial class ReportViewModel : ObservableObject
 
         SpeakerEmotions = System.Array.Empty<SpeakerEmotionVm>();
         OnPropertyChanged(nameof(SpeakerEmotions));
+        OnPropertyChanged(nameof(FaceMappingHint));
 
         TalkBalance = System.Array.Empty<TalkShareVm>();
         OnPropertyChanged(nameof(TalkBalance));
+
+        FaceMappings = System.Array.Empty<SpeakerFaceRowVm>();
+        OnPropertyChanged(nameof(FaceMappings));
+        OnPropertyChanged(nameof(HasFaceMappings));
+        OnPropertyChanged(nameof(FaceMappingHint));
     }
 
     /// <summary>Zaman damgalı transkripti konuşmacı bölgeleriyle hizalayıp satırlara indirger.
@@ -266,15 +379,79 @@ public sealed partial class ReportViewModel : ObservableObject
         IReadOnlyList<SpeakerSegment> speakers,
         double minOverlapRatio)
     {
+        _lastSpeakerInput = (transcript, speakers, minOverlapRatio);
+        BuildSpeakerLines();
+    }
+
+    private void BuildSpeakerLines()
+    {
+        if (_lastSpeakerInput is not var (transcript, speakers, minOverlapRatio)) return;
         var aligned = SpeakerAligner.Align(transcript, speakers, minOverlapRatio);
-        SpeakerLines = SpeakerLineBuilder.Build(aligned).Select(l => new SpeakerLineVm(l)).ToList();
+        SpeakerLines = SpeakerLineBuilder.Build(aligned).Select(l => new SpeakerLineVm(l, GivenName(l.Speaker))).ToList();
         HasSpeakers = SpeakerLines.Count > 0;
         OnPropertyChanged(nameof(SpeakerLines));
 
         TalkBalance = Application.Diarization.TalkBalance.Compute(speakers)
-            .Select(t => new TalkShareVm(t.Speaker.DefaultLabel, t.Share, $"{Duration(t.Duration)} · {Percent(t.Share)}", t.Speaker.Index))
+            .Select(t => new TalkShareVm(GivenName(t.Speaker) ?? t.Speaker.DefaultLabel, t.Share, $"{Duration(t.Duration)} · {Percent(t.Share)}", t.Speaker.Index))
             .ToList();
         OnPropertyChanged(nameof(TalkBalance));
+        BuildFaceMappings(speakers);
+    }
+
+    /// <summary>Her konuşmacı için yüz seçimi (konuşma payındaki kişiler). Yüz hiç görülmediyse boş.</summary>
+    public IReadOnlyList<SpeakerFaceRowVm> FaceMappings { get; private set; } = System.Array.Empty<SpeakerFaceRowVm>();
+
+    public bool HasFaceMappings => FaceMappings.Count > 0;
+
+    private void BuildFaceMappings(IReadOnlyList<SpeakerSegment> speakers)
+    {
+        var options = FaceOptions();
+        FaceMappings = options.Count <= 1 ? System.Array.Empty<SpeakerFaceRowVm>()
+            : speakers.Select(sp => sp.Speaker).Where(id => id.Index >= 0).Distinct().OrderBy(id => id.Index)
+                .Select(id => new SpeakerFaceRowVm(id.Index, GivenName(id) ?? id.DefaultLabel, options,
+                    _faceBySpeaker.TryGetValue(id, out var f) ? f : null, SetSpeakerFace))
+                .ToList();
+        OnPropertyChanged(nameof(FaceMappings));
+        OnPropertyChanged(nameof(HasFaceMappings));
+        OnPropertyChanged(nameof(FaceMappingHint));
+    }
+
+    /// <summary>Konuşmacıya eşlenen yüze kullanıcı bir ad yazdıysa o ad; yoksa null (varsayılan "Konuşmacı A").</summary>
+    private string? GivenName(SpeakerId speaker) =>
+        _faceBySpeaker.TryGetValue(speaker, out var face) && _faceNames.TryGetValue(face, out var name)
+        && !string.IsNullOrWhiteSpace(name) ? name.Trim() : null;
+
+    /// <summary>Görüşme bitince çağrılır: canlı parçalar (yüzsüz değerleriyle) ve panelde yazılan adlar.
+    /// Yeni görüşmede önceki eşleme geçersizdir.</summary>
+    public void SetFaceContext(IReadOnlyList<ChunkResult> liveChunks, IReadOnlyDictionary<int, string> faceNames)
+    {
+        _liveChunks = liveChunks;
+        _faceNames = faceNames;
+        _faceBySpeaker.Clear();
+    }
+
+    /// <summary>Yüz görüldü ama hiçbir konuşmacıya eşlenmedi: kullanıcıyı seçim kutusuna yönlendirir; aksi halde boş.</summary>
+    public string FaceMappingHint =>
+        HasFaceMappings && _faceBySpeaker.Count == 0
+            ? "Adları görmek için aşağıda her kişinin \"Bu kişinin yüzü\" kutusunu seç."
+            : string.Empty;
+
+    private IReadOnlyList<FaceOptionVm> FaceOptions()
+    {
+        var indexes = _faceWindows.SelectMany(w => w.Faces.Select(f => f.FaceIndex)).Concat(_faceNames.Keys).Distinct().OrderBy(i => i);
+        return new[] { FaceOptionVm.None }
+            .Concat(indexes.Select(i => new FaceOptionVm(i,
+                _faceNames.TryGetValue(i, out var n) && !string.IsNullOrWhiteSpace(n) ? n.Trim() : $"Yüz {i + 1}")))
+            .ToList();
+    }
+
+    /// <summary>Kullanıcı bir konuşmacıya yüz eşledi (ya da kaldırdı): satırlar, paylar ve duygu kartları yeniden kurulur.</summary>
+    public void SetSpeakerFace(int speakerIndex, int? faceIndex)
+    {
+        var id = new SpeakerId(speakerIndex);
+        if (faceIndex is int f) _faceBySpeaker[id] = f; else _faceBySpeaker.Remove(id);
+        BuildSpeakerLines();
+        BuildSpeakerEmotions();
     }
 
     /// <summary>Bitmiş görüşmenin karar verisini (11e) gösterir: zaman çizelgesi, verilen öneriler, kritik
@@ -282,6 +459,7 @@ public sealed partial class ReportViewModel : ObservableObject
     public void LoadDecisions(DecisionSession session)
     {
         var windows = session.Windows;
+        _faceWindows = windows.Select(w => new FaceWindow(w.Start, w.End, w.Faces)).ToArray();
         HasDecisionData = windows.Count > 0;
         DecisionSaveStatus = string.Empty;
         IndicatorTimeline = System.Enum.GetValues<Criterion>()
@@ -324,14 +502,33 @@ public sealed partial class ReportViewModel : ObservableObject
         double minOverlapRatio,
         IReadOnlyList<SpeakerProsodySummary> speakerProsody)
     {
+        _lastEmotionInput = (chunks, speakers, minOverlapRatio, speakerProsody);
+        BuildSpeakerEmotions();
+    }
+
+    private void BuildSpeakerEmotions()
+    {
+        if (_lastEmotionInput is not var (chunks, speakers, minOverlapRatio, speakerProsody)) return;
         var bySpeaker = speakerProsody.ToDictionary(p => p.Speaker);
         var summaries = SpeakerEmotionAggregator.Aggregate(chunks, speakers, minOverlapRatio);
+        // Kişiye özel üç kaynaklı duygu yalnızca yüz eşlenen konuşmacılar için; canlı parçalar yüzsüz değeri taşır.
+        var people = _faceBySpeaker.Count == 0
+            ? new Dictionary<SpeakerId, PersonEmotion>()
+            : PersonEmotionComposer.Compose(_liveChunks.Count > 0 ? _liveChunks : chunks, speakers, _faceWindows,
+                _faceBySpeaker, _fusion, minOverlapRatio).ToDictionary(p => p.Speaker);
+        var options = FaceOptions();
         SpeakerEmotions = summaries
             .Select(s => new SpeakerEmotionVm(
                 s, _temperature, _neutralRadius,
-                bySpeaker.TryGetValue(s.Speaker, out var p) ? p : null))
+                bySpeaker.TryGetValue(s.Speaker, out var p) ? p : null,
+                GivenName(s.Speaker),
+                people.TryGetValue(s.Speaker, out var person) ? person : null,
+                options,
+                _faceBySpeaker.TryGetValue(s.Speaker, out var face) ? face : null,
+                SetSpeakerFace))
             .ToList();
         OnPropertyChanged(nameof(SpeakerEmotions));
+        OnPropertyChanged(nameof(FaceMappingHint));
     }
 
     /// <summary>Duygu haritası: paylar büyükten küçüğe, süre ve tek cümlelik özet.</summary>
