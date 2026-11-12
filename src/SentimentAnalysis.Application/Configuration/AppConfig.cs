@@ -137,14 +137,17 @@ public sealed record DecisionConfig(
     double ContextWeight = 0.3);         // duygu/tempo/hareket uyumunun TOPSIS yakınlığına katkısı (0 = kapalı)
 
 /// <summary>Canlı konuşmacı rolü ayarları (12). Pencere/eşik 12a spike'ında ÖLÇÜLDÜ (TitaNet-small, 4 oturum,
-/// dengeli doğruluk %95, LOSO %95); tanıtma süresi ve şüphe eşiği tahmindir.</summary>
+/// dengeli doğruluk %95, LOSO %95). Tanıtma ayrı bir kayıtla yapılır: akış içi "ilk saniyeler" tanıtması gerçek
+/// doğrulamada %64'e düştü (karşı taraf araya giriyor).</summary>
 public sealed record RoleConfig(
     bool Enabled = true,                  // model yoksa özellik kendiliğinden kapanır (rol bilgisi gelmez)
     double WindowSeconds = 1.5,           // 12a: 1,5 sn → %95, 16 ms/pencere (2,0 sn %96 ama daha geç tepki)
     double HopSeconds = 0.5,
     double Threshold = 0.41,              // 12a tek eşik (LOSO ile kontrol edildi)
-    double EnrollSeconds = 6.0,           // görüşme başında yönetenin konuşma süresi (tanıtma örneği)
-    double DoubtThreshold = 0.41);        // tanıtma örneğinin iki yarısı bundan az benzerse "iki kişi konuşmuş olabilir"
+    double EnrollRecordSeconds = 8.0,     // "Sesimi tanıt" kaydının süresi (sessizlik ayıklanır)
+    double MinEnrollSpeechSeconds = 4.0,  // ayıklandıktan sonra en az bu kadar konuşma olmalı
+    double DoubtThreshold = 0.45);        // tanıtmanın iki yarısı bundan az benzerse "iki kişi konuşmuş olabilir"
+                                          // (2026-11-12 ölçümü: 3+3 sn karışık örneklerin 8/8'i ≤ 0,42; temizlerin 7/8'i ≥ 0,50)
 
 /// <summary>Görüntü kanalı ayarları (spec 11 §6.2). Sayılar 11a spike'ında M1 Air 8 GB'ta ÖLÇÜLDÜ
 /// (bkz. <c>11a-goruntu-spike-olcumu.md</c>); yüz boyu eşikleri ise tahmindir.</summary>

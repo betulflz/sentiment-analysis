@@ -44,30 +44,86 @@ public class SpeakerRoleTrackerTests
         return (new SpeakerRoleTracker(emb, new FakeVad(), config), emb);
     }
 
-    [Fact]
-    public void TanitmaIcinYetersizKonusma_RolVermez()
+    private static float[] Pcm(params (double Seconds, float Value)[] parts) => Chunk(0, parts).Samples;
+
+    private static (SpeakerRoleTracker Sut, FakeEmbedder Emb) Enrolled()
     {
-        var (sut, _) = Make();
-
-        var t = sut.Label(Chunk(0, (4, Host), (6, Quiet)));
-
-        Assert.False(t.Enrolled);
-        Assert.Empty(t.Spans);
+        var (sut, emb) = Make();
+        Assert.True(sut.Enroll(Pcm((8, Host))).Success);
+        return (sut, emb);
     }
 
     [Fact]
-    public void IlkAltiSaniyeYoneten_SonrasiKarsiTaraf_DogruEtiketlenir()
+    public void TanitmaYokken_RolVermez_ModeleDokunmaz()
+    {
+        var (sut, emb) = Make();
+
+        var t = sut.Label(Chunk(0, (10, Host)));
+
+        Assert.False(t.Enrolled);
+        Assert.Empty(t.Spans);
+        Assert.Equal(0, emb.Calls);
+    }
+
+    [Fact]
+    public void Tanitma_SessizligiAyiklar_YetersizKonusmadaReddeder()
     {
         var (sut, _) = Make();
+
+        var r = sut.Enroll(Pcm((3, Host), (5, Quiet)));
+
+        Assert.False(r.Success);
+        Assert.InRange(r.SpeechSeconds, 2.5, 3.5);
+        Assert.False(sut.Enrolled);
+    }
+
+    [Fact]
+    public void Tanitma_SessizlikliAmaYeterliKonusma_Basarili()
+    {
+        var (sut, _) = Make();
+
+        var r = sut.Enroll(Pcm((2.5, Host), (2, Quiet), (3, Host)));
+
+        Assert.True(r.Success);
+        Assert.False(r.Doubtful);
+        Assert.InRange(r.SpeechSeconds, 5, 6);
+        Assert.True(sut.Enrolled);
+    }
+
+    [Fact]
+    public void TanitmadaIkiSes_SupheliAmaTanitilir()
+    {
+        var (sut, _) = Make();
+
+        var r = sut.Enroll(Pcm((4, Host), (4, Other)));
+
+        Assert.True(r.Success);
+        Assert.True(r.Doubtful);
+        Assert.True(sut.Enrolled);
+    }
+
+    [Fact]
+    public void BasarisizTanitma_OncekiTanitmayiKorur()
+    {
+        var (sut, _) = Enrolled();
+
+        Assert.False(sut.Enroll(Pcm((1, Other), (7, Quiet))).Success);
+
+        Assert.True(sut.Enrolled);
+        Assert.Equal(SpeakerRole.Yoneten, sut.Label(Chunk(0, (10, Host))).Spans.Single().Role);
+    }
+
+    [Fact]
+    public void YonetenVeKarsiTaraf_DogruEtiketlenir_ZamanlarMutlak()
+    {
+        var (sut, _) = Enrolled();
 
         var t = sut.Label(Chunk(20, (6, Host), (4, Other)));
 
         Assert.True(t.Enrolled);
-        Assert.False(t.EnrollmentDoubtful);
         var from = TimeSpan.FromSeconds(20);
-        Assert.InRange(t.Seconds(SpeakerRole.Yoneten, from, from + TimeSpan.FromSeconds(10)), 5.5, 6.75);
-        Assert.InRange(t.Seconds(SpeakerRole.KarsiTaraf, from, from + TimeSpan.FromSeconds(10)), 3.25, 4.5);
-        // Zamanlar mutlak: ilk dilim parçanın başında (20 sn), son dilim sonunda (30 sn).
+        Assert.InRange(t.Seconds(SpeakerRole.Yoneten, from, from + TimeSpan.FromSeconds(10)), 5.5, 6.5);
+        Assert.InRange(t.Seconds(SpeakerRole.KarsiTaraf, from, from + TimeSpan.FromSeconds(10)), 3.5, 4.5);
         Assert.Equal(from, t.Spans[0].Start);
         Assert.Equal(TimeSpan.FromSeconds(30), t.Spans[^1].End);
         Assert.Equal(SpeakerRole.Yoneten, t.Spans[0].Role);
@@ -75,47 +131,9 @@ public class SpeakerRoleTrackerTests
     }
 
     [Fact]
-    public void TanitmaSirasindaKarsiTarafKonusursa_SupheliIsaretlenir()
+    public void Sessizlik_DilimUretmez_KonusmaSuresiSismez()
     {
-        var (sut, _) = Make();
-
-        var t = sut.Label(Chunk(0, (3, Host), (7, Other)));
-
-        Assert.True(t.Enrolled);
-        Assert.True(t.EnrollmentDoubtful);
-    }
-
-    [Fact]
-    public void ParcalarArasiOrtusme_TanitmadaIkiKezSayilmaz()
-    {
-        var (sut, _) = Make();
-        Assert.False(sut.Label(Chunk(0, (5, Host))).Enrolled);       // dilimler 0–5 sn'yi döşer → 5 sn toplandı
-
-        // 3–5,5 sn tekrar geliyor (örtüşme): dilimleri 3, 4 ve 4,5 sn'de başlar, hepsi imleçten (5 sn) önce → +0.
-        // Tekrar sayılsaydı +2,5 sn ile tanıtma (6 sn) tamamlanırdı.
-        var t = sut.Label(Chunk(3, (2.5, Host)));
-
-        Assert.False(t.Enrolled);
-    }
-
-    [Fact]
-    public void TanitmaParcalarArasindaTamamlanir()
-    {
-        var (sut, _) = Make();
-        sut.Label(Chunk(0, (4, Host), (6, Quiet)));
-
-        var t = sut.Label(Chunk(8, (2, Quiet), (4, Host), (4, Other)));
-
-        Assert.True(t.Enrolled);
-        Assert.False(t.EnrollmentDoubtful);
-        Assert.Contains(t.Spans, s => s.Role == SpeakerRole.KarsiTaraf);
-    }
-
-    [Fact]
-    public void Sessizlik_DilimUretmez()
-    {
-        var (sut, _) = Make();
-        sut.Label(Chunk(0, (10, Host)));
+        var (sut, _) = Enrolled();
 
         var t = sut.Label(Chunk(10, (3, Other), (4, Quiet), (3, Other)));
 
@@ -125,9 +143,9 @@ public class SpeakerRoleTrackerTests
     }
 
     [Fact]
-    public void ModelHatasi_KosuyuDurdurmaz_OzellikKapanir()
+    public void ModelHatasi_KosuyuDurdurmaz_OzellikKosuBoyuncaKapanir()
     {
-        var (sut, emb) = Make();
+        var (sut, emb) = Enrolled();
         emb.Throw = true;
 
         var t = sut.Label(Chunk(0, (10, Host)));
@@ -135,31 +153,44 @@ public class SpeakerRoleTrackerTests
         Assert.False(t.Enrolled);
         Assert.Equal("model yok", sut.Failure);
         emb.Throw = false;
-        Assert.False(sut.Label(Chunk(10, (10, Host))).Enrolled);   // bu koşu için kapalı kalır
+        Assert.False(sut.Label(Chunk(10, (10, Host))).Enrolled);
     }
 
     [Fact]
-    public void Reset_TanitmayiVeHatayiSifirlar()
+    public void Reset_HatayiSifirlar_TanitmayiKorur()
     {
-        var (sut, _) = Make();
+        var (sut, emb) = Enrolled();
+        emb.Throw = true;
         sut.Label(Chunk(0, (10, Host)));
-        Assert.True(sut.Enrolled);
+        emb.Throw = false;
 
         sut.Reset();
 
-        Assert.False(sut.Enrolled);
         Assert.Null(sut.Failure);
-        Assert.False(sut.Label(Chunk(0, (4, Other))).Enrolled);
+        Assert.True(sut.Label(Chunk(0, (10, Other))).Enrolled);
+    }
+
+    [Fact]
+    public void ClearEnrollment_RolleriKapatir()
+    {
+        var (sut, _) = Enrolled();
+
+        sut.ClearEnrollment();
+
+        Assert.False(sut.Enrolled);
+        Assert.False(sut.Label(Chunk(0, (10, Host))).Enrolled);
     }
 
     [Fact]
     public void Kapaliyken_ModeleHicDokunmaz()
     {
         var (sut, emb) = Make(new RoleConfig(Enabled: false));
+        sut.Enroll(Pcm((8, Host)));
+        int afterEnroll = emb.Calls;
 
         var t = sut.Label(Chunk(0, (10, Host)));
 
         Assert.False(t.Enrolled);
-        Assert.Equal(0, emb.Calls);
+        Assert.Equal(afterEnroll, emb.Calls);
     }
 }

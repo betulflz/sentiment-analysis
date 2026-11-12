@@ -9,6 +9,12 @@
              x:Name="Root"
              x:Class="SentimentAnalysis.Desktop.Avalonia.Views.LiveView">
 
+    <UserControl.Styles>
+        <Style Selector="TextBlock.warn">
+            <Setter Property="Foreground" Value="#C0392B" />
+        </Style>
+    </UserControl.Styles>
+
     <UserControl.Resources>
         <conv:StringNotEmptyConverter x:Key="StringNotEmptyConverter" />
         <conv:MeetingProfileNameConverter x:Key="ProfileName" />
@@ -90,6 +96,15 @@
                     </ComboBox.ItemTemplate>
                 </ComboBox>
             </WrapPanel>
+
+            <!-- 12: "Sesimi tanıt" — canlı Siz / Karşı taraf ayrımı bu kayda dayanır (yalnız mikrofon/kamera). -->
+            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding ShowEnrollment}">
+                <Button Content="{Binding EnrollButtonText}" Command="{Binding EnrollCommand}"
+                        AutomationProperties.Name="Sesimi tanıt"
+                        ToolTip.Tip="Görüşmeden önce birkaç saniye yalnız siz konuşun. Böylece konuşmalar 'Siz' ve 'Karşı taraf' diye ayrılır." />
+                <TextBlock Text="{Binding EnrollmentStatus}" VerticalAlignment="Center" TextWrapping="Wrap" FontSize="12"
+                           Classes.warn="{Binding EnrollmentWarning}" MaxWidth="640" />
+            </StackPanel>
 
             <TextBlock Text="{Binding DiarizationHint}" FontSize="11" TextWrapping="Wrap"
                        IsVisible="{Binding DiarizationHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"

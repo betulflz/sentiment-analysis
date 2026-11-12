@@ -127,6 +127,54 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     /// ayrımı bu değerle çalışır.</summary>
     public int LastSpeakerCount { get; private set; } = 2;
 
+    // --- 12: "Sesimi tanıt" (canlı Yöneten / Karşı taraf ayrımı) ---
+    private readonly IVoiceEnrollment? _enrollment;
+
+    /// <summary>Tanıtma durumu (boş = özellik yok). Kayıt yoksa ne işe yaradığını söyler.</summary>
+    [ObservableProperty] private string _enrollmentStatus = string.Empty;
+
+    /// <summary>Tanıtma kaydı şüpheli (iki ses) ya da başarısız: durum metni uyarı renginde gösterilir.</summary>
+    [ObservableProperty] private bool _enrollmentWarning;
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(EnrollButtonText))]
+    [NotifyCanExecuteChangedFor(nameof(EnrollCommand))]
+    private bool _isEnrolling;
+
+    /// <summary>Tanıtma düğmesi yalnız canlı modlarda (mikrofon/kamera): ses dosyasında yöneten kişi kayıtta olmayabilir.</summary>
+    public bool ShowEnrollment => _enrollment is not null && !IsFileMode;
+
+    public string EnrollButtonText => IsEnrolling ? "Kaydediliyor…"
+        : _enrollment?.IsEnrolled == true ? "Sesimi yeniden tanıt" : "Sesimi tanıt";
+
+    private bool CanEnroll() => _enrollment is not null && !IsEnrolling && !IsCapturing && !IsPreparingModels;
+
+    [RelayCommand(CanExecute = nameof(CanEnroll))]
+    private async Task EnrollAsync()
+    {
+        if (_enrollment is null) return;
+        IsEnrolling = true;
+        EnrollmentWarning = false;
+        StartCommand.NotifyCanExecuteChanged();
+        EnrollmentStatus = $"Kaydediliyor: {_enrollment.RecordSeconds:0} saniye boyunca yalnız siz konuşun " +
+                           "(ör. kendinizi ve görüşmenin amacını anlatın).";
+        try
+        {
+            var r = await _enrollment.RecordAsync(CancellationToken.None).ConfigureAwait(true);
+            EnrollmentWarning = !r.Success || r.Doubtful;
+            EnrollmentStatus = r.Success && !r.Doubtful
+                ? "Sesiniz tanındı. Görüşmede konuşmalar \"Siz\" ve \"Karşı taraf\" diye ayrılacak."
+                : r.Message;
+        }
+        finally
+        {
+            IsEnrolling = false;
+            StartCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private static string IdleEnrollmentText =>
+        "Sesinizi tanıtırsanız öneriler yalnız karşı tarafın sesine göre yapılır ve konuşma payınız ölçülür.";
+
     [ObservableProperty] private string _currentEmotion = "—";
     [ObservableProperty] private double _currentValence;
     [ObservableProperty] private double _currentArousal;
@@ -134,7 +182,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
     /// <summary>Üç kaynaklı füzyonda yüzün nihai valence'a etkisi (11d); yüz katılmadıysa boş.</summary>
     [ObservableProperty] private string _faceContributionText = string.Empty;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(WaitingForSpeech))] private bool _isCapturing;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(WaitingForSpeech)), NotifyCanExecuteChangedFor(nameof(EnrollCommand))] private bool _isCapturing;
 
     private bool _receivedThisRun;
 
@@ -148,10 +196,10 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     [ObservableProperty] private SourceAnalysisVm _finalAnalysis = SourceAnalysisVm.Empty("Genel sonuç");
 
     /// <summary>Canlı mikrofon mu kullanılsın (aksi halde seçili dosya)?</summary>
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsFileMode))] private bool _useMicrophone;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsFileMode)), NotifyPropertyChangedFor(nameof(ShowEnrollment))] private bool _useMicrophone;
 
     /// <summary>Kamera modu: mikrofon + kamera (11b). <see cref="UseMicrophone"/> ile karşılıklı dışlayıcı.</summary>
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsFileMode))] private bool _useCamera;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsFileMode)), NotifyPropertyChangedFor(nameof(ShowEnrollment))] private bool _useCamera;
 
     /// <summary>Dosya modu mu (dosya seçici görünür)?</summary>
     public bool IsFileMode => !UseMicrophone && !UseCamera;
@@ -186,7 +234,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     [ObservableProperty] private string _diarizationHint = string.Empty;
 
     /// <summary>Modeller hazırlanıyor mu (warm-up)?</summary>
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(WaitingForSpeech))] private bool _isPreparingModels;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(WaitingForSpeech)), NotifyCanExecuteChangedFor(nameof(EnrollCommand))] private bool _isPreparingModels;
 
     partial void OnIsPreparingModelsChanged(bool value)
     {
@@ -206,8 +254,11 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
     public LiveViewModel(IAnalysisRunner runner, IAudioFilePicker? picker = null,
                          ISelectedAudio? selected = null, AppConfig? config = null,
-                         ICaptureModeState? captureMode = null, IDiarizationState? diarization = null)
+                         ICaptureModeState? captureMode = null, IDiarizationState? diarization = null,
+                         IVoiceEnrollment? enrollment = null)
     {
+        _enrollment = enrollment;
+        if (enrollment is not null) _enrollmentStatus = IdleEnrollmentText;
         _selectedSpeakerCount = SpeakerCountOptions[0];
         _runner = runner;
         _picker = picker;
@@ -311,7 +362,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         _run = RunAsync(_cts.Token);
     }
 
-    private bool CanStart() => !IsCapturing && !IsPreparingModels && (!IsFileMode || _selected?.Path != null);
+    private bool CanStart() => !IsCapturing && !IsPreparingModels && !IsEnrolling && (!IsFileMode || _selected?.Path != null);
 
     private async Task RunAsync(CancellationToken ct)
     {

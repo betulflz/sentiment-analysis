@@ -4,14 +4,18 @@ using SentimentAnalysis.Core;
 
 namespace SentimentAnalysis.Application.Diarization;
 
-/// <summary>Canlı "Yöneten / Karşı taraf" ayrımı (12, ölçüm 12a). Görüşmenin ilk konuşma saniyeleri yönetenin
-/// tanıtma örneği olur; sonra her ses parçası kısa pencerelere bölünür ve her konuşma penceresi örneğe kosinüs
-/// benzerliğiyle etiketlenir. Kümeleme ve bölütleme YOKTUR — pyannote'un karşılıklı konuşmayı tek parça kesme
-/// sorunu (2026-11-09 ölçümü) bu yolda oluşmaz.
-/// <para><b>Durumludur, koşu başına bir örnek gibi kullanılır:</b> her koşunun başında <see cref="Reset"/>.
-/// Tek tüketici iş parçacığından sırayla çağrılmalıdır (boru hattı bunu sağlar).</para>
-/// <para><b>Örtüşme:</b> ses parçaları birbirine ~2 sn biner. Tanıtma örneği toplanırken aynı ses iki kez
-/// sayılmaz (imleç); etiketleme ise her parçanın tamamını kapsar.</para>
+/// <summary>Tanıtma kaydının sonucu. <paramref name="Doubtful"/>: kayıt kendi içinde tutarsız (iki kişi konuşmuş
+/// olabilir) — tanıtma yine yapılır ama kullanıcıya yeniden kaydetmesi önerilir.</summary>
+public sealed record EnrollmentResult(bool Success, bool Doubtful, double SpeechSeconds, string Message);
+
+/// <summary>Canlı "Yöneten / Karşı taraf" ayrımı (12, ölçüm 12a). Görüşmeyi yöneten kişi görüşmeden önce kısa bir
+/// tanıtma kaydı yapar (<see cref="Enroll"/>); sonra her ses parçası kısa pencerelere bölünür ve her konuşma
+/// penceresi tanıtma örneğine kosinüs benzerliğiyle etiketlenir. Kümeleme ve bölütleme YOKTUR — pyannote'un
+/// karşılıklı konuşmayı tek parça kesme sorunu (2026-11-09 ölçümü) bu yolda oluşmaz.
+/// <para><b>Tanıtma yoksa rol verilmez</b> (davranış 12 öncesiyle aynı). Akış içi "ilk saniyeler" tanıtması gerçek
+/// doğrulamada %64'e düştüğü için bilerek yoktur — yanlış rol, rolsüzlükten kötüdür.</para>
+/// <para><b>Gizlilik:</b> ses imzası yalnız bellekte tutulur, diske yazılmaz; uygulama kapanınca kaybolur.</para>
+/// <para><see cref="Label"/> tek tüketici iş parçacığından sırayla çağrılır; <see cref="Enroll"/> koşu dışında.</para>
 /// <para><b>Hata:</b> model eksik/bozuksa özellik bu koşu için kapanır (<see cref="Failure"/>), analiz sürer.</para></summary>
 public sealed class SpeakerRoleTracker
 {
@@ -19,11 +23,8 @@ public sealed class SpeakerRoleTracker
     private readonly ISpeakerEmbedder _embedder;
     private readonly IVadGate _vad;
     private readonly RoleConfig _cfg;
-
-    private readonly List<float> _enrollAudio = new();
-    private TimeSpan _enrollCursor = TimeSpan.MinValue;
-    private float[]? _enrollment;
-    private bool _doubtful;
+    private volatile float[]? _enrollment;
+    private volatile bool _doubtful;
 
     public SpeakerRoleTracker(ISpeakerEmbedder embedder, IVadGate vad, AppConfig config)
     {
@@ -37,18 +38,45 @@ public sealed class SpeakerRoleTracker
 
     public bool Enrolled => _enrollment is not null;
 
-    public void Reset()
+    /// <summary>Yeni koşu: hata durumu sıfırlanır. Tanıtma KORUNUR (aynı kişi sonraki görüşmeleri de yönetir).</summary>
+    public void Reset() => Failure = null;
+
+    public void ClearEnrollment()
     {
-        _enrollAudio.Clear();
-        _enrollCursor = TimeSpan.MinValue;
         _enrollment = null;
         _doubtful = false;
-        Failure = null;
+    }
+
+    /// <summary>Tanıtma kaydından ses imzası çıkarır: sessizlik ayıklanır, en az
+    /// <see cref="RoleConfig.MinEnrollSpeechSeconds"/> konuşma gerekir. Başarısızsa önceki tanıtma korunur.</summary>
+    public EnrollmentResult Enroll(float[] mono16k)
+    {
+        ArgumentNullException.ThrowIfNull(mono16k);
+        var chunk = new AudioChunk(mono16k, Sr, TimeSpan.Zero, Seconds(mono16k.Length));
+        var speech = new List<float>();
+        foreach (var w in Windows(chunk))
+            if (_vad.HasSpeech(Slice(chunk, w.A, w.B)))
+                speech.AddRange(mono16k.AsSpan(w.A, w.B - w.A).ToArray());
+
+        double seconds = speech.Count / (double)Sr;
+        if (seconds < _cfg.MinEnrollSpeechSeconds)
+            return new EnrollmentResult(false, false, seconds,
+                $"Yeterince konuşma algılanmadı ({seconds:0.0} sn). Kayıt süresince kesintisiz konuşup tekrar deneyin.");
+
+        var audio = speech.ToArray();
+        var enrollment = _embedder.Embed(audio);
+        int half = audio.Length / 2;
+        bool doubtful = Cos(_embedder.Embed(audio[..half]), _embedder.Embed(audio[half..])) < _cfg.DoubtThreshold;
+        _doubtful = doubtful;
+        _enrollment = enrollment;
+        return new EnrollmentResult(true, doubtful, seconds, doubtful
+            ? "Kayıtta birden fazla ses var gibi. Sessiz bir ortamda yalnız siz konuşarak yeniden kaydetmeniz önerilir."
+            : "Sesiniz tanındı.");
     }
 
     public RoleTimeline Label(AudioChunk chunk)
     {
-        if (!_cfg.Enabled || Failure is not null || chunk.SampleRate != Sr || chunk.Samples.Length == 0)
+        if (!_cfg.Enabled || _enrollment is null || Failure is not null || chunk.SampleRate != Sr || chunk.Samples.Length == 0)
             return RoleTimeline.NotEnrolled;
         try
         {
@@ -68,15 +96,10 @@ public sealed class SpeakerRoleTracker
         // ~1 sn taşar, konuşma payı şişerdi.
         var windows = Windows(chunk).Where(w => _vad.HasSpeech(Slice(chunk, w.A, w.B))).ToList();
 
-        if (_enrollment is null)
-        {
-            Collect(chunk, windows);
-            if (_enrollment is null) return RoleTimeline.NotEnrolled;
-        }
-
+        if (_enrollment is not { } enrollment) return RoleTimeline.NotEnrolled;
         if (windows.Count == 0) return new RoleTimeline(Array.Empty<RoleSpan>(), true, _doubtful);
 
-        var sims = windows.Select(w => Cos(_embedder.Embed(Slice(chunk, w.From, w.To).Samples), _enrollment)).ToArray();
+        var sims = windows.Select(w => Cos(_embedder.Embed(Slice(chunk, w.From, w.To).Samples), enrollment)).ToArray();
         var smooth = new double[sims.Length];
         for (int i = 0; i < sims.Length; i++)
         {
@@ -87,27 +110,6 @@ public sealed class SpeakerRoleTracker
             smooth[i] = Math.Max(Math.Min(a, b), Math.Min(Math.Max(a, b), c));
         }
         return new RoleTimeline(Spans(chunk.Start, windows, smooth, _cfg.Threshold), true, _doubtful);
-    }
-
-    /// <summary>Tanıtma örneği: konuşma pencerelerinin temsil dilimleri (uç uca döşenir, örtüşmez). İmleçten önce
-    /// başlayan dilimler (önceki parçayla örtüşen, zaten toplanmış ses) atlanır.</summary>
-    private void Collect(AudioChunk chunk, List<Window> windows)
-    {
-        foreach (var w in windows)
-        {
-            var start = chunk.Start + Seconds(w.A);
-            if (start < _enrollCursor) continue;
-            _enrollAudio.AddRange(chunk.Samples.AsSpan(w.A, w.B - w.A).ToArray());
-            _enrollCursor = chunk.Start + Seconds(w.B);
-            if (_enrollAudio.Count >= _cfg.EnrollSeconds * Sr) break;
-        }
-        if (_enrollAudio.Count < _cfg.EnrollSeconds * Sr) return;
-
-        var audio = _enrollAudio.ToArray();
-        _enrollment = _embedder.Embed(audio);
-        int half = audio.Length / 2;
-        _doubtful = Cos(_embedder.Embed(audio[..half]), _embedder.Embed(audio[half..])) < _cfg.DoubtThreshold;
-        _enrollAudio.Clear();
     }
 
     /// <summary>Embedding penceresi [From, To) ve temsil ettiği dilim [A, B): pencerenin ortasındaki "hop" dilimi;

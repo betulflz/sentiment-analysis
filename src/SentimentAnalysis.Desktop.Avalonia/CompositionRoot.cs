@@ -125,6 +125,9 @@ public static class CompositionRoot
         services.AddSingleton<DiarizationJob>();
         services.AddSingleton<SpeakerProsodyAnalyzer>();
         services.AddSingleton<ISpeakerAnalysis, SpeakerAnalysisService>();
+        // 12: canlı "Yöneten / Karşı taraf" — tanıtma örneği uygulama ömrü boyunca bellekte (diske yazılmaz).
+        services.AddSingleton<SpeakerRoleTracker>();
+        services.AddSingleton<IVoiceEnrollment, MicrophoneVoiceEnrollment>();
 
         services.AddSingleton<LiveViewModel>(sp => new LiveViewModel(
             sp.GetRequiredService<IAnalysisRunner>(),
@@ -132,7 +135,8 @@ public static class CompositionRoot
             sp.GetRequiredService<ISelectedAudio>(),
             sp.GetRequiredService<AppConfig>(),
             sp.GetRequiredService<ICaptureModeState>(),
-            sp.GetRequiredService<IDiarizationState>()));
+            sp.GetRequiredService<IDiarizationState>(),
+            sp.GetRequiredService<IVoiceEnrollment>()));
         services.AddSingleton<ReportViewModel>();
         services.AddSingleton<HistoryViewModel>();
         services.AddSingleton<SettingsViewModel>(sp =>
