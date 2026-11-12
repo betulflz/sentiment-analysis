@@ -127,6 +127,12 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
             int pct = (int)Math.Round(100 * hs, MidpointRounding.AwayFromZero);
             TalkShareText = $"Siz %{pct} · Karşı taraf %{100 - pct}";
         }
+        else
+        {
+            // Son dakikada yeterli konuşma yok (ya da rol yok): eski pay ekranda asılı kalmasın.
+            HostShare = 0;
+            TalkShareText = string.Empty;
+        }
         var indicators = IndicatorCalculator.Compute(chunk, faces, _valences, _cfg, talk);
         if (IndicatorCalculator.TrendValence(chunk) is double tv) _valences.Add(tv);
         var rec = _advisor.Next(indicators, CurrentWeights);

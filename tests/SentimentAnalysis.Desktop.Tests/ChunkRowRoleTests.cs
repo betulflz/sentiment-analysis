@@ -10,14 +10,36 @@ public class ChunkRowRoleTests
     private static FusedResult F(Emotion e) => new(new ValenceArousal(0, 0.5), e, Emotion.Notr, Confidence.Orta,
         true, false, IncongruencePattern.Yok, 1, ValenceArousal.Neutral, ValenceArousal.Neutral, 0, 0);
 
-    private static ChunkResult Chunk(double hostSeconds, FusedResult? counterpart)
+    private static ChunkResult Chunk(double hostSeconds, FusedResult? counterpart, bool doubtful = false)
     {
         var spans = new List<RoleSpan>();
         if (hostSeconds > 0) spans.Add(new(TimeSpan.Zero, TimeSpan.FromSeconds(hostSeconds), SpeakerRole.Yoneten, 0.6));
         if (hostSeconds < 10) spans.Add(new(TimeSpan.FromSeconds(hostSeconds), TimeSpan.FromSeconds(10), SpeakerRole.KarsiTaraf, 0.2));
         return new ChunkResult(TimeSpan.Zero, TimeSpan.FromSeconds(10), F(Emotion.Kizgin), "x")
-        { Roles = new RoleTimeline(spans, true, false), Counterpart = counterpart };
+        { Roles = new RoleTimeline(spans, true, doubtful), Counterpart = counterpart };
     }
+
+    [Fact]
+    public void SizSatirinda_KarsiTarafinDuygusuGosterilmez()
+    {
+        var row = new ChunkRowVm(Chunk(8.5, F(Emotion.Uzgun)));   // karşı taraf 1,5 sn ama ayrı sonuç var
+
+        Assert.Equal("Siz", row.Who);
+        Assert.Equal("Kızgın", row.Emotion);
+    }
+
+    [Fact]
+    public void KarisikSatir_KarsiTarafSonucuYoksa_SadeceIkiniz()
+    {
+        var row = new ChunkRowVm(Chunk(5, null));
+
+        Assert.Equal("İkiniz", row.Who);
+        Assert.Equal("Kızgın", row.Emotion);
+    }
+
+    [Fact]
+    public void SupheliTanitma_EtiketteBelirtilir() =>
+        Assert.Equal("Karşı taraf (ses tanıtması şüpheli)", new ChunkRowVm(Chunk(1, F(Emotion.Sakin), doubtful: true)).Who);
 
     [Fact]
     public void RolYok_EtiketYok_DuyguGenel()
@@ -31,7 +53,7 @@ public class ChunkRowRoleTests
     [Theory]
     [InlineData(9.0, "Siz")]
     [InlineData(1.0, "Karşı taraf")]
-    [InlineData(5.0, "İkiniz")]
+    [InlineData(5.0, "İkiniz · duygu: karşı taraf")]
     public void KimKonustu(double host, string expected) =>
         Assert.Equal(expected, new ChunkRowVm(Chunk(host, F(Emotion.Sakin))).Who);
 
@@ -72,5 +94,26 @@ public class DecisionPanelTalkShareTests
         Assert.Equal(0.7, vm.HostShare, 3);
         vm.Start();
         Assert.False(vm.HasTalkShare);
+    }
+
+    [Fact]
+    public void UzunSessizliktenSonra_EskiPayAsiliKalmaz()
+    {
+        var vm = new DecisionPanelViewModel(new SentimentAnalysis.Application.Configuration.DecisionConfig());
+        vm.OnWindow(Chunk(0, 7), Array.Empty<FaceWindowSummary>());
+        vm.OnWindow(Chunk(10, 17), Array.Empty<FaceWindowSummary>());
+        Assert.True(vm.HasTalkShare);
+
+        // 2 dk sonra çok kısa bir konuşma: son 60 sn'de yeterli konuşma yok.
+        var f = new FusedResult(new ValenceArousal(0, 0.5), Emotion.Notr, Emotion.Notr, Confidence.Orta,
+            true, false, IncongruencePattern.Yok, 1, ValenceArousal.Neutral, ValenceArousal.Neutral, 0.7, 0.7);
+        var late = new ChunkResult(TimeSpan.FromSeconds(140), TimeSpan.FromSeconds(150), f, "x")
+        {
+            Roles = new RoleTimeline(new[] { new RoleSpan(TimeSpan.FromSeconds(140), TimeSpan.FromSeconds(142), SpeakerRole.Yoneten, 0.6) }, true, false),
+        };
+        vm.OnWindow(late, Array.Empty<FaceWindowSummary>());
+
+        Assert.False(vm.HasTalkShare);
+        Assert.Equal(0, vm.HostShare);
     }
 }

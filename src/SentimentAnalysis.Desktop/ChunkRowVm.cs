@@ -39,9 +39,20 @@ public sealed class ChunkRowVm
     public ChunkRowVm(ChunkResult r, IReadOnlyList<FaceWindowSummary>? faces = null)
     {
         Time = r.TimeStart;
-        Who = WhoText(r);
-        // 12: karşı taraf konuştuysa satırın duygusu ONUN duygusudur (öneriler de ona göre); aksi halde konuşanın.
-        var shown = r.Counterpart ?? r.Fused;
+        var role = DominantRole(r);
+        // 12: gösterilen duygu etiketle aynı karardan gelir. "Siz" satırında karşı tarafın verisi gösterilmez;
+        // karışık satırda karşı tarafın duygusu gösterilir ve etiket bunu açıkça söyler.
+        var shown = role == SpeakerRole.Yoneten ? r.Fused : r.Counterpart ?? r.Fused;
+        bool mixedShowsOther = role == SpeakerRole.Belirsiz && r.Counterpart is not null && r.Roles is not null;
+        Who = role switch
+        {
+            SpeakerRole.Yoneten => "Siz",
+            SpeakerRole.KarsiTaraf => "Karşı taraf",
+            _ when r.Roles is null || !HasSpeech(r) => string.Empty,
+            _ => mixedShowsOther ? "İkiniz · duygu: karşı taraf" : "İkiniz",
+        };
+        // Tanıtma şüpheliyse (kayıtta iki ses) rol etiketi kesin gibi gösterilmez.
+        if (Who.Length > 0 && r.Roles is { EnrollmentDoubtful: true }) Who += " (ses tanıtması şüpheli)";
         Emotion = EmotionLocalizer.Emotion(shown.PrimaryEmotion);
         Valence = shown.Combined.Valence;
         Arousal = shown.Combined.Arousal;
@@ -58,15 +69,19 @@ public sealed class ChunkRowVm
             $"olumsuz ifade %{Percent(f.NegativeExpression)}, gülümseme %{Percent(f.SmileRatio)}"));
     }
 
-    private static string WhoText(ChunkResult r)
+    /// <summary>Satırda baskın konuşan: payı ≥ %80 olan rol; karışıksa ya da rol yoksa <see cref="SpeakerRole.Belirsiz"/>.</summary>
+    private static SpeakerRole DominantRole(ChunkResult r)
     {
-        if (r.Roles is not { Enrolled: true } roles) return string.Empty;
+        if (r.Roles is not { Enrolled: true } roles) return SpeakerRole.Belirsiz;
         double host = roles.Seconds(SpeakerRole.Yoneten, r.TimeStart, r.TimeEnd);
         double other = roles.Seconds(SpeakerRole.KarsiTaraf, r.TimeStart, r.TimeEnd);
-        if (host + other <= 0) return string.Empty;
+        if (host + other <= 0) return SpeakerRole.Belirsiz;
         double share = host / (host + other);
-        return share >= 0.8 ? "Siz" : share <= 0.2 ? "Karşı taraf" : "İkiniz";
+        return share >= 0.8 ? SpeakerRole.Yoneten : share <= 0.2 ? SpeakerRole.KarsiTaraf : SpeakerRole.Belirsiz;
     }
+
+    private static bool HasSpeech(ChunkResult r) =>
+        r.Roles is { Enrolled: true } roles && roles.Spans.Count > 0;
 
     private static int Percent(double reliability) =>
         (int)Math.Round(Math.Clamp(reliability, 0.0, 1.0) * 100, MidpointRounding.AwayFromZero);
