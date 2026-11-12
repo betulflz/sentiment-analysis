@@ -11,18 +11,33 @@ namespace SentimentAnalysis.Application.Decision;
 /// çatma "kızgın" değil "üzgün" okundu, gerilimin asıl taşıyıcısı sestir.</para></summary>
 public static class IndicatorCalculator
 {
+    /// <summary>Eğilim (K6) serisine eklenecek konuşma valence'ı: ses tanıtıldıysa KARŞI TARAFIN; karşı taraf bu parçada
+    /// konuşmadıysa null (yönetenin sesi karşı tarafın gidişatına yazılmaz).</summary>
+    public static double? TrendValence(ChunkResult chunk) =>
+        chunk.Roles is not null && chunk.Counterpart is null ? null : (chunk.Counterpart ?? chunk.Fused).SpeechValence;
+
+    /// <param name="talk">12: konuşma payı / yönetenin hızı (bağlam ipuçlarına girer); null = bilinmiyor.</param>
     public static Indicators Compute(ChunkResult chunk, IReadOnlyList<FaceWindowSummary> faces,
-        IReadOnlyList<double> previousValences, DecisionConfig cfg)
+        IReadOnlyList<double> previousValences, DecisionConfig cfg, TalkSnapshot? talk = null)
     {
-        var f = chunk.Fused;
+        // 12: ses tanıtıldıysa ses/metin göstergeleri KARŞI TARAFIN sesinden; bu parçada konuşmadıysa ses kanalı nötr
+        // (değeri yok) — yönetenin gerginliği "karşı taraf gergin" diye okunmaz. Veri kalitesi yine parçanın ses
+        // kalitesidir: kayıt iyi, yalnızca karşı taraf susuyor.
+        var roles = chunk.Roles;
+        bool counterpartSilent = roles is not null && chunk.Counterpart is null;
+        var f = chunk.Counterpart ?? chunk.Fused;
         // Yüz K1–K4'e aşağıda yüz özetiyle girer; üç kaynaklı Combined değil konuşma valence'ı alınır (çift sayım yok).
-        double a = f.Combined.Arousal;
+        double a = counterpartSilent ? 0.5 : f.Combined.Arousal;
         // Ses modeli yüksek sesli/hızlı konuşmayı (öfke dahil) "olumlu" okuyabiliyor (gerçek kayıtta "Sinirliyim"
         // derken ses valence'ı +0,7…+1,0, metin −0,7). Söz açıkça olumsuzsa ve metin güvenilirse olumsuzluk
         // metinden alınır: konuşma valence'ı metnin altına inebilir ama sesin şişirdiği pozitife güvenilmez.
-        double v = f.SpeechValence;
-        if (f.TextReliability >= 0.15 && f.TextVa.Valence <= -0.2) v = Math.Min(v, f.TextVa.Valence);
-        double aq = Math.Max(f.AudioReliability, f.TextReliability);
+        double v = counterpartSilent ? 0 : f.SpeechValence;
+        if (!counterpartSilent && f.TextReliability >= 0.15 && f.TextVa.Valence <= -0.2) v = Math.Min(v, f.TextVa.Valence);
+        double congruence = counterpartSilent ? 1 : f.Congruence;
+        double aq = Math.Max(chunk.Fused.AudioReliability, chunk.Fused.TextReliability);
+        if (!counterpartSilent) aq = Math.Max(f.AudioReliability, f.TextReliability);
+        // Konuşma valence'ının yüze karşı ağırlığı: karşı taraf susuyorsa ses bilgisi yok, yüz tek kaynak.
+        double speechWeight = counterpartSilent ? 0 : aq;
         double audioTension = C01((a - 0.5) * 2) * C01(-v);
 
         var values = new double[6];
@@ -33,7 +48,7 @@ public static class IndicatorCalculator
             values[(int)Criterion.Gerilim] = audioTension;
             values[(int)Criterion.IlgiKaybi] = 0;
             values[(int)Criterion.OlumsuzDuygu] = C01(-v);
-            values[(int)Criterion.Uyumsuzluk] = C01(1 - f.Congruence);
+            values[(int)Criterion.Uyumsuzluk] = C01(1 - congruence);
         }
         else
         {
@@ -43,19 +58,32 @@ public static class IndicatorCalculator
                 x => x.LookAwayRatio * C01(x.VisibleRatio / 0.5));
             MaxOverFaces(faces, Criterion.OlumsuzDuygu, values, source, x =>
             {
-                double wf = 0.5 * x.Reliability, den = aq + wf;
-                return C01(-(den <= 0 ? 0 : (aq * v + wf * x.ValenceShift) / den));
+                double wf = 0.5 * x.Reliability, den = speechWeight + wf;
+                return C01(-(den <= 0 ? 0 : (speechWeight * v + wf * x.ValenceShift) / den));
             });
             MaxOverFaces(faces, Criterion.Uyumsuzluk, values, source,
-                x => Math.Max(1 - f.Congruence, C01(Math.Abs(x.ValenceShift - v)) * x.Reliability));
+                x => Math.Max(1 - congruence, counterpartSilent ? 0 : C01(Math.Abs(x.ValenceShift - v)) * x.Reliability));
         }
 
-        double seconds = (chunk.TimeEnd - chunk.TimeStart).TotalSeconds;
-        int words = chunk.Transcript.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
-        double wps = seconds <= 0 ? 0 : words / seconds;
-        values[(int)Criterion.DusukEnerji] = C01(0.5 * C01((0.5 - a) * 2) + 0.5 * C01(1 - wps / 2));
+        double wps;
+        if (roles is null)
+        {
+            double seconds = (chunk.TimeEnd - chunk.TimeStart).TotalSeconds;
+            int words = chunk.Transcript.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+            wps = seconds <= 0 ? 0 : words / seconds;
+        }
+        else
+        {
+            // Karşı tarafın konuşma hızı: kendi sözleri / kendi konuşma süresi (yönetenin sözü sayılmaz).
+            double sec = roles.Seconds(SpeakerRole.KarsiTaraf, chunk.TimeStart, chunk.TimeEnd);
+            int words = chunk.Segments.Where(x => roles.RoleOf(x.Start, x.End) == SpeakerRole.KarsiTaraf)
+                .Sum(x => x.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length);
+            wps = sec < 1 ? 0 : words / sec;
+        }
+        // Karşı taraf susuyorsa "düşük enerji" ölçülemez (dinliyor olabilir); konuşma payı ayrıca ele alınır.
+        values[(int)Criterion.DusukEnerji] = counterpartSilent ? 0 : C01(0.5 * C01((0.5 - a) * 2) + 0.5 * C01(1 - wps / 2));
 
-        var series = previousValences.Append(v).TakeLast(cfg.TrendWindows).ToArray();
+        var series = (counterpartSilent ? previousValences : previousValences.Append(v)).TakeLast(cfg.TrendWindows).ToArray();
         values[(int)Criterion.Kotulesme] = series.Length < 3 ? 0 : C01(-Slope(series) * 5);
 
         // En iyi görülen yüz: anlık yanlış algılanan bir "hayalet" yüz ortalamayı (ve kararı) düşürmesin.
@@ -66,11 +94,15 @@ public static class IndicatorCalculator
         double smile = faces.Count == 0 ? 0 : faces.Max(x => C01(x.SmileRatio) * C01(x.Reliability));
         double positivity = faces.Count == 0 ? C01(v) : 0.6 * C01(v) + 0.4 * smile;
 
-        var cues = new ContextCues(CueEmotion(f.PrimaryEmotion, v, a), C01(a), Math.Clamp(v, -1, 1), wps,
+        var cues = new ContextCues(counterpartSilent ? Emotion.Notr : CueEmotion(f.PrimaryEmotion, v, a), C01(a), Math.Clamp(v, -1, 1), wps,
             faces.Count == 0 ? 0 : faces.Max(x => C01(x.LookAwayRatio) * C01(x.VisibleRatio / 0.5)),
             smile,
             faces.Count == 0 ? 0 : faces.Max(x => C01(x.NegativeExpression) * C01(x.Reliability)),
-            faces.Count > 0);
+            faces.Count > 0)
+        {
+            HostShare = talk?.HostShare,
+            HostWordsPerSecond = talk?.HostWordsPerSecond,
+        };
 
         return new Indicators(values.Select(C01).ToArray(), source, quality) { Positivity = C01(positivity), Cues = cues };
     }

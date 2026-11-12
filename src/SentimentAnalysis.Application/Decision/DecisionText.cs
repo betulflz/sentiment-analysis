@@ -85,7 +85,11 @@ public static class DecisionText
         _ => p.ToString(),
     };
 
-    public static string Subject(int? face) => face is int i ? $"Yüz {i + 1}" : "Görüşme geneli";
+    /// <summary>12: konuşma payı kuralının gerekçesi.</summary>
+    public static string TalkReason(double hostShare) =>
+        $"Son bir dakikada konuşmanın %{Math.Round(100 * hostShare, MidpointRounding.AwayFromZero)}'i sizde.";
+
+        public static string Subject(int? face) => face is int i ? $"Yüz {i + 1}" : "Görüşme geneli";
 
     /// <summary>"{Kişi}: {kriter} %{değer}, {kriter} %{değer}." — ikinci kriter 0,2'nin altındaysa yazılmaz.</summary>
     public static string Reason(Indicators ind, IReadOnlyList<Criterion> top)

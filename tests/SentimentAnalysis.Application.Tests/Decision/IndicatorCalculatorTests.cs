@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Application.Decision;
 using SentimentAnalysis.Core;
@@ -233,5 +234,57 @@ public class IndicatorCalculatorTests
         Assert.True(K(ind, Criterion.Gerilim) > 0.5, $"gerilim {K(ind, Criterion.Gerilim)}");
         Assert.True(K(ind, Criterion.OlumsuzDuygu) > 0.5);
         Assert.Equal(Emotion.Kizgin, ind.Cues!.Primary);
+    }
+
+    // ---- 12: ses tanıtıldıysa göstergeler karşı tarafın sesinden ----
+
+    private static RoleTimeline Roles(params (double A, double B, SpeakerRole R)[] spans) =>
+        new(spans.Select(x => new RoleSpan(TimeSpan.FromSeconds(x.A), TimeSpan.FromSeconds(x.B), x.R, 0.5)).ToArray(), true, false);
+
+    [Fact]
+    public void Roller_YonetenGerginKarsiTarafSakin_GerilimKarsiTaraftanOkunur()
+    {
+        var hostAngry = Chunk(-0.8, 0.95);                       // karışık ses: yönetenin öfkesi baskın
+        var calm = Chunk(0.3, 0.4).Fused;
+        var chunk = hostAngry with
+        {
+            Roles = Roles((0, 5, SpeakerRole.Yoneten), (5, 10, SpeakerRole.KarsiTaraf)),
+            Counterpart = calm,
+        };
+
+        var withRoles = IndicatorCalculator.Compute(chunk, NoFaces, NoHistory, Cfg);
+        var mixed = IndicatorCalculator.Compute(hostAngry, NoFaces, NoHistory, Cfg);
+
+        Assert.True(K(mixed, Criterion.Gerilim) > 0.5);
+        Assert.Equal(0, K(withRoles, Criterion.Gerilim), 3);
+        Assert.Equal(0, K(withRoles, Criterion.OlumsuzDuygu), 3);
+        Assert.Equal(0.3, IndicatorCalculator.TrendValence(chunk)!.Value, 3);
+    }
+
+    [Fact]
+    public void Roller_KarsiTarafSustu_SesGostergeleriNotr_YuzSurer_KaliteKorunur()
+    {
+        var chunk = Chunk(-0.8, 0.95) with { Roles = Roles((0, 10, SpeakerRole.Yoneten)), Counterpart = null };
+        var faces = new[] { Face(0, lookAway: 0.8) };
+
+        var ind = IndicatorCalculator.Compute(chunk, faces, new[] { 0.5, 0.2 }, Cfg);
+
+        Assert.Equal(0, K(ind, Criterion.Gerilim), 3);
+        Assert.Equal(0, K(ind, Criterion.OlumsuzDuygu), 3);
+        Assert.Equal(0, K(ind, Criterion.DusukEnerji), 3);
+        Assert.True(K(ind, Criterion.IlgiKaybi) > 0.5);          // yüz göstergesi sürer
+        Assert.True(ind.DataQuality > 0.5);                       // kayıt iyi, yalnız karşı taraf susuyor
+        Assert.Null(IndicatorCalculator.TrendValence(chunk));     // yönetenin sesi gidişata yazılmaz
+    }
+
+    [Fact]
+    public void KonusmaPayi_BaglamIpuclarinaGirer()
+    {
+        var talk = new TalkSnapshot(0.8, 48, 12, 3.4);
+
+        var ind = IndicatorCalculator.Compute(Chunk(0, 0.5), NoFaces, NoHistory, Cfg, talk);
+
+        Assert.Equal(0.8, ind.Cues!.HostShare);
+        Assert.Equal(3.4, ind.Cues.HostWordsPerSecond);
     }
 }

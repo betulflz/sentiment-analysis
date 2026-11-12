@@ -36,6 +36,16 @@ public sealed record RoleTimeline(IReadOnlyList<RoleSpan> Spans, bool Enrolled, 
 {
     public static readonly RoleTimeline NotEnrolled = new(System.Array.Empty<RoleSpan>(), false, false);
 
+    /// <summary>[from, to) aralığında en çok konuşan rol (transkript satırını role atamak için); hiç konuşma yoksa
+    /// <see cref="SpeakerRole.Belirsiz"/>. Eşitlikte karşı taraf (yönetenin sözü karşı tarafa yazılmasın diye
+    /// değil, karşı tarafın kısa cevapları kaybolmasın diye).</summary>
+    public SpeakerRole RoleOf(TimeSpan from, TimeSpan to)
+    {
+        double host = Seconds(SpeakerRole.Yoneten, from, to), other = Seconds(SpeakerRole.KarsiTaraf, from, to);
+        if (host <= 0 && other <= 0) return SpeakerRole.Belirsiz;
+        return host > other ? SpeakerRole.Yoneten : SpeakerRole.KarsiTaraf;
+    }
+
     /// <summary>[from, to) aralığında <paramref name="role"/> ile etiketli konuşma süresi (sn).</summary>
     public double Seconds(SpeakerRole role, TimeSpan from, TimeSpan to)
     {

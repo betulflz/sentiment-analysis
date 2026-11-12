@@ -60,6 +60,14 @@ public sealed class LiveAdvisor
         if (needs.Max() < (intervening ? _cfg.InterventionExitThreshold : _cfg.InterventionThreshold))
         {
             bool lowQualitySignal = indicators.Values.Max() >= _cfg.InterventionThreshold;
+            // 12: başka sorun yokken konuşmanın çoğu yönetendeyse karşı tarafa alan açılması önerilir (K7 kriter olana
+            // kadar kural; karşı taraf konuşmadıkça göstergeler de onu ölçemez).
+            if (indicators.Cues?.HostShare is double share && share >= _cfg.HostDominanceRule)
+            {
+                Commit(LiveAction.SusVeDinle);
+                return new Recommendation(LiveAction.SusVeDinle, 1, Array.Empty<Ranked<LiveAction>>(),
+                    Array.Empty<Criterion>(), null, confidence, DecisionText.TalkReason(share));
+            }
             // Sorun yok ve görüşme gerçekten olumluysa olumlu bir öneri (sinyal düşük kaliteden gelmiyorsa).
             if (!lowQualitySignal && indicators.Positivity >= _cfg.PositiveThreshold)
             {

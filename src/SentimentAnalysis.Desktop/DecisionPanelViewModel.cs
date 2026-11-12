@@ -18,6 +18,7 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
     private readonly DecisionConfig _cfg;
     private readonly List<DecisionWindow> _history = new();
     private readonly List<double> _valences = new();
+    private readonly TalkMeter _talk;
     private LiveAdvisor _advisor;
     private bool _applyingProfile;
 
@@ -46,6 +47,7 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
     public DecisionPanelViewModel(DecisionConfig cfg)
     {
         _cfg = cfg;
+        _talk = new TalkMeter(cfg);
         _advisor = new LiveAdvisor(_selectedProfile, cfg);
         Weights = Enum.GetValues<Criterion>().Select(c => new WeightSliderVm(c, OnWeightChanged)).ToArray();
         ApplyProfileWeights();
@@ -75,6 +77,9 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
 
     public IReadOnlyList<DecisionWindow> History => _history;
 
+    /// <summary>Son pencerenin konuşma payı (12); ses tanıtılmadıysa <see cref="TalkSnapshot.Unknown"/>.</summary>
+    public TalkSnapshot LastTalk { get; private set; } = TalkSnapshot.Unknown;
+
     public IReadOnlyList<double> CurrentWeights => Weights.Select(w => w.Value).ToArray();
 
     [RelayCommand]
@@ -85,6 +90,8 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
     {
         _history.Clear();
         _valences.Clear();
+        _talk.Reset();
+        LastTalk = TalkSnapshot.Unknown;
         _advisor = new LiveAdvisor(SelectedProfile, _cfg);
         Faces.Clear();
         Indicators = EmptyBars();
@@ -102,8 +109,10 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
 
     public void OnWindow(ChunkResult chunk, IReadOnlyList<FaceWindowSummary> faces)
     {
-        var indicators = IndicatorCalculator.Compute(chunk, faces, _valences, _cfg);
-        _valences.Add(chunk.Fused.SpeechValence);
+        var talk = _talk.Add(chunk);
+        LastTalk = talk;
+        var indicators = IndicatorCalculator.Compute(chunk, faces, _valences, _cfg, talk);
+        if (IndicatorCalculator.TrendValence(chunk) is double tv) _valences.Add(tv);
         var rec = _advisor.Next(indicators, CurrentWeights);
         _history.Add(new DecisionWindow(chunk.TimeStart, chunk.TimeEnd, indicators, rec) { Faces = faces.ToArray() });
 
@@ -181,6 +190,8 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
     {
         if (r.Action is LiveAction.BirAdimIlerlet or LiveAction.OlumluyuPekistir)
             return "Neden bu öneri? Konuşma ve yüz ifadesi olumlu; bu iyi havayı bir sonraki adıma taşımak için uygun bir an.";
+        if (r.Action == LiveAction.SusVeDinle && r.TopCriteria.Count == 0)
+            return "Neden bu öneri? Konuşmanın çoğu sizde. Karşı taraf konuşmadıkça ne düşündüğü ölçülemez ve ilgisi dağılabilir; ona soru sorup alan açın.";
         if (r.TopCriteria.Count == 0 || !DecisionKnowledgeBase.LiveImpact.TryGetValue(r.Action, out var impact)) return string.Empty;
         var top = r.TopCriteria[0];
         return $"Neden bu öneri? {Capitalize(DecisionText.Description(top))}. "

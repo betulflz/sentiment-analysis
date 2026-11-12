@@ -134,7 +134,12 @@ public sealed record DecisionConfig(
     int RepeatLimit = 2,                 // aynı öneri art arda bu kadar pencere gösterilince yakın alternatife geçilir (çeşitlilik)
     double DiversityMargin = 0.2,        // alternatifin yakınlığı birinciden en fazla bu kadar geride olabilir
     double PositiveThreshold = 0.5,      // olumluluk bunun üstündeyse (ve sorun yoksa) olumlu öneri verilir
-    double ContextWeight = 0.3);         // duygu/tempo/hareket uyumunun TOPSIS yakınlığına katkısı (0 = kapalı)
+    double ContextWeight = 0.3,          // duygu/tempo/hareket uyumunun TOPSIS yakınlığına katkısı (0 = kapalı)
+    // 12: konuşma payı (ses tanıtıldıysa). TAHMİN, KALİBRE EDİLMEMİŞ.
+    double TalkWindowSeconds = 60,       // konuşma payının bakıldığı son süre
+    double TalkMinSeconds = 15,          // bu pencerede en az bu kadar konuşma yoksa pay bilinmiyor sayılır
+    double HostDominanceCue = 0.6,       // yönetenin payı bunun üstünde: "dinle/sor/kısa tut" öne çıkar
+    double HostDominanceRule = 0.75);    // başka sorun yokken bunun üstü: "Sus ve dinle" kuralla önerilir
 
 /// <summary>Canlı konuşmacı rolü ayarları (12). Pencere/eşik 12a spike'ında ÖLÇÜLDÜ (TitaNet-small, 4 oturum,
 /// dengeli doğruluk %95, LOSO %95). Tanıtma ayrı bir kayıtla yapılır: akış içi "ilk saniyeler" tanıtması gerçek

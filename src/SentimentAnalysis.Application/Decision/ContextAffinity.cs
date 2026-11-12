@@ -10,11 +10,16 @@ public static class ContextAffinity
 {
     private const double FastSpeech = 2.8;   // kelime/sn: bunun üstü "hızlı konuşuyor"
     private const double SlowSpeech = 0.9;   // bunun altı "yavaş / kısık"
+    private const double DominanceStart = 0.6, DominanceFull = 0.85;   // yönetenin konuşma payı (TAHMİN)
 
     public static double Of(LiveAction action, ContextCues c, double incongruence)
     {
         double emo = ByEmotion(action, c.Primary);
-        double fast = c.WordsPerSecond >= FastSpeech ? 1 : 0;
+        // 12: ses tanıtıldıysa "hızlı konuşma" YÖNETENİN hızıdır ("Yavaşla", "Sakin ol" onun davranışı hakkında);
+        // bilinmiyorsa eski davranış: parçanın (karışık) hızı.
+        double fast = (c.HostWordsPerSecond ?? c.WordsPerSecond) >= FastSpeech ? 1 : 0;
+        // 12: konuşma payı — yönetenin payı arttıkça "dinle / sor / kısa tut" öne çıkar (0,6 → 0, 0,85 → 1).
+        double dominant = c.HostShare is double hs ? Math.Clamp((hs - DominanceStart) / (DominanceFull - DominanceStart), 0, 1) : 0;
         double slow = c.WordsPerSecond <= SlowSpeech && c.Arousal < 0.5 ? 1 : 0;
         double away = c.LookAway;
         double mixed = c.Smile >= 0.4 && (c.Valence < -0.15 || c.FaceNegative >= 0.3) ? 1 : 0;   // gülüyor ama içi olumsuz
@@ -24,16 +29,17 @@ public static class ContextAffinity
             LiveAction.GozTemasiKur      => away,
             LiveAction.KonuyuDegistir    => 0.7 * away,
             LiveAction.EnerjiYukselt     => Math.Max(0.6 * away, slow),
-            LiveAction.KisaTut           => Math.Max(0.5 * away, 0.7 * slow),
+            LiveAction.KisaTut           => Math.Max(Math.Max(0.5 * away, 0.7 * slow), 0.7 * dominant),
             LiveAction.FaydayaDon        => 0.6 * away,
-            LiveAction.SozVer            => 0.8 * away,
+            LiveAction.SozVer            => Math.Max(0.8 * away, 0.8 * dominant),
             LiveAction.OrnekleAnlat      => 0.5 * away,
             LiveAction.YavaslaKonus      => fast,
             LiveAction.SakinOl           => 0.7 * fast,
             LiveAction.KolaySoruSor      => slow,
-            LiveAction.SusVeDinle        => 0.5 * slow,
+            LiveAction.SusVeDinle        => Math.Max(0.5 * slow, dominant),
+            LiveAction.SoruSor           => 0.7 * dominant,
             LiveAction.DuyguyuAdlandir   => mixed,
-            LiveAction.TereddudunuSor    => 0.8 * mixed,
+            LiveAction.TereddudunuSor    => Math.Max(0.8 * mixed, 0.5 * dominant),
             _ => 0,
         };
 

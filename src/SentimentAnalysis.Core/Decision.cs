@@ -32,7 +32,15 @@ public sealed record ContextCues(
     double LookAway,      // en çok başını çeviren yüz, 0..1
     double Smile,         // en çok gülümseyen güvenilir yüz, 0..1
     double FaceNegative,  // en olumsuz yüz ifadesi, 0..1
-    bool HasFace);
+    bool HasFace)
+{
+    /// <summary>12: son dakikada konuşmanın yönetene düşen payı (0..1); ses tanıtılmadıysa ya da az konuşma varsa null.</summary>
+    public double? HostShare { get; init; }
+
+    /// <summary>12: yönetenin konuşma hızı (kelime/sn); bilinmiyorsa null. Bilinirken <see cref="WordsPerSecond"/>
+    /// karşı tarafın hızıdır.</summary>
+    public double? HostWordsPerSecond { get; init; }
+}
 
 /// <summary>Görüşme sonrası takip adımları (profile özgü alt kümeler). Mülakat seçenekleri SÜREÇ
 /// adımlarıdır — sistem işe alım kararı vermez (spec §4).</summary>

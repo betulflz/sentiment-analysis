@@ -81,8 +81,7 @@ public sealed class ChunkProcessor : IChunkProcessor
             chunk.Start + TimeSpan.FromSeconds(samples.Count / (double)chunk.SampleRate));
 
         // Satır, en çok örtüştüğü role aittir.
-        var otherSegments = absolute.Where(seg =>
-            timeline.Seconds(SpeakerRole.KarsiTaraf, seg.Start, seg.End) > timeline.Seconds(SpeakerRole.Yoneten, seg.Start, seg.End)).ToList();
+        var otherSegments = absolute.Where(seg => timeline.RoleOf(seg.Start, seg.End) == SpeakerRole.KarsiTaraf).ToList();
         var otherTranscript = transcript with
         {
             Text = string.Join(" ", otherSegments.Select(x => x.Text.Trim())).Trim(),

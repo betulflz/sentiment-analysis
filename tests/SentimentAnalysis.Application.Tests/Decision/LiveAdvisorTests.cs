@@ -466,6 +466,41 @@ public class ContextDiversityTests
         Assert.Contains(First(MeetingProfile.Mulakat, Cue(Emotion.Gergin, wps: 3.5)),
             new[] { LiveAction.YavaslaKonus, LiveAction.SakinOl, LiveAction.GuvenceVer });
 
+    // ---- 12: konuşma payı ve yönetenin hızı ----
+
+    [Fact]
+    public void YonetenCokKonusuyor_DinlemeVeSoruOneCikar() =>
+        Assert.Contains(First(MeetingProfile.Mulakat, Cue(Emotion.Notr) with { HostShare = 0.85 }),
+            new[] { LiveAction.SusVeDinle, LiveAction.SoruSor, LiveAction.KisaTut, LiveAction.TereddudunuSor });
+
+    [Fact]
+    public void YonetenHizli_KarisikHizYavasOlsaBile_YavaslamaOnerilir() =>
+        Assert.Contains(First(MeetingProfile.Mulakat, Cue(Emotion.Gergin, wps: 0.5) with { HostWordsPerSecond = 3.6 }),
+            new[] { LiveAction.YavaslaKonus, LiveAction.SakinOl, LiveAction.GuvenceVer });
+
+    [Fact]
+    public void SorunYokAmaKonusmaYonetende_SusVeDinleKuralla()
+    {
+        var calm = new Indicators(new[] { .05, .05, .05, .05, .05, .05 }, new int?[6], 0.8)
+        { Positivity = 0.9, Cues = Cue(Emotion.Mutlu) with { HostShare = 0.8 } };
+
+        var r = new LiveAdvisor(MeetingProfile.Satis, Cfg).Next(calm, DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis));
+
+        Assert.Equal(LiveAction.SusVeDinle, r.Action);
+        Assert.Contains("%80", r.Reason);
+    }
+
+    [Fact]
+    public void SorunYokKonusmaDengeli_KuralDevredeDegil()
+    {
+        var calm = new Indicators(new[] { .05, .05, .05, .05, .05, .05 }, new int?[6], 0.8)
+        { Cues = Cue(Emotion.Notr) with { HostShare = 0.5 } };
+
+        var r = new LiveAdvisor(MeetingProfile.Satis, Cfg).Next(calm, DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis));
+
+        Assert.Equal(LiveAction.DevamEt, r.Action);
+    }
+
     [Fact]
     public void BaglamYoksa_EskiSiralamaAynen() =>
         Assert.Equal(new LiveAdvisor(MeetingProfile.Satis, Cfg).Next(Ind(null), DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis)).Action,
