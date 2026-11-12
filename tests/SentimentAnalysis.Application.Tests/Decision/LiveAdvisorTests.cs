@@ -491,6 +491,18 @@ public class ContextDiversityTests
     }
 
     [Fact]
+    public void KonusmaPayiKurali_DusukKaliteliSinyaldeDevredeDegil()
+    {
+        // Bir gösterge eşiği aşıyor ama kalite düşük (ihtiyaç eşik altı): kardeş kurallar gibi öneri yapılmaz.
+        var weak = new Indicators(new[] { .6, .05, .05, .05, .05, .05 }, new int?[6], 0.35)
+        { Cues = Cue(Emotion.Notr) with { HostShare = 0.9 } };
+
+        var r = new LiveAdvisor(MeetingProfile.Satis, Cfg).Next(weak, DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis));
+
+        Assert.Equal(LiveAction.DevamEt, r.Action);
+    }
+
+    [Fact]
     public void SorunYokKonusmaDengeli_KuralDevredeDegil()
     {
         var calm = new Indicators(new[] { .05, .05, .05, .05, .05, .05 }, new int?[6], 0.8)

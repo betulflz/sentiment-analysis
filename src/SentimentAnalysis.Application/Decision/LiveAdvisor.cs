@@ -62,7 +62,9 @@ public sealed class LiveAdvisor
             bool lowQualitySignal = indicators.Values.Max() >= _cfg.InterventionThreshold;
             // 12: başka sorun yokken konuşmanın çoğu yönetendeyse karşı tarafa alan açılması önerilir (K7 kriter olana
             // kadar kural; karşı taraf konuşmadıkça göstergeler de onu ölçemez).
-            if (indicators.Cues?.HostShare is double share && share >= _cfg.HostDominanceRule)
+            // Kardeş kurallarla aynı kapı: düşük kaliteli bir sinyal varken ya da güven düşükken kuralla öneri verilmez.
+            if (!lowQualitySignal && confidence != Confidence.Dusuk
+                && indicators.Cues?.HostShare is double share && share >= _cfg.HostDominanceRule)
             {
                 Commit(LiveAction.SusVeDinle);
                 return new Recommendation(LiveAction.SusVeDinle, 1, Array.Empty<Ranked<LiveAction>>(),

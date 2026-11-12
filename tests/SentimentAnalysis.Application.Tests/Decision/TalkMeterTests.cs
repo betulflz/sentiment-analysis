@@ -94,3 +94,23 @@ public class TalkMeterTests
         Assert.Equal(10, t.CounterpartSeconds, 3);
     }
 }
+
+public class RoleOfTests
+{
+    private static TimeSpan S(double x) => TimeSpan.FromSeconds(x);
+
+    [Fact]
+    public void Esitlik_Belirsiz_CogunlukKazanir()
+    {
+        var t = new RoleTimeline(new[]
+        {
+            new RoleSpan(S(0), S(2), SpeakerRole.Yoneten, 0.6),
+            new RoleSpan(S(2), S(4), SpeakerRole.KarsiTaraf, 0.2),
+        }, true, false);
+
+        Assert.Equal(SpeakerRole.Belirsiz, t.RoleOf(S(1), S(3)));     // 1 sn – 1 sn
+        Assert.Equal(SpeakerRole.KarsiTaraf, t.RoleOf(S(1), S(4)));
+        Assert.Equal(SpeakerRole.Yoneten, t.RoleOf(S(0), S(3)));
+        Assert.Equal(SpeakerRole.Belirsiz, t.RoleOf(S(5), S(6)));     // konuşma yok
+    }
+}
