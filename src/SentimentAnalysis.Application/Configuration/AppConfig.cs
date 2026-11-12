@@ -146,6 +146,8 @@ public sealed record RoleConfig(
     double Threshold = 0.41,              // 12a tek eşik (LOSO ile kontrol edildi)
     double EnrollRecordSeconds = 8.0,     // "Sesimi tanıt" kaydının süresi (sessizlik ayıklanır)
     double MinEnrollSpeechSeconds = 4.0,  // ayıklandıktan sonra en az bu kadar konuşma olmalı
+    double MinCounterpartSeconds = 2.0,   // karışık parçada karşı tarafın ayrı duygusu için en az konuşma (prozodi bağlamı)
+    double NegligibleHostSeconds = 0.5,   // yönetenin konuşması bunun altındaysa parça zaten karşı tarafındır
     double DoubtThreshold = 0.45);        // tanıtmanın iki yarısı bundan az benzerse "iki kişi konuşmuş olabilir"
                                           // (2026-11-12 ölçümü: 3+3 sn karışık örneklerin 8/8'i ≤ 0,42; temizlerin 7/8'i ≥ 0,50)
 

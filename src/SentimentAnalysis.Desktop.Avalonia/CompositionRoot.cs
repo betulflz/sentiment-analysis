@@ -116,7 +116,8 @@ public static class CompositionRoot
             sp.GetService<ISessionAudioSink>(),
             sp.GetService<IDiarizationState>(),
             sp.GetRequiredService<Func<IVideoCaptureSource?>>(),
-            sp.GetRequiredService<Func<VisionAnalyzer>>()));
+            sp.GetRequiredService<Func<VisionAnalyzer>>(),
+            sp.GetRequiredService<SpeakerRoleTracker>()));
 
         // Konuşmacı ayrımı (10b): motor + arka plan geçişi + UI'nin dokunduğu servis.
         // Model YÜKLENMEZ; ilk gerçek çağrıya kadar maliyeti sıfırdır (özellik kapalıysa hiç).

@@ -56,15 +56,17 @@ public sealed class EmotionPipeline
     /// Yüklenemeyen modelin hatasını açıklayıcı bir şekilde fırlatır.</summary>
     public Task WarmUpAsync(CancellationToken ct) => _processor.WarmUpAsync(ct);
 
+    /// <param name="roles">İsteğe bağlı (12): canlı "Yöneten / Karşı taraf" etiketleyicisi; koşu başında sıfırlanır.</param>
     /// <param name="enrich">İsteğe bağlı (11d): işlenen chunk timeline/progress/depoya yazılmadan önce
     /// dönüştürülür — ör. aynı aralığın yüz özetiyle üç kaynaklı füzyon. Fırlatırsa chunk olduğu gibi kalır.</param>
     public async Task<MeetingSummary> RunAsync(
         IAudioCaptureSource source, CaptureOptions options, Guid sessionId,
         DateTimeOffset startedAt, DetectedLanguage language,
         IProgress<ChunkResult>? progress, CancellationToken ct,
-        Func<ChunkResult, ChunkResult>? enrich = null)
+        Func<ChunkResult, ChunkResult>? enrich = null, IRoleLabeler? roles = null)
     {
         _timeline.Clear();
+        roles?.Reset();
         _droppedCount = 0;
         _drainSkippedCount = 0;
 
@@ -112,7 +114,7 @@ public sealed class EmotionPipeline
             // ct iptal olsa bile kanal writer tamamlanana ( Complete ) kadar tüm chunk'ları tüketiriz
             await foreach (var chunk in channel.Reader.ReadAllAsync(processingCts.Token).ConfigureAwait(false))
             {
-                await ProcessOneAsync(chunk, sessionId, progress, enrich, processingCts.Token).ConfigureAwait(false);
+                await ProcessOneAsync(chunk, sessionId, progress, enrich, roles, processingCts.Token).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -140,7 +142,7 @@ public sealed class EmotionPipeline
     /// değil, koşunun kendisinin durumudur.</summary>
     private async Task ProcessOneAsync(
         AudioChunk chunk, Guid sessionId, IProgress<ChunkResult>? progress,
-        Func<ChunkResult, ChunkResult>? enrich, CancellationToken ct)
+        Func<ChunkResult, ChunkResult>? enrich, IRoleLabeler? roles, CancellationToken ct)
     {
         ChunkResult? result = null;
         try
@@ -156,7 +158,7 @@ public sealed class EmotionPipeline
             });
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            result = await _processor.ProcessAsync(chunk, ct).ConfigureAwait(false);
+            result = await _processor.ProcessAsync(chunk, roles, ct).ConfigureAwait(false);
             sw.Stop();
 
             var outcome = result is not null ? "Konuşma var" : "Sessizlik";

@@ -180,6 +180,14 @@ public interface ISpeakerEmbedder
     float[] Embed(float[] mono16k);
 }
 
+/// <summary>Canlı ses parçasının "Yöneten / Karşı taraf" çizelgesini çıkarır (12). Durumludur (tanıtma örneği);
+/// koşu başında <see cref="Reset"/>. Hata fırlatmaz: tanıtma yoksa ya da model bozuksa rolsüz çizelge döner.</summary>
+public interface IRoleLabeler
+{
+    RoleTimeline Label(AudioChunk chunk);
+    void Reset();
+}
+
 /// <summary>Tüm kaydı görüp konuşmacı bölgeleri üretir (Alt-proje 10b; sherpa-onnx offline
 /// diarization). Canlı hatta ÇAĞRILMAZ — oturum bittikten sonra arka planda bir kez çalışır
 /// (spec 10 S2: sherpa'nın diarization'ı yalnızca offline'dır ve 10a ölçümünde RTF ~0,44

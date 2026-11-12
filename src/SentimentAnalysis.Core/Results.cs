@@ -54,6 +54,14 @@ public sealed record ChunkResult(
     IReadOnlyList<TranscriptSegment>? Segments = null)
 {
     public IReadOnlyList<TranscriptSegment> Segments { get; init; } = Segments ?? Array.Empty<TranscriptSegment>();
+
+    /// <summary>Canlı "Yöneten / Karşı taraf" çizelgesi (12); null = rol ayrımı yok (tanıtılmadı, dosya modu,
+    /// model eksik). Saklanmaz — yalnız canlı karar ve ekran içindir. Additive.</summary>
+    public RoleTimeline? Roles { get; init; }
+
+    /// <summary>Yalnız KARŞI TARAFIN sesi ve sözlerinden duygu (12). Parçada yalnız karşı taraf konuştuysa
+    /// <see cref="Fused"/>'ın kendisi; karşı taraf yeterince konuşmadıysa null. Rol ayrımı yoksa null. Additive.</summary>
+    public FusedResult? Counterpart { get; init; }
 }
 
 /// <summary>Bir toplantı/oturum: chunk listesi + üst-veriler. Toplantı-düzeyi

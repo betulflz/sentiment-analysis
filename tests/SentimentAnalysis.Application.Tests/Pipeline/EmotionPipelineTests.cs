@@ -155,6 +155,36 @@ public class EmotionPipelineTests
         Assert.Equal(2, store.Saved.Count);
     }
 
+    private sealed class RoleSpyProcessor(Func<AudioChunk, ChunkResult?> map) : IChunkProcessor
+    {
+        public readonly List<IRoleLabeler?> Seen = new();
+        public Task<ChunkResult?> ProcessAsync(AudioChunk chunk, CancellationToken ct) => ProcessAsync(chunk, null, ct);
+        public Task<ChunkResult?> ProcessAsync(AudioChunk chunk, IRoleLabeler? roles, CancellationToken ct)
+        { Seen.Add(roles); return Task.FromResult(map(chunk)); }
+    }
+
+    private sealed class CountingLabeler : IRoleLabeler
+    {
+        public int Resets;
+        public RoleTimeline Label(AudioChunk chunk) => RoleTimeline.NotEnrolled;
+        public void Reset() => Resets++;
+    }
+
+    [Fact]
+    public async Task RunAsync_RolEtiketleyici_KosuBasindaSifirlanir_HerParcayaIletilir()
+    {
+        var proc = new RoleSpyProcessor(ResultFor);
+        var pipeline = new EmotionPipeline(proc, new RecordingStore(), new FakeAggregator(), Cfg(32));
+        var roles = new CountingLabeler();
+
+        await pipeline.RunAsync(new FakeSource(3, ChunkAt), Opts, Guid.NewGuid(), DateTimeOffset.UnixEpoch,
+            DetectedLanguage.Turkish, progress: null, CancellationToken.None, roles: roles);
+
+        Assert.Equal(1, roles.Resets);
+        Assert.Equal(3, proc.Seen.Count);
+        Assert.All(proc.Seen, r => Assert.Same(roles, r));
+    }
+
     [Fact]
     public async Task RunAsync_EnrichThrows_KeepsUnenrichedChunk()
     {

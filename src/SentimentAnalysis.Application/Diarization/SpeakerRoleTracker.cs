@@ -17,7 +17,7 @@ public sealed record EnrollmentResult(bool Success, bool Doubtful, double Speech
 /// <para><b>Gizlilik:</b> ses imzası yalnız bellekte tutulur, diske yazılmaz; uygulama kapanınca kaybolur.</para>
 /// <para><see cref="Label"/> tek tüketici iş parçacığından sırayla çağrılır; <see cref="Enroll"/> koşu dışında.</para>
 /// <para><b>Hata:</b> model eksik/bozuksa özellik bu koşu için kapanır (<see cref="Failure"/>), analiz sürer.</para></summary>
-public sealed class SpeakerRoleTracker
+public sealed class SpeakerRoleTracker : IRoleLabeler
 {
     private const int Sr = 16000;
     private readonly ISpeakerEmbedder _embedder;

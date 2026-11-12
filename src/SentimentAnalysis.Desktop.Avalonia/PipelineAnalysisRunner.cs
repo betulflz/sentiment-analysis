@@ -29,6 +29,7 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
     private readonly Func<IVideoCaptureSource?>? _videoFactory;
     private readonly Func<VisionAnalyzer>? _visionFactory;
     private VisionAnalyzer? _vision;
+    private readonly IRoleLabeler? _roles;
     private volatile VisionAnalyzer? _activeVision;
 
     public PipelineAnalysisRunner(EmotionPipeline pipeline, Func<IAudioCaptureSource?> sourceFactory,
@@ -36,8 +37,10 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
                                   ISessionAudioSink? audioSink = null,
                                   IDiarizationState? diarization = null,
                                   Func<IVideoCaptureSource?>? videoFactory = null,
-                                  Func<VisionAnalyzer>? visionFactory = null)
+                                  Func<VisionAnalyzer>? visionFactory = null,
+                                  IRoleLabeler? roles = null)
     {
+        _roles = roles;
         // 11b: görüntü kanalı additive — fabrika yoksa ya da null dönerse (ses dosyası, mikrofon) davranış değişmez.
         _videoFactory = videoFactory;
         _visionFactory = visionFactory;
@@ -162,7 +165,9 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
                 : r;
 
             var summary = await _pipeline.RunAsync(pipelineSource, options, sessionId, startedAt, language, uiThreadProgress, ct,
-                    enrich: WithFace)
+                    enrich: WithFace,
+                    // 12: rol ayrımı yalnız canlı modlarda — ses dosyasında tanıtılan kişi kayıtta olmayabilir.
+                    roles: _captureMode?.Mode is CaptureMode.Mikrofon or CaptureMode.Kamera ? _roles : null)
                 .ConfigureAwait(false);
 
             // Ses, özet ÜRETİLDİKTEN SONRA saklanır: rapor bu yüzden gecikmez (spec 10 S2).
