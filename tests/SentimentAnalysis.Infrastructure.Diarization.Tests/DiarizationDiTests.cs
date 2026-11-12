@@ -50,4 +50,15 @@ public class DiarizationDiTests
 
         Assert.Null(ex);
     }
+
+    [Fact]
+    public void AddSherpaDiarization_SesImzasiCikaricisiCozulur_ModelYuklemez()
+    {
+        using var sp = Build();
+
+        var embedder = sp.GetRequiredService<ISpeakerEmbedder>();
+
+        Assert.IsType<SherpaSpeakerEmbedder>(embedder);
+        Assert.Same(embedder, sp.GetRequiredService<ISpeakerEmbedder>());
+    }
 }

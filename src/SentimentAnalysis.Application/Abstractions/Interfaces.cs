@@ -171,6 +171,15 @@ public interface IDecisionStore
     Task<DecisionSessionRecord?> GetDecisionSessionAsync(Guid sessionId, CancellationToken ct);
 }
 
+/// <summary>Kısa bir ses parçasından konuşmacı ses imzası (embedding) çıkarır (12: canlı "Yöneten / Karşı taraf").
+/// Canlı hatta pencere başına çağrılır: 12a ölçümünde 1,5 sn pencere ≈ 16 ms (TitaNet-small, M1 Air).
+/// İş parçacığı güvenlidir. Model eksikse <see cref="System.IO.FileNotFoundException"/> atar — sessizce boş dönmez.</summary>
+public interface ISpeakerEmbedder
+{
+    /// <param name="mono16k">16 kHz mono örnekler (tipik 1,5–8 sn).</param>
+    float[] Embed(float[] mono16k);
+}
+
 /// <summary>Tüm kaydı görüp konuşmacı bölgeleri üretir (Alt-proje 10b; sherpa-onnx offline
 /// diarization). Canlı hatta ÇAĞRILMAZ — oturum bittikten sonra arka planda bir kez çalışır
 /// (spec 10 S2: sherpa'nın diarization'ı yalnızca offline'dır ve 10a ölçümünde RTF ~0,44

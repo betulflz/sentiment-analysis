@@ -12,8 +12,11 @@ public static class DiarizationServiceCollectionExtensions
 {
     public static IServiceCollection AddSherpaDiarization(this IServiceCollection services)
     {
-        services.TryAddSingleton<IDiarizationModelProvider, FileDiarizationModelProvider>();
+        services.TryAddSingleton<FileDiarizationModelProvider>();
+        services.TryAddSingleton<IDiarizationModelProvider>(sp => sp.GetRequiredService<FileDiarizationModelProvider>());
+        services.TryAddSingleton<ISpeakerRoleModelProvider>(sp => sp.GetRequiredService<FileDiarizationModelProvider>());
         services.AddSingleton<IDiarizer, SherpaDiarizer>();
+        services.AddSingleton<ISpeakerEmbedder, SherpaSpeakerEmbedder>();
         return services;
     }
 }

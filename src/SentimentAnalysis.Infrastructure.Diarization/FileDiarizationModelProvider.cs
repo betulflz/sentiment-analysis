@@ -5,7 +5,7 @@ namespace SentimentAnalysis.Infrastructure.Diarization;
 /// <summary>Modelleri uygulama veri klasöründeki <c>models/</c> altından çözer.
 /// <para>Dosya adları 10a spike'ında ölçülen kurulumla birebir aynıdır: segmentation için
 /// <b>fp32</b> (<c>model.onnx</c>) kullanılır, int8 değil.</para></summary>
-public sealed class FileDiarizationModelProvider : IDiarizationModelProvider
+public sealed class FileDiarizationModelProvider : IDiarizationModelProvider, ISpeakerRoleModelProvider
 {
     private const string SegmentationDir = "sherpa-onnx-pyannote-segmentation-3-0";
     private const string SegmentationFile = "model.onnx";
@@ -47,6 +47,31 @@ public sealed class FileDiarizationModelProvider : IDiarizationModelProvider
                     "sessizce yanlış konuşmacı sayısı üretir. Doğru dosyayı indirip " +
                     $"{EmbeddingFile} adıyla değiştirin: {path}");
 
+            return path;
+        }
+    }
+
+    // 12a: nemo_en_titanet_small.onnx ~40,3 MB. Tanıtma eşiği (0,41) bu modele göre ölçüldü; başka bir model
+    // (ör. 26 MB resnet34) sessizce yanlış "Yöneten / Karşı taraf" etiketi üretir.
+    public const string RoleEmbeddingFile = "speaker-embedding-titanet-small.onnx";
+    private const long RoleMinBytes = 35_000_000;
+    private const long RoleMaxBytes = 45_000_000;
+
+    public string RoleEmbeddingModelPath
+    {
+        get
+        {
+            var path = Resolve(
+                RoleEmbeddingFile,
+                "konuşmacı rolü (TitaNet-small) modeli",
+                "github.com/k2-fsa/sherpa-onnx → releases/speaker-recongition-models/nemo_en_titanet_small.onnx " +
+                $"(indirip {RoleEmbeddingFile} adıyla models/ altına koyun)");
+
+            long size = new FileInfo(path).Length;
+            if (size < RoleMinBytes || size > RoleMaxBytes)
+                throw new InvalidDataException(
+                    $"Konuşmacı rolü modeli beklenen boyutta değil ({size} bayt; beklenen {RoleMinBytes}-{RoleMaxBytes}). " +
+                    $"Tanıtma eşiği nemo_en_titanet_small modeline göre ölçüldü: {path}");
             return path;
         }
     }
