@@ -102,6 +102,9 @@
                 <Button Content="{Binding EnrollButtonText}" Command="{Binding EnrollCommand}"
                         AutomationProperties.Name="Sesimi tanıt"
                         ToolTip.Tip="Görüşmeden önce birkaç saniye yalnız siz konuşun. Böylece konuşmalar 'Siz' ve 'Karşı taraf' diye ayrılır." />
+                <Button Content="Tanıtmayı sil" Command="{Binding ClearEnrollmentCommand}"
+                        IsVisible="{Binding CanClearEnrollment}" AutomationProperties.Name="Ses tanıtmasını sil"
+                        ToolTip.Tip="Ses imzası yalnız bu uygulama açıkken bellekte durur. Sonraki görüşmeyi başka biri yönetecekse silin." />
                 <TextBlock Text="{Binding EnrollmentStatus}" VerticalAlignment="Center" TextWrapping="Wrap" FontSize="12"
                            Classes.warn="{Binding EnrollmentWarning}" MaxWidth="640" />
             </StackPanel>
@@ -172,6 +175,15 @@
                     <TextBlock Text="{Binding Decision.ReasonText}" TextWrapping="Wrap" />
                     <TextBlock Text="{Binding Decision.WhyText}" TextWrapping="Wrap" FontSize="12" Classes="muted"
                                IsVisible="{Binding Decision.WhyText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    <!-- 12: konuşma payı (ses tanıtıldıysa) -->
+                    <StackPanel Spacing="2" IsVisible="{Binding Decision.HasTalkShare}" Margin="0,4,0,0">
+                        <TextBlock Text="Konuşma payı (son 1 dakika)" FontSize="12" Classes="muted" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <ProgressBar Minimum="0" Maximum="1" Value="{Binding Decision.HostShare}" Height="8"
+                                         VerticalAlignment="Center" AutomationProperties.Name="Sizin konuşma payınız" />
+                            <TextBlock Grid.Column="1" Text="{Binding Decision.TalkShareText}" FontSize="12" VerticalAlignment="Center" />
+                        </Grid>
+                    </StackPanel>
                     <TextBlock Text="{Binding Decision.ConfidenceText}" FontSize="12" />
                     <TextBlock Text="{Binding Decision.AlternativeText}" FontSize="12" TextWrapping="Wrap" />
                     <TextBlock Text="İlk analiz penceresi bekleniyor." IsVisible="{Binding Decision.ConfidenceText, Converter={x:Static StringConverters.IsNullOrEmpty}}" FontSize="12" />
@@ -300,8 +312,14 @@
                                 <TextBlock Grid.Column="0" Text="{Binding Time, StringFormat='{}{0:hh\\:mm\\:ss}'}"
                                            FontSize="11" Foreground="{DynamicResource SystemBaseMediumColor}"
                                            VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1" Text="{Binding Emotion}" FontWeight="SemiBold"
-                                           VerticalAlignment="Center" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                    <!-- 12: kim konuştu (ses tanıtıldıysa) -->
+                                    <Border IsVisible="{Binding HasWho}" CornerRadius="4" Padding="5,1" HorizontalAlignment="Left"
+                                            Background="{DynamicResource SystemBaseLowColor}">
+                                        <TextBlock Text="{Binding Who}" FontSize="10" />
+                                    </Border>
+                                    <TextBlock Text="{Binding Emotion}" FontWeight="SemiBold" />
+                                </StackPanel>
                                 <!-- Eksen özeti + girdi kalitesi: "neden bu sonuç?" sorusunun ilk durağı. -->
                                 <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
                                     <TextBlock Text="{Binding AxisSummary}" FontSize="11"

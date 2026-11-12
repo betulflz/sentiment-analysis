@@ -25,6 +25,8 @@ public sealed class MicrophoneVoiceEnrollment : IVoiceEnrollment
 
     public double RecordSeconds => _config.Role.EnrollRecordSeconds;
 
+    public void Clear() => _tracker.ClearEnrollment();
+
     public async Task<EnrollmentResult> RecordAsync(CancellationToken ct)
     {
         try

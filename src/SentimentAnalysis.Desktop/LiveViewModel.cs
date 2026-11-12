@@ -136,9 +136,28 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     /// <summary>Tanıtma kaydı şüpheli (iki ses) ya da başarısız: durum metni uyarı renginde gösterilir.</summary>
     [ObservableProperty] private bool _enrollmentWarning;
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(EnrollButtonText))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(EnrollButtonText)), NotifyPropertyChangedFor(nameof(CanClearEnrollment))]
     [NotifyCanExecuteChangedFor(nameof(EnrollCommand))]
     private bool _isEnrolling;
+
+    /// <summary>Mevcut tanıtma en az bir görüşmede kullanıldı: sonraki görüşmeyi başka biri yönetiyorsa roller
+    /// yanlış atanır — kullanıcı uyarılır (güvenlik incelemesi 2026-11-12).</summary>
+    private bool _enrollmentUsed;
+
+    /// <summary>"Tanıtmayı sil" görünsün mü: tanıtma var ve kayıt/görüşme sürmüyor.</summary>
+    public bool CanClearEnrollment => _enrollment?.IsEnrolled == true && !IsEnrolling && !IsCapturing;
+
+    [RelayCommand]
+    private void ClearEnrollment()
+    {
+        if (_enrollment is null || IsCapturing) return;
+        _enrollment.Clear();
+        _enrollmentUsed = false;
+        EnrollmentWarning = false;
+        EnrollmentStatus = "Ses tanıtması silindi. " + IdleEnrollmentText;
+        OnPropertyChanged(nameof(EnrollButtonText));
+        OnPropertyChanged(nameof(CanClearEnrollment));
+    }
 
     /// <summary>Tanıtma düğmesi yalnız canlı modlarda (mikrofon/kamera): ses dosyasında yöneten kişi kayıtta olmayabilir.</summary>
     public bool ShowEnrollment => _enrollment is not null && !IsFileMode;
@@ -161,6 +180,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         {
             var r = await _enrollment.RecordAsync(CancellationToken.None).ConfigureAwait(true);
             EnrollmentWarning = !r.Success || r.Doubtful;
+            if (r.Success) _enrollmentUsed = false;
             EnrollmentStatus = r.Success && !r.Doubtful
                 ? "Sesiniz tanındı. Görüşmede konuşmalar \"Siz\" ve \"Karşı taraf\" diye ayrılacak."
                 : r.Message;
@@ -356,6 +376,17 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
             ? "Konuşmacı ayrımı bu oturum için AÇIK — ses geçici olarak saklanacak, konuşmacılar Durdur sonrası Rapor'da görünür."
             : "Konuşmacı ayrımı KAPALI (Ayarlar'dan açıp Kaydet'e basarak bir sonraki oturumda etkinleştirebilirsiniz).";
         LastSpeakerCount = SelectedSpeakerCount?.Value ?? 2;
+        if (_enrollment?.IsEnrolled == true && !IsFileMode)
+        {
+            if (_enrollmentUsed)
+            {
+                EnrollmentWarning = true;
+                EnrollmentStatus = "Önceki görüşmenin ses tanıtması kullanılıyor. Bu görüşmeyi başka biri yönetiyorsa " +
+                                   "durdurup \"Sesimi yeniden tanıt\" ile tanıtın; aksi halde roller yanlış atanır.";
+            }
+            _enrollmentUsed = true;
+        }
+        OnPropertyChanged(nameof(CanClearEnrollment));
         StartCommand.NotifyCanExecuteChanged();
         StopCommand.NotifyCanExecuteChanged();
         _cts = new CancellationTokenSource();
@@ -410,6 +441,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         finally 
         { 
             IsCapturing = false; 
+            OnPropertyChanged(nameof(CanClearEnrollment));
             Decision.IsLocked = false;
             RefreshPreview();
             IsPreparingModels = false;

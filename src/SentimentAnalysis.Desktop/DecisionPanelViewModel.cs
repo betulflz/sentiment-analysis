@@ -23,6 +23,14 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
     private bool _applyingProfile;
 
     [ObservableProperty] private string _actionText = Dash;
+
+    /// <summary>12: son dakikanın konuşma payı ("Siz %62 · Karşı taraf %38"); bilinmiyorsa boş.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasTalkShare))] private string _talkShareText = string.Empty;
+
+    /// <summary>12: yönetenin konuşma payı (0..1) — çubuk için.</summary>
+    [ObservableProperty] private double _hostShare;
+
+    public bool HasTalkShare => TalkShareText.Length > 0;
     [ObservableProperty] private string _reasonText = string.Empty;
 
     /// <summary>"Neden bu öneri?": en çok sürükleyen sorunun açıklaması ve eylemin o soruna etkisi (bilgi tabanı).
@@ -92,6 +100,8 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
         _valences.Clear();
         _talk.Reset();
         LastTalk = TalkSnapshot.Unknown;
+        TalkShareText = string.Empty;
+        HostShare = 0;
         _advisor = new LiveAdvisor(SelectedProfile, _cfg);
         Faces.Clear();
         Indicators = EmptyBars();
@@ -111,6 +121,12 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
     {
         var talk = _talk.Add(chunk);
         LastTalk = talk;
+        if (talk.HostShare is double hs)
+        {
+            HostShare = hs;
+            int pct = (int)Math.Round(100 * hs, MidpointRounding.AwayFromZero);
+            TalkShareText = $"Siz %{pct} · Karşı taraf %{100 - pct}";
+        }
         var indicators = IndicatorCalculator.Compute(chunk, faces, _valences, _cfg, talk);
         if (IndicatorCalculator.TrendValence(chunk) is double tv) _valences.Add(tv);
         var rec = _advisor.Next(indicators, CurrentWeights);

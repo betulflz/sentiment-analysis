@@ -13,4 +13,7 @@ public interface IVoiceEnrollment
 
     /// <summary>Mikrofondan kayıt alıp ses imzasını çıkarır. Hata fırlatmaz: sonucu/nedeni döndürür.</summary>
     Task<EnrollmentResult> RecordAsync(CancellationToken ct);
+
+    /// <summary>Ses imzasını bellekten siler; sonraki görüşmede rol ayrımı yapılmaz.</summary>
+    void Clear();
 }

@@ -24,6 +24,7 @@ public class VoiceEnrollmentTests
         public TaskCompletionSource<EnrollmentResult>? Gate;
         public bool IsEnrolled { get; private set; }
         public double RecordSeconds => 8;
+        public void Clear() => IsEnrolled = false;
         public async Task<EnrollmentResult> RecordAsync(CancellationToken ct)
         {
             var r = Gate is null ? Result : await Gate.Task;
@@ -94,5 +95,49 @@ public class VoiceEnrollmentTests
         e.Gate.SetResult(new(true, false, 6, "ok"));
         await run;
         Assert.True(vm.StartCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task TanitmayiSil_DugmeVeDurumGuncellenir()
+    {
+        var vm = Vm(new FakeEnrollment());
+        Assert.False(vm.CanClearEnrollment);
+        await vm.EnrollCommand.ExecuteAsync(null);
+        Assert.True(vm.CanClearEnrollment);
+
+        vm.ClearEnrollmentCommand.Execute(null);
+
+        Assert.False(vm.CanClearEnrollment);
+        Assert.Equal("Sesimi tanıt", vm.EnrollButtonText);
+        Assert.Contains("silindi", vm.EnrollmentStatus);
+    }
+
+    [Fact]
+    public async Task TanitmaIkinciGorusmedeKullanilirsa_Uyarir_IlkindeUyarmaz()
+    {
+        var vm = Vm(new FakeEnrollment());
+        await vm.EnrollCommand.ExecuteAsync(null);
+
+        vm.StartCommand.Execute(null);
+        await vm.WaitForIdleAsync();
+        Assert.False(vm.EnrollmentWarning);
+
+        vm.StartCommand.Execute(null);
+        await vm.WaitForIdleAsync();
+        Assert.True(vm.EnrollmentWarning);
+        Assert.Contains("Önceki görüşmenin ses tanıtması", vm.EnrollmentStatus);
+    }
+
+    [Fact]
+    public async Task YenidenTanitma_UyariyiKaldirir()
+    {
+        var vm = Vm(new FakeEnrollment());
+        await vm.EnrollCommand.ExecuteAsync(null);
+        vm.StartCommand.Execute(null); await vm.WaitForIdleAsync();
+
+        await vm.EnrollCommand.ExecuteAsync(null);
+        vm.StartCommand.Execute(null); await vm.WaitForIdleAsync();
+
+        Assert.False(vm.EnrollmentWarning);
     }
 }

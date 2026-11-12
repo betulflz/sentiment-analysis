@@ -13,6 +13,11 @@ public sealed class ChunkRowVm
     public string Badge { get; }
     public string Transcript { get; }
 
+    /// <summary>12: bu aralıkta kim konuştu — "Siz", "Karşı taraf", "İkiniz"; ses tanıtılmadıysa boş.</summary>
+    public string Who { get; }
+
+    public bool HasWho => Who.Length > 0;
+
     /// <summary>Valence/Arousal'ın jargonsuz, düz Türkçe özeti. <see cref="SourceAnalysisVm.AxisSummary"/>
     /// ile aynı üretici metotları kullanır — iki yüzey asla ayrışmasın diye.</summary>
     public string AxisSummary { get; }
@@ -34,11 +39,14 @@ public sealed class ChunkRowVm
     public ChunkRowVm(ChunkResult r, IReadOnlyList<FaceWindowSummary>? faces = null)
     {
         Time = r.TimeStart;
-        Emotion = EmotionLocalizer.Emotion(r.Fused.PrimaryEmotion);
-        Valence = r.Fused.Combined.Valence;
-        Arousal = r.Fused.Combined.Arousal;
-        Flagged = r.Fused.Flagged;
-        Badge = r.Fused.Flagged ? EmotionLocalizer.Pattern(r.Fused.Pattern) : string.Empty;
+        Who = WhoText(r);
+        // 12: karşı taraf konuştuysa satırın duygusu ONUN duygusudur (öneriler de ona göre); aksi halde konuşanın.
+        var shown = r.Counterpart ?? r.Fused;
+        Emotion = EmotionLocalizer.Emotion(shown.PrimaryEmotion);
+        Valence = shown.Combined.Valence;
+        Arousal = shown.Combined.Arousal;
+        Flagged = shown.Flagged;
+        Badge = shown.Flagged ? EmotionLocalizer.Pattern(shown.Pattern) : string.Empty;
         Transcript = r.Transcript;
         AxisSummary = $"{EmotionLocalizer.ValenceText(Valence)} · {EmotionLocalizer.ArousalText(Arousal)}";
         QualityNote =
@@ -48,6 +56,16 @@ public sealed class ChunkRowVm
         FaceNote = string.Join(" · ", (faces ?? Array.Empty<FaceWindowSummary>()).Select(f =>
             $"Yüz {f.FaceIndex + 1}: dönük %{Percent(f.LookAwayRatio)}, " +
             $"olumsuz ifade %{Percent(f.NegativeExpression)}, gülümseme %{Percent(f.SmileRatio)}"));
+    }
+
+    private static string WhoText(ChunkResult r)
+    {
+        if (r.Roles is not { Enrolled: true } roles) return string.Empty;
+        double host = roles.Seconds(SpeakerRole.Yoneten, r.TimeStart, r.TimeEnd);
+        double other = roles.Seconds(SpeakerRole.KarsiTaraf, r.TimeStart, r.TimeEnd);
+        if (host + other <= 0) return string.Empty;
+        double share = host / (host + other);
+        return share >= 0.8 ? "Siz" : share <= 0.2 ? "Karşı taraf" : "İkiniz";
     }
 
     private static int Percent(double reliability) =>
