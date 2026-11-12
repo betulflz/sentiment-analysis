@@ -37,7 +37,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
     private IReadOnlyList<(int Index, FaceBox Box)>? _previewBoxes;
 
-    /// <summary>Mülakat/toplantıda yüz başına paneller (görünen yüzler); satışta boş kalır.</summary>
+    /// <summary>Her profilde yüz başına paneller (görünen yüzler); yüz yoksa boş kalır.</summary>
     public ObservableCollection<FacePanelVm> FacePanels { get; } = new();
 
     // Panel nesneleri yüz numarasına göre yaşar: yüz kaybolup dönünce ad ve göstergeler korunur.
@@ -55,7 +55,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
     public bool ShowFacePanels => FacePanels.Count > 0;
 
-    /// <summary>Tek ortak kare: satışta her zaman; mülakat/toplantıda yüz görünene kadar.</summary>
+    /// <summary>Tek ortak kare: yüz görünene kadar.</summary>
     public bool ShowSharedPreview => HasPreview && !ShowFacePanels;
 
     /// <summary>Panel ızgarasının sütun sayısı: 1–2 yüz yan yana, sonra kareye yakın ızgara.</summary>
@@ -75,8 +75,8 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
     private void SyncFacePanels(IReadOnlyList<(int Index, FaceBox Box)> boxes)
     {
-        bool wantPanels = Decision.SelectedProfile != MeetingProfile.Satis;
-        var wanted = wantPanels ? boxes.OrderBy(b => b.Index).ToArray() : Array.Empty<(int Index, FaceBox Box)>();
+        // Her profilde (satış dahil) yüz başına panel: tek ortak kare yalnız yüz görünmeyince kalır.
+        var wanted = boxes.OrderBy(b => b.Index).ToArray();
 
         bool sameSet = wanted.Length == FacePanels.Count
             && wanted.Select(w => w.Index).SequenceEqual(FacePanels.Select(p => p.Index));
@@ -218,7 +218,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         _neutralRadius = fusion.NeutralRadius;
         _captureMode = captureMode;
         _diarization = diarization;
-        // Profil değişince (satış ↔ mülakat/toplantı) paneller ve ortak kare yeniden belirlenir.
+        // Profil değişince paneller ve ortak kare yeniden belirlenir.
         Decision.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(Decision.SelectedProfile) && _previewBoxes is not null)

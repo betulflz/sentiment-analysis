@@ -95,7 +95,7 @@
                        IsVisible="{Binding DiarizationHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                        Foreground="{DynamicResource SystemBaseMediumColor}" FontStyle="Italic" />
 
-            <!-- Mülakat/toplantı: her yüz kendi panelinde; satış (ve yüz görünmeyince): tek ortak kare. -->
+            <!-- Her profilde her yüz kendi panelinde; yüz görünmeyince tek ortak kare. -->
             <ItemsControl ItemsSource="{Binding FacePanels}" IsVisible="{Binding ShowFacePanels}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate><UniformGrid Columns="{Binding FacePanelColumns}" /></ItemsPanelTemplate>

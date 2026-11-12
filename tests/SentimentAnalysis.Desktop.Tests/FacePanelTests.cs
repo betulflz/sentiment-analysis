@@ -41,23 +41,11 @@ public class FacePanelTests
         return vm;
     }
 
-    [Fact]
-    public void Satis_TekOrtakKare_PanelYok()
-    {
-        var runner = new FaceRunner { Boxes = Faces(2) };
-        var vm = Vm(runner, MeetingProfile.Satis);
-
-        vm.RefreshPreview();
-
-        Assert.False(vm.ShowFacePanels);
-        Assert.Empty(vm.FacePanels);
-        Assert.True(vm.ShowSharedPreview);
-    }
-
     [Theory]
+    [InlineData(MeetingProfile.Satis)]
     [InlineData(MeetingProfile.Mulakat)]
     [InlineData(MeetingProfile.Toplanti)]
-    public void MulakatVeToplanti_YuzBasinaPanel_OrtakKareGizlenir(MeetingProfile profile)
+    public void HerProfilde_YuzBasinaPanel_OrtakKareGizlenir(MeetingProfile profile)
     {
         var runner = new FaceRunner { Boxes = Faces(2) };
         var vm = Vm(runner, profile);
