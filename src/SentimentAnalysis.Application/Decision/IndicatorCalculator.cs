@@ -16,7 +16,12 @@ public static class IndicatorCalculator
     {
         var f = chunk.Fused;
         // Yüz K1–K4'e aşağıda yüz özetiyle girer; üç kaynaklı Combined değil konuşma valence'ı alınır (çift sayım yok).
-        double v = f.SpeechValence, a = f.Combined.Arousal;
+        double a = f.Combined.Arousal;
+        // Ses modeli yüksek sesli/hızlı konuşmayı (öfke dahil) "olumlu" okuyabiliyor (gerçek kayıtta "Sinirliyim"
+        // derken ses valence'ı +0,7…+1,0, metin −0,7). Söz açıkça olumsuzsa ve metin güvenilirse olumsuzluk
+        // metinden alınır: konuşma valence'ı metnin altına inebilir ama sesin şişirdiği pozitife güvenilmez.
+        double v = f.SpeechValence;
+        if (f.TextReliability >= 0.15 && f.TextVa.Valence <= -0.2) v = Math.Min(v, f.TextVa.Valence);
         double aq = Math.Max(f.AudioReliability, f.TextReliability);
         double audioTension = C01((a - 0.5) * 2) * C01(-v);
 
@@ -61,7 +66,21 @@ public static class IndicatorCalculator
         double smile = faces.Count == 0 ? 0 : faces.Max(x => C01(x.SmileRatio) * C01(x.Reliability));
         double positivity = faces.Count == 0 ? C01(v) : 0.6 * C01(v) + 0.4 * smile;
 
-        return new Indicators(values.Select(C01).ToArray(), source, quality) { Positivity = C01(positivity) };
+        var cues = new ContextCues(CueEmotion(f.PrimaryEmotion, v, a), C01(a), Math.Clamp(v, -1, 1), wps,
+            faces.Count == 0 ? 0 : faces.Max(x => C01(x.LookAwayRatio) * C01(x.VisibleRatio / 0.5)),
+            smile,
+            faces.Count == 0 ? 0 : faces.Max(x => C01(x.NegativeExpression) * C01(x.Reliability)),
+            faces.Count > 0);
+
+        return new Indicators(values.Select(C01).ToArray(), source, quality) { Positivity = C01(positivity), Cues = cues };
+    }
+
+    /// <summary>Baskın duygu: konuşma açıkça olumsuzsa (söz) enerjiye göre kızgın/gergin/üzgün; aksi halde füzyonun duygusu.
+    /// Ses modeli yüksek sesi "coşkulu" gösterse bile öfkeli söz öfke olarak okunur.</summary>
+    private static Emotion CueEmotion(Emotion fused, double v, double a)
+    {
+        if (v > -0.3) return fused;
+        return a >= 0.75 ? Emotion.Kizgin : a >= 0.5 ? Emotion.Gergin : Emotion.Uzgun;
     }
 
     // Bir yüz, değeri NÖTR bir yüzün alacağı değeri en az bu kadar aşıyorsa kaynak olarak anılır.

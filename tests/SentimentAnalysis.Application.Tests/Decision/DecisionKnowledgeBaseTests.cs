@@ -67,7 +67,7 @@ public class DecisionKnowledgeBaseTests
     [Fact]
     public void AppConfig_Default_HasDecisionDefaults()
     {
-        Assert.Equal(0.35, AppConfig.Default.Decision.InterventionThreshold);
+        Assert.Equal(0.30, AppConfig.Default.Decision.InterventionThreshold);
         Assert.Equal(2, AppConfig.Default.Decision.SwitchPersistence);
     }
 

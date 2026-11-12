@@ -122,8 +122,8 @@ public sealed record DiarizationConfig(
 
 /// <summary>Karar destek motoru ayarları (spec 11 §6.4). BAŞLANGIÇ DEĞERLERİ, KALİBRE EDİLMEMİŞ.</summary>
 public sealed record DecisionConfig(
-    double InterventionThreshold = 0.35, // max ihtiyaç bunun altındaysa "Devam et" / olumlu takip adımı
-    double InterventionExitThreshold = 0.30, // müdahale gösterilirken "Devam et"e dönmek için max ihtiyaç bunun altına inmeli (titreme bandı)
+    double InterventionThreshold = 0.30, // max ihtiyaç bunun altındaysa "Devam et" / olumlu takip adımı
+    double InterventionExitThreshold = 0.25, // müdahale gösterilirken "Devam et"e dönmek için max ihtiyaç bunun altına inmeli (titreme bandı)
     double QualityRecovery = 0.30,       // "veri yetersiz" durumundan çıkmak için kalite bunun üstüne çıkmalı (titreme bandı)
     double SwitchMargin = 0.05,          // yeni öneri mevcudu bu kadar yakınlık farkıyla geçerse hemen değişir
     int SwitchPersistence = 2,           // ya da art arda bu kadar pencere önde kalırsa (titreme önleme)
@@ -131,9 +131,10 @@ public sealed record DecisionConfig(
     double LowQuality = 0.4,             // altı: güven Düşük
     double HighQuality = 0.7,            // üstü: güven Yüksek
     int TrendWindows = 6,                // K6 eğimi için son pencere sayısı (şimdiki dahil)
-    int RepeatLimit = 3,                 // aynı öneri art arda bu kadar pencere gösterilince yakın alternatife geçilir (çeşitlilik)
-    double DiversityMargin = 0.15,       // alternatifin yakınlığı birinciden en fazla bu kadar geride olabilir
-    double PositiveThreshold = 0.5);     // olumluluk bunun üstündeyse (ve sorun yoksa) olumlu öneri verilir
+    int RepeatLimit = 2,                 // aynı öneri art arda bu kadar pencere gösterilince yakın alternatife geçilir (çeşitlilik)
+    double DiversityMargin = 0.2,        // alternatifin yakınlığı birinciden en fazla bu kadar geride olabilir
+    double PositiveThreshold = 0.5,      // olumluluk bunun üstündeyse (ve sorun yoksa) olumlu öneri verilir
+    double ContextWeight = 0.3);         // duygu/tempo/hareket uyumunun TOPSIS yakınlığına katkısı (0 = kapalı)
 
 /// <summary>Görüntü kanalı ayarları (spec 11 §6.2). Sayılar 11a spike'ında M1 Air 8 GB'ta ÖLÇÜLDÜ
 /// (bkz. <c>11a-goruntu-spike-olcumu.md</c>); yüz boyu eşikleri ise tahmindir.</summary>

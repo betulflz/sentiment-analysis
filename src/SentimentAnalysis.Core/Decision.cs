@@ -17,8 +17,22 @@ public enum LiveAction
     FaydayaDon,      // yalnız satış
     KolaySoruSor,    // yalnız mülakat
     SozVer,          // yalnız toplantı
-    BirAdimIlerlet, OlumluyuPekistir   // olumlu durum: TOPSIS müdahalesi değil, kuralla seçilir
+    BirAdimIlerlet, OlumluyuPekistir,  // olumlu durum: TOPSIS müdahalesi değil, kuralla seçilir
+    // 2026-11-12: duygu/tempo/hareket ipuçlarına bağlı eylemler (yine SONA eklenir).
+    GuvenceVer, SusVeDinle, GozTemasiKur, DuyguyuAdlandir, YavaslaKonus, MizahlaGevset, ItiraziKabulEt
 }
+
+/// <summary>Bir pencerenin 6 göstergeye girmeyen bağlam ipuçları: baskın duygu, tempo, baş çevirme,
+/// gülümseme. Öneri çeşitliliği için eylemleri duygu/hal/harekete göre öne çıkarır (saklanmaz).</summary>
+public sealed record ContextCues(
+    Emotion Primary,
+    double Arousal,       // 0..1
+    double Valence,       // −1..1 (konuşma)
+    double WordsPerSecond,
+    double LookAway,      // en çok başını çeviren yüz, 0..1
+    double Smile,         // en çok gülümseyen güvenilir yüz, 0..1
+    double FaceNegative,  // en olumsuz yüz ifadesi, 0..1
+    bool HasFace);
 
 /// <summary>Görüşme sonrası takip adımları (profile özgü alt kümeler). Mülakat seçenekleri SÜREÇ
 /// adımlarıdır — sistem işe alım kararı vermez (spec §4).</summary>
@@ -55,6 +69,9 @@ public sealed record Indicators(
     /// <summary>Görüşmenin ne kadar olumlu gittiği (0..1): konuşma valence'ı ve gülümseme. Sorun yokken
     /// "olumlu öneri" için kullanılır; saklanmaz (yalnız canlı öneri). Additive, varsayılan 0.</summary>
     public double Positivity { get; init; }
+
+    /// <summary>Duygu/tempo/hareket bağlamı; null = bağlam yok (eylem sıralaması yalnız TOPSIS). Additive.</summary>
+    public ContextCues? Cues { get; init; }
 }
 
 /// <summary>TOPSIS sıralamasındaki bir seçenek ve onu en çok destekleyen iki kriter.</summary>

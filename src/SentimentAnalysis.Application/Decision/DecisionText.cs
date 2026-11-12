@@ -52,6 +52,13 @@ public static class DecisionText
         LiveAction.SozVer => "Katılımı sağla, sessiz kişiye söz ver",
         LiveAction.BirAdimIlerlet => "Bu havayı kullan, bir adım ileri götür",
         LiveAction.OlumluyuPekistir => "Olumlu noktayı pekiştir",
+        LiveAction.GuvenceVer => "Güvence ver: \"Endişelenecek bir şey yok, birlikte bakalım\"",
+        LiveAction.SusVeDinle => "Sus, alan aç, sadece dinle",
+        LiveAction.GozTemasiKur => "Göz temasını kur, dikkatini geri topla",
+        LiveAction.DuyguyuAdlandir => "Hissi nazikçe adlandır: \"Biraz tedirgin görünüyorsunuz\"",
+        LiveAction.YavaslaKonus => "Yavaşla, nefes al, daha sakin konuş",
+        LiveAction.MizahlaGevset => "Hafif bir espriyle ortamı gevşet",
+        LiveAction.ItiraziKabulEt => "Haklı yanını kabul et, itirazı sahiplen",
         _ => a.ToString(),
     };
 

@@ -145,7 +145,8 @@ public class LiveAdvisorTests
     [Fact]
     public void Hysteresis_InterruptedCandidate_ResetsCount()
     {
-        var advisor = new LiveAdvisor(MeetingProfile.Satis, Cfg);
+        // Çeşitlilik kuralı (RepeatLimit) bu testin konusu değil; kapatılır.
+        var advisor = new LiveAdvisor(MeetingProfile.Satis, Cfg with { RepeatLimit = 1000 });
         var w = DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis);
         advisor.Next(Ind(A), w);
         advisor.Next(Ind(B), w);           // Konu 1. kez önde
@@ -410,13 +411,13 @@ public class LiveAdvisorTests
     [Fact]
     public void Olumlu_OlumluOneriMudahaleSayilmaz_MudahaleCikisBandiUygulanmaz()
     {
-        // İhtiyaç 0,33: müdahale girişi 0,35'in altında. Olumlu öneri müdahale olsaydı çıkış eşiği 0,30 uygulanır
-        // ve 0,33 yeniden müdahaleye döndürürdü.
+        // İhtiyaç 0,28: müdahale girişi 0,30'un altında. Olumlu öneri müdahale olsaydı çıkış eşiği 0,25 uygulanır
+        // ve 0,28 yeniden müdahaleye döndürürdü.
         var advisor = new LiveAdvisor(MeetingProfile.Satis, Cfg);
         var w = DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis);
         Assert.Equal(LiveAction.BirAdimIlerlet, advisor.Next(Pos(Sakin, 0.8), w).Action);
 
-        var gri = new[] { .33, .05, .05, .05, .05, .05 };   // kalite 1,0 → ihtiyaç 0,33 (band: 0,30–0,35)
+        var gri = new[] { .28, .05, .05, .05, .05, .05 };   // kalite 1,0 → ihtiyaç 0,28 (band: 0,25–0,30)
         var r = advisor.Next(Pos(gri, 0.8, quality: 1.0), w);
 
         Assert.Empty(r.Ranking);
@@ -431,4 +432,42 @@ public class LiveAdvisorTests
         Assert.Equal(LiveAction.DevamEt, r.Action);
         Assert.Contains("Veri yetersiz", r.Reason);
     }
+}
+
+public class ContextDiversityTests
+{
+    private static readonly DecisionConfig Cfg = new();
+    private static readonly double[] Mixed = { .5, .4, .5, .6, .4, .3 };
+
+    private static Indicators Ind(ContextCues? cues) => new(Mixed, new int?[6], 0.8) { Cues = cues };
+
+    private static LiveAction First(MeetingProfile p, ContextCues? cues) =>
+        new LiveAdvisor(p, Cfg).Next(Ind(cues), DecisionKnowledgeBase.DefaultWeights(p)).Action;
+
+    private static ContextCues Cue(Emotion e, double wps = 1.5, double away = 0, double smile = 0) =>
+        new(e, 0.5, -0.3, wps, away, smile, 0.2, true);
+
+    [Fact]
+    public void FarkliDuygular_FarkliOneriler()
+    {
+        var actions = new[] { Emotion.Kizgin, Emotion.Uzgun, Emotion.Sikilmis, Emotion.Gergin }
+            .Select(e => First(MeetingProfile.Satis, Cue(e))).ToArray();
+        Assert.True(actions.Distinct().Count() >= 3, string.Join(",", actions));
+        Assert.DoesNotContain(LiveAction.SoruSor, actions);
+    }
+
+    [Fact]
+    public void BasCevirme_GozTemasiOnerilir() =>
+        Assert.Contains(First(MeetingProfile.Toplanti, Cue(Emotion.Notr, away: 0.9)),
+            new[] { LiveAction.GozTemasiKur, LiveAction.SozVer, LiveAction.EnerjiYukselt, LiveAction.KonuyuDegistir });
+
+    [Fact]
+    public void HizliKonusma_YavaslamaOnerilir() =>
+        Assert.Contains(First(MeetingProfile.Mulakat, Cue(Emotion.Gergin, wps: 3.5)),
+            new[] { LiveAction.YavaslaKonus, LiveAction.SakinOl, LiveAction.GuvenceVer });
+
+    [Fact]
+    public void BaglamYoksa_EskiSiralamaAynen() =>
+        Assert.Equal(new LiveAdvisor(MeetingProfile.Satis, Cfg).Next(Ind(null), DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis)).Action,
+            First(MeetingProfile.Satis, null));
 }

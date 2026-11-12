@@ -76,12 +76,28 @@ public sealed class LiveAdvisor
                 Array.Empty<Criterion>(), null, confidence, reason);
         }
 
-        var ranking = ActionRanker.Rank(_profile.Interventions, DecisionKnowledgeBase.LiveImpact, weights, needs);
+        var pool = indicators.Cues is null
+            ? _profile.Interventions
+            : _profile.Interventions.Concat(DecisionKnowledgeBase.ContextActions).ToArray();
+        var ranking = ApplyContext(ActionRanker.Rank(pool, DecisionKnowledgeBase.LiveImpact, weights, needs), indicators);
         var chosen = Choose(ranking);
         var entry = ranking.First(r => r.Alternative == chosen);
         var face = indicators.SourceFace[(int)entry.TopCriteria[0]];
         return new Recommendation(chosen, entry.Closeness, ranking, entry.TopCriteria, face, confidence,
             DecisionText.Reason(indicators, entry.TopCriteria));
+    }
+
+    /// <summary>TOPSIS yakınlığına duygu/tempo/hareket uyumunu ekler ve yeniden sıralar (bağlam yoksa dokunmaz).</summary>
+    private IReadOnlyList<Ranked<LiveAction>> ApplyContext(IReadOnlyList<Ranked<LiveAction>> ranking, Indicators ind)
+    {
+        if (ind.Cues is not { } cues || _cfg.ContextWeight <= 0) return ranking;
+        double incongruence = ind.Values[(int)Criterion.Uyumsuzluk];
+        return ranking
+            .Select((r, i) => (r: r with { Closeness = Math.Clamp(
+                r.Closeness + _cfg.ContextWeight * ContextAffinity.Of(r.Alternative, cues, incongruence), 0, 1) }, i))
+            .OrderByDescending(x => x.r.Closeness).ThenBy(x => x.i)
+            .Select(x => x.r)
+            .ToArray();
     }
 
     /// <summary>Kullanıcı ağırlıkları değiştirdi: histerezis atlanır, en iyi eylem hemen gösterilir ve

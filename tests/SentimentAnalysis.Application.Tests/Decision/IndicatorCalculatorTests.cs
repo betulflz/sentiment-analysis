@@ -217,4 +217,21 @@ public class IndicatorCalculatorTests
 
         Assert.Equal(0.6 * 0.5, ind.Positivity, 3);
     }
+
+    [Fact]
+    public void BagiranOfkeliKonusma_SesPozitifOkusaBile_MetinOlumsuzsa_GerilimVeKizginDuygu()
+    {
+        // Gerçek kayıt (oturum 6339…, parça 6): "Sinirliyim" — ses valence +0,67 / enerji 0,95, metin −0,66.
+        // Birleşik değer pozitife kayıyordu; gerilim ~%1, olumsuz duygu %0 çıkıp "Devam et" gösteriliyordu.
+        var combined = new ValenceArousal(0.40, 0.95);
+        var fused = new FusedResult(combined, Emotion.Cosakulu, Emotion.Notr, Confidence.Orta, false, true,
+            IncongruencePattern.Yok, 0.34, new ValenceArousal(-0.66, 0.5), new ValenceArousal(0.67, 0.95), 0.9, 0.5, 0.5, 0.9);
+        var chunk = new ChunkResult(TimeSpan.Zero, TimeSpan.FromSeconds(10), fused, "devam etmeyeceğim sinirliyim şu an");
+
+        var ind = IndicatorCalculator.Compute(chunk, NoFaces, NoHistory, Cfg);
+
+        Assert.True(K(ind, Criterion.Gerilim) > 0.5, $"gerilim {K(ind, Criterion.Gerilim)}");
+        Assert.True(K(ind, Criterion.OlumsuzDuygu) > 0.5);
+        Assert.Equal(Emotion.Kizgin, ind.Cues!.Primary);
+    }
 }

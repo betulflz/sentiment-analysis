@@ -27,6 +27,14 @@ public static class DecisionKnowledgeBase
         LiveAction.EnerjiYukselt, LiveAction.OrtakNoktaHatirlat,
     };
 
+    /// <summary>Duygu/tempo/hareket bağlamı VARKEN havuza katılan eylemler (<see cref="Indicators.Cues"/>). Bağlamsız
+    /// (yalnız 6 gösterge) sıralama değişmesin diye <see cref="ProfileDefinition.Interventions"/>'a konmaz.</summary>
+    public static IReadOnlyList<LiveAction> ContextActions { get; } = new[]
+    {
+        LiveAction.GuvenceVer, LiveAction.SusVeDinle, LiveAction.GozTemasiKur, LiveAction.DuyguyuAdlandir,
+        LiveAction.YavaslaKonus, LiveAction.MizahlaGevset, LiveAction.ItiraziKabulEt,
+    };
+
     private static LiveAction[] For(LiveAction profileSpecific) => Common.Append(profileSpecific).ToArray();
 
     //                                                           K1   K2   K3   K4   K5   K6
@@ -48,6 +56,13 @@ public static class DecisionKnowledgeBase
         [LiveAction.YenidenAnlat]        = new[] { 0.2, 0.4, 0.3, 0.8, 0.3, 0.4 },
         [LiveAction.EnerjiYukselt]       = new[] { 0.1, 0.5, 0.1, 0.1, 0.9, 0.3 },
         [LiveAction.OrtakNoktaHatirlat]  = new[] { 0.4, 0.3, 0.5, 0.4, 0.3, 0.9 },
+        [LiveAction.GuvenceVer]          = new[] { 0.6, 0.2, 0.8, 0.3, 0.1, 0.5 },
+        [LiveAction.SusVeDinle]          = new[] { 0.5, 0.1, 0.7, 0.5, 0.1, 0.4 },
+        [LiveAction.GozTemasiKur]        = new[] { 0.1, 0.8, 0.2, 0.2, 0.4, 0.2 },
+        [LiveAction.DuyguyuAdlandir]     = new[] { 0.4, 0.1, 0.7, 0.8, 0.1, 0.4 },
+        [LiveAction.YavaslaKonus]        = new[] { 0.7, 0.2, 0.2, 0.4, 0.1, 0.3 },
+        [LiveAction.MizahlaGevset]       = new[] { 0.8, 0.5, 0.3, 0.1, 0.6, 0.5 },
+        [LiveAction.ItiraziKabulEt]      = new[] { 0.7, 0.1, 0.8, 0.5, 0.1, 0.6 },
         [LiveAction.FaydayaDon]          = new[] { 0.1, 0.9, 0.3, 0.4, 0.5, 0.4 },
         [LiveAction.KolaySoruSor]        = new[] { 0.5, 0.8, 0.4, 0.3, 0.4, 0.3 },
         [LiveAction.SozVer]              = new[] { 0.1, 0.9, 0.1, 0.2, 0.6, 0.4 },
