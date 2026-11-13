@@ -62,6 +62,9 @@ public sealed partial class MainViewModel : ObservableObject
             Report.LoadDecisions(decision);
             // Konuşmacı kartından yüz seçilebilsin: yüzsüz değerli parçalar + panelde yazılan adlar (kopya).
             Report.SetFaceContext(Live.RunChunks.ToArray(), Live.UserFaceNames);
+            // Karşı tarafa odak: rol notu bu koşunun parçalarından; önceki dosyanın yönetici kartı sarkmasın.
+            Report.SetRoleContext(Live.RunChunks.ToArray());
+            Report.SetHost(null);
             var generation = ++_reportGeneration;
             if (_decisions is not null) DecisionSaveTask = SaveDecisionsAsync(_decisions, decision, generation);
             History.RefreshCommand.Execute(null);
@@ -146,6 +149,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (result.Outcome == DiarizationOutcome.Completed)
         {
+            Report.SetHost(host);
             var minOverlap = _config?.Diarization.MinOverlapRatio ?? 0.5;
             Report.ApplySpeakers(result.Transcript, result.Speakers, minOverlap);
             Report.ApplySpeakerEmotions(result.Chunks, result.Speakers, minOverlap, result.SpeakerProsody);

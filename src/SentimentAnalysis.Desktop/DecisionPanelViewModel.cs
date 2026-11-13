@@ -136,7 +136,11 @@ public sealed partial class DecisionPanelViewModel : ObservableObject
         var indicators = IndicatorCalculator.Compute(chunk, faces, _valences, _cfg, talk);
         if (IndicatorCalculator.TrendValence(chunk) is double tv) _valences.Add(tv);
         var rec = _advisor.Next(indicators, CurrentWeights);
-        _history.Add(new DecisionWindow(chunk.TimeStart, chunk.TimeEnd, indicators, rec) { Faces = faces.ToArray() });
+        _history.Add(new DecisionWindow(chunk.TimeStart, chunk.TimeEnd, indicators, rec)
+        {
+            Faces = faces.ToArray(),
+            CounterpartSilent = chunk.Roles is { Enrolled: true } && chunk.Counterpart is null,
+        });
 
         Faces.Clear();
         foreach (var f in faces.OrderBy(f => f.FaceIndex))

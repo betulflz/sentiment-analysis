@@ -50,6 +50,9 @@
                         <TextBlock Text="Görüşme özeti" Classes="cardTitle" />
                         <TextBlock Text="{Binding TurkishSummary}" TextWrapping="Wrap" FontSize="16" LineHeight="24" Margin="0,4,0,4" />
                         <TextBlock Text="{Binding AnalysisQualityNotice}" TextWrapping="Wrap" Classes="muted" />
+                        <Border Classes="pill warn" Padding="12,5" IsVisible="{Binding HasRoleNotice}">
+                            <TextBlock Text="{Binding RoleNotice}" FontSize="13" TextWrapping="Wrap" />
+                        </Border>
                         <ItemsControl ItemsSource="{Binding SummaryTags}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
@@ -372,17 +375,18 @@
                                                 </Border>
                                                 <StackPanel VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="14" />
-                                                    <TextBlock Text="{Binding OverallText}" Classes="muted" />
+                                                    <TextBlock Text="{Binding OverallText}" Classes="muted" IsVisible="{Binding ShowEmotion}" />
+                                                    <TextBlock Text="{Binding HostBehaviorText}" Classes="muted" TextWrapping="Wrap" IsVisible="{Binding IsHost}" />
                                                 </StackPanel>
                                             </StackPanel>
                                             <TextBlock Text="{Binding FaceNote}" Classes="muted" FontSize="11" TextWrapping="Wrap"
                                                        IsVisible="{Binding HasFaceNote}" />
                                             <!-- Ölçüm VARSA kaç saniyeye dayandığını, YOKSA yeterli ses olmadığını söyler;
                                                  satır hiçbir durumda gizlenmez — aksi halde iki durum aynı görünürdü. -->
-                                            <TextBlock Text="{Binding AudioMeasurementNote}" Classes="muted" FontSize="11" />
+                                            <TextBlock Text="{Binding AudioMeasurementNote}" Classes="muted" FontSize="11" IsVisible="{Binding ShowEmotion}" />
                                             <TextBlock Text="{Binding UncertainChunkNote}" Classes="muted" FontSize="11"
                                                        IsVisible="{Binding HasUncertainChunks}" />
-                                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6" IsVisible="{Binding ShowEmotion}">
                                                 <ContentControl Grid.Column="0" Content="{Binding TextAnalysis}"
                                                                 ContentTemplate="{StaticResource SourcePanel}"
                                                                 HorizontalContentAlignment="Stretch" />

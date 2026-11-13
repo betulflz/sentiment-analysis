@@ -19,7 +19,12 @@ public sealed class MeetingAggregator : IMeetingAggregator
 
     public MeetingSummary Aggregate(MeetingSession session)
     {
-        var chunks = session.Chunks;
+        var all = session.Chunks;
+        // Karşı tarafa odak (2026-11-13): rol bilgili oturumda özet yalnız karşı tarafın sesinden/sözünden; karşı tarafın
+        // konuşmadığı parçalar özete girmez (nötr sayılmaz). Analiz edilen süre yine tüm parçalardan.
+        var chunks = all.Any(c => c.Roles is { Enrolled: true })
+            ? all.Where(c => c.Counterpart is not null).Select(c => c with { Fused = c.Counterpart! }).ToArray()
+            : all;
         if (chunks.Count == 0)
         {
             return new MeetingSummary(
@@ -30,7 +35,7 @@ public sealed class MeetingAggregator : IMeetingAggregator
                 PeakMoments: new List<ChunkResult>(),
                 AverageVa: ValenceArousal.Neutral,
                 AverageCongruence: 1.0,
-                TurkishSummary: string.Empty);
+                TurkishSummary: string.Empty) with { AnalyzedDuration = Union(all) };
         }
 
         var timeShare = ComputeTimeShare(chunks, out var dominant);
@@ -56,7 +61,7 @@ public sealed class MeetingAggregator : IMeetingAggregator
             AverageVa: averageVa,
             AverageCongruence: avgCongruence,
             TurkishSummary: string.Empty);
-        return summary with { TurkishSummary = TurkishSummaryWriter.Write(summary), AnalyzedDuration = Union(chunks) };
+        return summary with { TurkishSummary = TurkishSummaryWriter.Write(summary), AnalyzedDuration = Union(all) };
     }
 
     /// <summary>Kritiklik: yüksek arousal + düşük valence = en kritik an.</summary>

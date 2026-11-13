@@ -225,6 +225,19 @@ public class ReportViewModelTests
         DW(0, 0.1, LiveAction.DevamEt), DW(10, 0.8, LiveAction.EmpatiKur), DW(20, 0.1, LiveAction.DevamEt));
 
     [Fact]
+    public void LoadDecisions_KarsiTarafinSustuguPencerelerCizelgeyeVeKritikAnlaraGirmez()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        var d = ThreeWindows();
+        var windows = d.Windows.ToArray();
+        windows[1] = windows[1] with { CounterpartSilent = true };
+        vm.LoadDecisions(d with { Windows = windows });
+
+        Assert.Equal(new[] { 0.1, 0.1 }, vm.IndicatorTimeline[0].Values);
+        Assert.False(vm.HasCriticalMoments);
+    }
+
+    [Fact]
     public void LoadDecisions_ZamanCizelgesi6SatirPencereSayisiKadarDeger()
     {
         var vm = new ReportViewModel(new FakeAggregator());

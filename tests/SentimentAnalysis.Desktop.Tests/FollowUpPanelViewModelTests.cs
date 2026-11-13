@@ -40,6 +40,16 @@ public class FollowUpPanelViewModelTests
     // --- Kategorili takip: yön + ilk 3 (2026-11-13) ---
 
     [Fact]
+    public void SessizPencereler_TakipToplaminaGirmez()
+    {
+        // Karşı tarafın sustuğu pencerelerde göstergeler (yanlışlıkla) gergin olsa bile karar sakin görüşmeden gelir.
+        var s = new DecisionSession(MeetingProfile.Satis, DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis), FinalW,
+            new[] { Window(0, Sakin), Window(10, Gergin) with { CounterpartSilent = true }, Window(20, Gergin) with { CounterpartSilent = true } });
+        var vm = Loaded(s);
+        Assert.Equal("Önerilen yön: İlerletin", vm.DirectionText);
+    }
+
+    [Fact]
     public void Gergin_Satis_YonVeIlkUc()
     {
         var s = Session(Gergin);

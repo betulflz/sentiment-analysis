@@ -87,7 +87,9 @@ public sealed partial class FollowUpPanelViewModel : ObservableObject
             return;
         }
 
-        _meeting = FollowUpAdvisor.AggregateMeeting(session.Windows.Select(w => w.Indicators).ToArray(), _cfg);
+        // Karşı tarafın sustuğu pencereler takip kararına girmez; hepsi sessizse tüm pencerelerle (bugünkü yol).
+        var spoken = session.Windows.Where(w => !w.CounterpartSilent).ToArray();
+        _meeting = FollowUpAdvisor.AggregateMeeting((spoken.Length > 0 ? spoken : session.Windows).Select(w => w.Indicators).ToArray(), _cfg);
         var cr = Ahp.Compute(DecisionKnowledgeBase.Get(session.Profile).Pairwise).ConsistencyRatio;
         ProfileText = $"Profil: {DecisionText.Name(session.Profile)} · AHP tutarlılık oranı CR = {cr.ToString("0.00", Tr)}";
         MeetingIndicators = Enum.GetValues<Criterion>()

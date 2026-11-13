@@ -23,6 +23,47 @@ public class MeetingAggregatorTests
     private static MeetingSession Session(params ChunkResult[] chunks) =>
         new(Guid.Empty, DateTimeOffset.UnixEpoch, DetectedLanguage.Turkish, chunks);
 
+    // --- Karşı tarafa odak: rol bilgili oturumda özet karşı taraftan ---
+    private static readonly RoleTimeline Enrolled = new(Array.Empty<RoleSpan>(), true, false);
+
+    private static ChunkResult WithRoles(ChunkResult c, FusedResult? counterpart) => c with { Roles = Enrolled, Counterpart = counterpart };
+
+    [Fact]
+    public void Roller_VarsaCounterpartKullanilir()
+    {
+        // Karışık ses mutlu (yöneten neşeli), karşı tarafın sesi üzgün → özet üzgün.
+        var s = Agg.Aggregate(Session(
+            WithRoles(Chunk(0, 10, 0.8, 0.5, Emotion.Mutlu), Fused(-0.6, 0.3, Emotion.Uzgun)),
+            WithRoles(Chunk(10, 20, 0.8, 0.5, Emotion.Mutlu), Fused(-0.6, 0.3, Emotion.Uzgun))));
+        Assert.Equal(Emotion.Uzgun, s.DominantEmotion);
+        Assert.Equal(-0.6, s.AverageVa.Valence, 3);
+    }
+
+    [Fact]
+    public void KarsiTarafSustu_OzeteGirmez()
+    {
+        var s = Agg.Aggregate(Session(
+            WithRoles(Chunk(0, 10, 0.8, 0.5, Emotion.Mutlu), null),
+            WithRoles(Chunk(10, 20, 0.8, 0.5, Emotion.Mutlu), Fused(-0.6, 0.3, Emotion.Uzgun))));
+        Assert.Equal(1.0, s.TimeShareByEmotion[Emotion.Uzgun], 3);
+        Assert.False(s.TimeShareByEmotion.ContainsKey(Emotion.Mutlu));
+    }
+
+    [Fact]
+    public void HepsiSessiz_BosOzet()
+    {
+        var s = Agg.Aggregate(Session(WithRoles(Chunk(0, 10, 0.8, 0.5, Emotion.Mutlu), null)));
+        Assert.Empty(s.TimeShareByEmotion);
+        Assert.Empty(s.PeakMoments);
+    }
+
+    [Fact]
+    public void RolYok_FusedKullanilir()
+    {
+        var s = Agg.Aggregate(Session(Chunk(0, 10, 0.8, 0.5, Emotion.Mutlu)));
+        Assert.Equal(Emotion.Mutlu, s.DominantEmotion);
+    }
+
     [Fact]
     public void EmptySession_ReturnsNeutralSummary()
     {

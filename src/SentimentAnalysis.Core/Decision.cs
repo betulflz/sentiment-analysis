@@ -106,6 +106,10 @@ public sealed record DecisionWindow(System.TimeSpan Start, System.TimeSpan End, 
 {
     /// <summary>Pencerede görülen yüzlerin özetleri (11e depolaması). Additive, varsayılan boş.</summary>
     public IReadOnlyList<FaceWindowSummary> Faces { get; init; } = System.Array.Empty<FaceWindowSummary>();
+
+    /// <summary>Rol bilgili oturumda karşı taraf bu pencerede konuşmadı (karşı tarafa odak, 2026-11-13): göstergeler
+    /// nötr sayılmaz — rapor çizelgesi, kritik anlar ve takip kararı bu pencereyi atlar. Bellek içi; saklanmaz.</summary>
+    public bool CounterpartSilent { get; init; }
 }
 
 /// <summary>Bitmiş bir görüşmenin karar verisi (11e): rapor ve depolama bu anlık görüntüyle çalışır.

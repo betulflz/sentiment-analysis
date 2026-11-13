@@ -80,6 +80,11 @@ public sealed class SpeakerEmotionVm
     public int SpeakerIndex { get; }
     public string Initial { get; }
 
+    /// <summary>Karşı tarafa odak: dosya modunda görüşmeyi yöneten kişinin kartı — duygu gösterilmez, yalnız davranış.</summary>
+    public bool IsHost { get; init; }
+    public string HostBehaviorText { get; init; } = string.Empty;
+    public bool ShowEmotion => !IsHost;
+
     /// <summary>Kartın başlığındaki tek satır: "Genel olarak: sakin" (füzyon sonucu).</summary>
     public string OverallText { get; }
     public SourceAnalysisVm TextAnalysis { get; }
@@ -463,9 +468,11 @@ public sealed partial class ReportViewModel : ObservableObject
         _faceWindows = windows.Select(w => new FaceWindow(w.Start, w.End, w.Faces)).ToArray();
         HasDecisionData = windows.Count > 0;
         DecisionSaveStatus = string.Empty;
+        // Karşı tarafa odak: karşı tarafın sustuğu pencereler çizelgeye ve kritik anlara girmez (nötr görünmesin).
+        var spoken = windows.Where(w => !w.CounterpartSilent).ToArray();
         IndicatorTimeline = System.Enum.GetValues<Criterion>()
             .Select(c => new IndicatorRowVm(DecisionPanelViewModel.Capitalize(DecisionText.Name(c)),
-                windows.Select(w => w.Indicators.Values[(int)c]).ToArray()))
+                spoken.Select(w => w.Indicators.Values[(int)c]).ToArray()))
             .ToArray();
         TimelineStart = windows.Count == 0 ? string.Empty : Clock(windows[0].Start);
         TimelineEnd = windows.Count == 0 ? string.Empty : Clock(windows[^1].End);
@@ -473,7 +480,7 @@ public sealed partial class ReportViewModel : ObservableObject
         Recommendations = DecisionReport.Changes(windows)
             .Select(c => new RecommendationRowVm(Clock(c.At), DecisionText.Name(c.Action), c.Reason, c.Confidence == Confidence.Dusuk))
             .ToArray();
-        CriticalMoments = DecisionReport.CriticalMoments(windows, _decision)
+        CriticalMoments = DecisionReport.CriticalMoments(spoken, _decision)
             .Select(m => new CriticalMomentVm($"{Clock(m.Start)}–{Clock(m.End)}",
                 $"{DecisionPanelViewModel.Capitalize(DecisionText.Name(m.Criterion))} {Percent(m.Peak)} — {DecisionText.Subject(m.Face)} · gösterilen öneri: {DecisionText.Name(m.Shown)}"))
             .ToArray();
@@ -526,10 +533,51 @@ public sealed partial class ReportViewModel : ObservableObject
                 people.TryGetValue(s.Speaker, out var person) ? person : null,
                 options,
                 _faceBySpeaker.TryGetValue(s.Speaker, out var face) ? face : null,
-                SetSpeakerFace))
+                SetSpeakerFace)
+            {
+                IsHost = _host == s.Speaker,
+                HostBehaviorText = _host == s.Speaker ? HostBehavior(s.Speaker, speakers) : string.Empty,
+            })
             .ToList();
         OnPropertyChanged(nameof(SpeakerEmotions));
         OnPropertyChanged(nameof(FaceMappingHint));
+    }
+
+    private SpeakerId? _host;
+
+    /// <summary>Dosya modunda "Siz hangisiniz?" seçimi (karşı tarafa odak); null = yöneten kartı yok.</summary>
+    public void SetHost(SpeakerId? host)
+    {
+        _host = host;
+        BuildSpeakerEmotions();
+    }
+
+    private string HostBehavior(SpeakerId host, IReadOnlyList<SpeakerSegment> speakers)
+    {
+        double total = speakers.Where(x => x.Speaker != SpeakerId.Unknown).Sum(x => (x.End - x.Start).TotalSeconds);
+        double mine = speakers.Where(x => x.Speaker == host).Sum(x => (x.End - x.Start).TotalSeconds);
+        int words = SpeakerLines.Where(l => l.SpeakerIndex == host.Index)
+            .Sum(l => l.Text.Split((char[]?)null, System.StringSplitOptions.RemoveEmptyEntries).Length);
+        var parts = new List<string> { "Görüşmeyi yöneten (siz)" };
+        if (total > 0) parts.Add($"konuşma payı %{System.Math.Round(100 * mine / total, System.MidpointRounding.AwayFromZero)}");
+        if (mine > 0 && words > 0) parts.Add($"dakikada {System.Math.Round(words / (mine / 60), System.MidpointRounding.AwayFromZero)} kelime");
+        return string.Join(" · ", parts);
+    }
+
+    public const string MixedRoleNotice = "Yöneten ayrılmadı — sonuçlar iki tarafın karışık sesinden.";
+    public const string PartialRoleNotice = "Yöneten yalnız kısmen ayrıldı — bazı bölümler karışık sesten.";
+
+    /// <summary>Rapor başındaki rol notu (karşı tarafa odak): rolsüz → karışık, kısmen rolsüz → kısmi, tam → boş.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasRoleNotice))] private string _roleNotice = string.Empty;
+    public bool HasRoleNotice => !string.IsNullOrEmpty(RoleNotice);
+
+    public void SetRoleContext(IReadOnlyList<ChunkResult> chunks)
+    {
+        var speech = chunks.Where(c => !string.IsNullOrWhiteSpace(c.Transcript)).ToArray();
+        int withRoles = speech.Count(c => c.Roles is { Enrolled: true });
+        RoleNotice = speech.Length == 0 || withRoles == speech.Length ? string.Empty
+            : withRoles == 0 ? MixedRoleNotice
+            : PartialRoleNotice;
     }
 
     /// <summary>Duygu haritası: paylar büyükten küçüğe, süre ve tek cümlelik özet.</summary>

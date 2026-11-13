@@ -300,4 +300,18 @@ public class DecisionPanelViewModelTests
         foreach (var w in p.Weights) w.Value = 0;
         Assert.All(p.Weights, w => Assert.Equal(string.Empty, w.IdleNote));
     }
+
+    [Fact]
+    public void KarsiTarafSustu_PencereIsaretlenir()
+    {
+        var p = Panel();
+        var enrolled = new RoleTimeline(Array.Empty<RoleSpan>(), true, false);
+        p.OnWindow(Tense(0) with { Roles = enrolled, Counterpart = null }, NoFaces);
+        p.OnWindow(Tense(10) with { Roles = enrolled, Counterpart = Tense(10).Fused }, NoFaces);
+        p.OnWindow(Tense(20), NoFaces);
+        var w = p.Snapshot().Windows;
+        Assert.True(w[0].CounterpartSilent);
+        Assert.False(w[1].CounterpartSilent);
+        Assert.False(w[2].CounterpartSilent);
+    }
 }
