@@ -2,8 +2,10 @@ using SentimentAnalysis.Core;
 
 namespace SentimentAnalysis.Infrastructure.Emotion;
 
-/// <summary>XLM-R 11-duygu logit'lerini domain <see cref="TextEmotion"/>'a eşler: softmax →
-/// olasılık-ağırlıklı VA ortalaması + entropi-tabanlı güven. VA tablosu etiket ADIYLA anahtarlı
+/// <summary>XLM-R 11-duygu logit'lerini domain <see cref="TextEmotion"/>'a eşler. Model ÇOK ETİKETLİDİR
+/// (config.json problem_type=multi_label_classification; model kartı: bağımsız sigmoid, τ=0,5) — 2026-11-14'te
+/// yerel ONNX'in ham logitleriyle doğrulandı (etkin olmayan duygular -5…-8). Bu yüzden softmax DEĞİL sigmoid:
+/// VA = sigmoid-ağırlıklı ortalama; güven = en olası duygunun olasılığı (&lt;0,5 → model hiçbir duyguya "var" demiyor). VA tablosu etiket ADIYLA anahtarlı
 /// (index sırası hatası VA'yı sessizce bozamaz). VA değerleri BAŞLANGIÇ (spec §04b); Alt-Proje 09
 /// Türkçe veriyle kalibre eder — keyfi değil.</summary>
 public static class TextVaLookup
@@ -33,39 +35,18 @@ public static class TextVaLookup
         if (logits.Count == 0)
             throw new ArgumentException("Boş logits.", nameof(logits));
 
-        var probs = Softmax(logits);
-
-        double valence = 0, arousal = 0, entropy = 0;
-        for (int i = 0; i < probs.Length; i++)
+        double valence = 0, arousal = 0, weight = 0, top = 0;
+        for (int i = 0; i < logits.Count; i++)
         {
             if (!Table.TryGetValue(labels[i], out var va))
                 throw new ArgumentException($"VA tablosunda etiket yok: '{labels[i]}'.", nameof(labels));
-            valence += probs[i] * va.Valence;
-            arousal += probs[i] * va.Arousal;
-            if (probs[i] > 0) entropy -= probs[i] * Math.Log(probs[i]);
+            double p = 1.0 / (1.0 + Math.Exp(-logits[i]));   // bağımsız sigmoid (çok etiketli model)
+            valence += p * va.Valence;
+            arousal += p * va.Arousal;
+            weight += p;
+            top = Math.Max(top, p);
         }
 
-        double maxEntropy = Math.Log(probs.Length);          // düzgün dağılımın entropisi
-        double confidence = maxEntropy > 0
-            ? Math.Clamp(1.0 - entropy / maxEntropy, 0.0, 1.0)
-            : 1.0;
-
-        return new TextEmotion(ValenceArousal.Clamp(valence, arousal), confidence);
-    }
-
-    private static double[] Softmax(IReadOnlyList<float> logits)
-    {
-        double max = double.NegativeInfinity;
-        for (int i = 0; i < logits.Count; i++) if (logits[i] > max) max = logits[i];
-
-        var exp = new double[logits.Count];
-        double sum = 0;
-        for (int i = 0; i < logits.Count; i++)
-        {
-            exp[i] = Math.Exp(logits[i] - max);              // sayısal kararlılık için max çıkar
-            sum += exp[i];
-        }
-        for (int i = 0; i < exp.Length; i++) exp[i] /= sum;
-        return exp;
+        return new TextEmotion(ValenceArousal.Clamp(valence / weight, arousal / weight), Math.Clamp(top, 0.0, 1.0));
     }
 }
