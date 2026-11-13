@@ -53,7 +53,7 @@ internal static class ModelSessions
         services.AddSingleton(app.GetRequiredService<IDiarizationState>());
         services.AddSingleton(app.GetRequiredService<IDiarizationStore>());
         services.AddSingleton(app.GetRequiredService<ISpeakerDataReader>());
-        services.AddSherpaDiarization().AddProsodyEmotion();
+        services.AddSherpaDiarization().AddSileroVad().AddProsodyEmotion();
         services.AddSingleton<DiarizationJob>();
         services.AddSingleton<SpeakerProsodyAnalyzer>();
         services.AddSingleton<ISpeakerAnalysis, SpeakerAnalysisService>();
@@ -67,7 +67,7 @@ internal static class ModelSessions
     {
         var services = new ServiceCollection();
         services.AddApplicationCore(app.GetRequiredService<AppConfig>());
-        services.AddSherpaDiarization();
+        services.AddSherpaDiarization().AddSileroVad();
         services.AddSingleton<SpeakerPreparation>();
         var models = services.BuildServiceProvider();
         try { return new OwnedModelSession<SpeakerPreparation>(models.GetRequiredService<SpeakerPreparation>(), models); }

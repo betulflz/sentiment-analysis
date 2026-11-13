@@ -113,6 +113,15 @@ public sealed record DiarizationConfig(
                                           // Bilinmeyen döner. Amaç dürüst belirsizlik — bilgiyi
                                           // çöpe atmadan, uydurma atama da yapmadan (master §12.2)
     int MaxRecordedMinutes = 90,          // ses biriktirme üst sınırı (16 kHz PCM16 ≈ 115 MB/saat)
+    // Pencereli ayrım (İterasyon 2, 2026-11-13; WindowedDiarizer). 5 etiketli iki kişilik kayıtta %71 → %85.
+    bool UseWindowedDiarizer = true,      // false → eski sherpa+pyannote yolu (karşılaştırma için)
+    double WindowSeconds = 1.5,           // 12a ile aynı (TitaNet, 1,5 sn)
+    double HopSeconds = 0.5,
+    int SmoothWindows = 3,                // komşu çoğunluğu (3 ve 5 aynı sonucu verdi)
+    double SameSpeakerCosine = 0.55,      // kişi sayısı bilinmiyorsa: iki küme merkezi bundan benzerse tek kişi.
+                                          // Ölçüm: aynı kişinin iki yarısı 0,51–0,87, farklı iki kişi 0,33–0,51 (5 kayıt).
+                                          // SINIR: 3+ kişiyle doğrulanmadı.
+    int MaxAutoSpeakers = 4,
     // Konuşmacı prozodisi (10d): duygu, konuşmacının KENDİ sesinden ölçülür.
     // 1 sn altı bölgeler prozodi için yetersiz bağlam taşır; 60 sn ise ortalama için fazlasıyla
     // yeterlidir — tüm sesi işlemek doğruluk kazandırmadan süreyi katlar.

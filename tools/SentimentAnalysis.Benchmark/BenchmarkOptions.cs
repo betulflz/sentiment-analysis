@@ -1,14 +1,14 @@
 namespace SentimentAnalysis.Benchmark;
 
 public sealed record BenchmarkOptions(string Task, string Input, string Output, string Models,
-    int Threads, int ExpectedSpeakers, string Model, string Quantization = "q5_0")
+    int Threads, int ExpectedSpeakers, string Model, string Quantization = "q5_0", string Diarizer = "windowed")
 {
     public static BenchmarkOptions Parse(string[] args)
     {
         if (args.Length == 0 || args[0] is not ("transcribe" or "diarize" or "analyze"))
             throw new ArgumentException("İlk seçenek transcribe, diarize veya analyze olmalı.");
         var values = new Dictionary<string, string>();
-        var accepted = new[] { "--input", "--output", "--models", "--threads", "--speakers", "--model", "--quantization" };
+        var accepted = new[] { "--input", "--output", "--models", "--threads", "--speakers", "--model", "--quantization", "--diarizer" };
         for (int i = 1; i < args.Length; i += 2)
         {
             if (i + 1 >= args.Length || !accepted.Contains(args[i]) || !values.TryAdd(args[i], args[i + 1]))
@@ -29,7 +29,10 @@ public sealed record BenchmarkOptions(string Task, string Input, string Output, 
         var quantization = values.GetValueOrDefault("--quantization", "q5_0");
         if (quantization is not ("q5_0" or "q5_1" or "q8_0"))
             throw new ArgumentException("Desteklenen kuantizasyonlar: q5_0, q5_1, q8_0.");
+        var diarizer = values.GetValueOrDefault("--diarizer", "windowed");
+        if (diarizer is not ("windowed" or "pyannote"))
+            throw new ArgumentException("Desteklenen konuşmacı ayrımı yöntemleri: windowed (varsayılan), pyannote (eski temel çizgi).");
         return new(args[0], Required("--input"), Required("--output"), Required("--models"),
-            Number("--threads", 2, 1, 4), Number("--speakers", 0, 0, 8), model, quantization);
+            Number("--threads", 2, 1, 4), Number("--speakers", 0, 0, 8), model, quantization, diarizer);
     }
 }

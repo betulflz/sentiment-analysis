@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using SentimentAnalysis.Application.Abstractions;
+using SentimentAnalysis.Application.Diarization;
 using SentimentAnalysis.Application.Fusion;
 using SentimentAnalysis.Application.Pipeline;
 using SentimentAnalysis.Application.Configuration;
@@ -55,7 +57,9 @@ try
     else
     {
         var provider = new FileDiarizationModelProvider(config);
-        modelPaths = [provider.SegmentationModelPath, provider.EmbeddingModelPath];
+        modelPaths = options.Diarizer == "pyannote"
+            ? [provider.SegmentationModelPath, provider.EmbeddingModelPath]
+            : [provider.RoleEmbeddingModelPath, new FileVadModelProvider(config).ResolveModelPath(config.Vad.VadModelFile)];
     }
     var models = modelPaths.Select(path =>
     {
@@ -115,15 +119,25 @@ try
     }
     else
     {
-        using var diarizer = new SherpaDiarizer(config, new FileDiarizationModelProvider(config));
+        var provider = new FileDiarizationModelProvider(config);
+        bool windowed = options.Diarizer == "windowed";
+        using var sherpa = windowed ? null : new SherpaDiarizer(config, provider);
+        using var embedder = windowed ? new SherpaSpeakerEmbedder(provider) : null;
+        using var vad = windowed ? new SileroVadGate(config, new FileVadModelProvider(config)) : null;
+        IDiarizer diarizer = windowed ? new WindowedDiarizer(embedder!, vad!, config) : sherpa!;
         var speakers = await diarizer.DiarizeAsync(samples, options.ExpectedSpeakers, CancellationToken.None);
         result = new { speakers = speakers.Select(s => new
             { speaker = s.Speaker.Index.ToString(System.Globalization.CultureInfo.InvariantCulture),
               start = s.Start.TotalSeconds, end = Math.Min(duration, s.End.TotalSeconds) }),
             durationSeconds = duration, models,
-            settings = new { expectedSpeakers = options.ExpectedSpeakers, threshold = config.Diarization.ClusteringThreshold,
-                             ghostFilter = false },
-            engine = "sherpa-onnx raw component baseline" };
+            settings = windowed
+                ? (object)new { expectedSpeakers = options.ExpectedSpeakers, diarizer = "windowed",
+                                window = config.Diarization.WindowSeconds, hop = config.Diarization.HopSeconds,
+                                smooth = config.Diarization.SmoothWindows, sameSpeakerCosine = config.Diarization.SameSpeakerCosine,
+                                ghostFilter = false }
+                : new { expectedSpeakers = options.ExpectedSpeakers, diarizer = "pyannote",
+                        threshold = config.Diarization.ClusteringThreshold, ghostFilter = false },
+            engine = windowed ? "windowed TitaNet + Silero VAD component" : "sherpa-onnx raw component baseline" };
     }
     var output = Path.GetFullPath(options.Output);
     Directory.CreateDirectory(Path.GetDirectoryName(output)!);

@@ -52,6 +52,15 @@ public sealed class ModelCompositionTests : IDisposable
         Assert.Empty(await app.GetRequiredService<ISessionStore>().ListSessionsAsync(default));
     }
 
+    [Fact]
+    public async Task Preparation_graph_resolves_with_windowed_diarizer()
+    {
+        // İterasyon 2: dosya modundaki ön ayrım pencereli yöntemle (VAD + ses imzası) çözülür, model yüklemeden.
+        await using var app = (ServiceProvider)CompositionRoot.BuildServiceProvider(Config);
+        await using (var session = ModelSessions.CreatePreparation(app))
+            Assert.IsType<SpeakerPreparation>(session.Service);
+    }
+
     public void Dispose()
     {
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();

@@ -11,13 +11,29 @@ namespace SentimentAnalysis.Infrastructure.Diarization.Tests;
 /// zamanında kanıtlar.</summary>
 public class DiarizationDiTests
 {
-    private static ServiceProvider Build()
+    private static ServiceProvider Build(bool windowed = false)
     {
         var services = new ServiceCollection();
-        services.AddSingleton(AppConfig.Default);
+        var cfg = AppConfig.Default;
+        services.AddSingleton(cfg with { Diarization = cfg.Diarization with { UseWindowedDiarizer = windowed } });
+        services.AddSingleton<IVadGate>(new NoVad());
         services.AddSherpaDiarization();
         return services.BuildServiceProvider();
     }
+
+    private sealed class NoVad : IVadGate { public bool HasSpeech(SentimentAnalysis.Core.AudioChunk c) => false; }
+
+    [Fact]
+    public void PencereliAyar_IDiarizerPencereli_ModelYuklemez()
+    {
+        // İterasyon 2: varsayılan pencereli ayrım (TitaNet + VAD); çözümleme native modele dokunmaz.
+        using var sp = Build(windowed: true);
+        Assert.IsType<SentimentAnalysis.Application.Diarization.WindowedDiarizer>(sp.GetRequiredService<IDiarizer>());
+        Assert.Same(sp.GetRequiredService<IDiarizer>(), sp.GetRequiredService<IDiarizer>());
+    }
+
+    [Fact]
+    public void Varsayilan_PencereliAyrim() => Assert.True(AppConfig.Default.Diarization.UseWindowedDiarizer);
 
     [Fact]
     public void AddSherpaDiarization_IDiarizerCozulur()

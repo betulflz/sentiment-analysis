@@ -20,6 +20,14 @@ public class BenchmarkOptionsTests
         ["diarize", "--input", "sample.wav", "--output", "result.json", "--models", "models", .. extra];
 
     [Fact]
+    public void Diarizer_DefaultsToWindowed_AndAcceptsPyannoteBaseline()
+    {
+        Assert.Equal("windowed", BenchmarkOptions.Parse(Args()).Diarizer);
+        Assert.Equal("pyannote", BenchmarkOptions.Parse(Args("--diarizer", "pyannote")).Diarizer);
+        Assert.Throws<ArgumentException>(() => BenchmarkOptions.Parse(Args("--diarizer", "x")));
+    }
+
+    [Fact]
     public void Defaults_AreSequentialPilotWithTwoWhisperThreadsAndUnknownCount()
     {
         var options = BenchmarkOptions.Parse(Args());
