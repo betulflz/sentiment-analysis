@@ -28,7 +28,8 @@ public sealed class FileRoleSelection : IFileRoleSelection
 
     public void Set(SpeakerPreparationResult prepared, SpeakerId host)
     {
-        lock (_gate) _state = (new DiarizationRoleLabeler(prepared.Segments, host), prepared, host);
+        TimeSpan? covered = prepared.Truncated ? TimeSpan.FromSeconds(prepared.Audio.Length / 16000.0) : null;
+        lock (_gate) _state = (new DiarizationRoleLabeler(prepared.Segments, host, covered), prepared, host);
     }
 
     public void SetMixed() { lock (_gate) _state = default; }

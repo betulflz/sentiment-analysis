@@ -243,4 +243,16 @@ public class FollowUpPanelViewModelTests
         Assert.NotEmpty(tense.Ranking);
         Assert.True(tense.HasRanking);
     }
+
+    [Fact]
+    public void HepsiSessiz_KararYok_Not()
+    {
+        var s = new DecisionSession(MeetingProfile.Satis, DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis), FinalW,
+            new[] { Window(0, Gergin) with { CounterpartSilent = true }, Window(10, Gergin) with { CounterpartSilent = true } });
+        var vm = Loaded(s);
+        Assert.False(vm.HasDecision);
+        Assert.Null(vm.Current);
+        Assert.Empty(vm.TopOptions);
+        Assert.Equal(FollowUpPanelViewModel.SilentCounterpartText, vm.DirectionText);
+    }
 }

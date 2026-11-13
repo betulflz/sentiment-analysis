@@ -21,9 +21,11 @@ public sealed class MeetingAggregator : IMeetingAggregator
     {
         var all = session.Chunks;
         // Karşı tarafa odak (2026-11-13): rol bilgili oturumda özet yalnız karşı tarafın sesinden/sözünden; karşı tarafın
-        // konuşmadığı parçalar özete girmez (nötr sayılmaz). Analiz edilen süre yine tüm parçalardan.
+        // konuşmadığı parçalar özete girmez (nötr sayılmaz). Rolsüz parçalar (ör. ayrım sınırını aşan kuyruk, rol hatası)
+        // rapordaki "kısmen ayrıldı" notuna uygun olarak karışık sesten girer. Analiz edilen süre yine tüm parçalardan.
         var chunks = all.Any(c => c.Roles is { Enrolled: true })
-            ? all.Where(c => c.Counterpart is not null).Select(c => c with { Fused = c.Counterpart! }).ToArray()
+            ? all.Where(c => c.Roles is not { Enrolled: true } || c.Counterpart is not null)
+                 .Select(c => c.Roles is { Enrolled: true } ? c with { Fused = c.Counterpart! } : c).ToArray()
             : all;
         if (chunks.Count == 0)
         {

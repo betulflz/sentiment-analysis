@@ -174,4 +174,15 @@ public class MeetingAggregatorTests
         Assert.Equal(0.5, s.AverageVa.Valence, precision: 10);
         Assert.Equal(0.5, s.AverageVa.Arousal, precision: 10);
     }
+
+    [Fact]
+    public void RolsuzParcalar_KarisikSestenOzeteGirer()
+    {
+        // Kısmi rol (ör. ayrım sınırını aşan dosya kuyruğu): rolsüz parça not'taki gibi karışık sesten özete girer.
+        var s = Agg.Aggregate(Session(
+            WithRoles(Chunk(0, 10, 0.8, 0.5, Emotion.Mutlu), Fused(-0.6, 0.3, Emotion.Uzgun)),
+            Chunk(10, 20, 0.8, 0.5, Emotion.Mutlu)));
+        Assert.Equal(0.5, s.TimeShareByEmotion[Emotion.Uzgun], 3);
+        Assert.Equal(0.5, s.TimeShareByEmotion[Emotion.Mutlu], 3);
+    }
 }

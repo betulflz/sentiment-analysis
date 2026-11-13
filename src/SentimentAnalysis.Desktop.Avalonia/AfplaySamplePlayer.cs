@@ -28,9 +28,14 @@ public sealed class AfplaySamplePlayer(IExternalProcessRunner runner, IRuntimePl
             await runner.RunAsync("/usr/bin/afplay", new[] { path }, mine.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) { /* yeni Dinle ya da panel kapandı */ }
+        catch (Exception ex)
+        {
+            // Dinle bir async komut: istisna UI iş parçacığında uygulamayı çökertirdi. Örnek dinletilemez, seçim sürer.
+            System.Diagnostics.Debug.WriteLine($"Konuşmacı örneği çalınamadı: {ex.Message}");
+        }
         finally
         {
-            try { File.Delete(path); } catch (IOException) { }
+            try { File.Delete(path); } catch (Exception) { }
             lock (_gate) { if (ReferenceEquals(_current, mine)) _current = null; }
             mine.Dispose();
         }

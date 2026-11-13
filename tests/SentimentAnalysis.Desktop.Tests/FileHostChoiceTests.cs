@@ -20,13 +20,14 @@ public class FileHostChoiceTests
         public int Runs;
         public RoleTimeline? SeenTimeline;
         public bool SawRoles;
+        public AnalysisOutcome Outcome = AnalysisOutcome.Success;
         public Task<MeetingSummary> RunAsync(IProgress<ChunkResult> progress, CancellationToken ct)
         {
-            Runs++;
             SawRoles = roles.Roles is not null;
             SeenTimeline = roles.Roles?.Label(new AudioChunk(new float[160000], 16000, TimeSpan.Zero, TimeSpan.FromSeconds(10)));
+            Interlocked.Increment(ref Runs);   // en son: test Runs'ı görünce gözlemler hazır olsun
             return Task.FromResult(new MeetingSummary(Emotion.Notr, new Dictionary<Emotion, double>(), 0, 0,
-                Array.Empty<ChunkResult>(), new ValenceArousal(0, 0), 0, ""));
+                Array.Empty<ChunkResult>(), new ValenceArousal(0, 0), 0, "", Outcome));
         }
     }
 
@@ -185,4 +186,18 @@ public class FileHostChoiceTests
 
     [Fact]
     public void SureMetni() => Assert.Equal("1 dk 20 sn", HostChoiceRowVm.FormatDuration(80));
+
+    [Fact]
+    public async Task Analiz_SonucsuzBitince_SecimVeSesBirakilir()
+    {
+        // Completed tetiklenmezse oturum sonrası geçiş seçimi temizlemez: bellekteki ses (90 dk ≈ 345 MB) koşu sonunda bırakılmalı.
+        var (vm, runner, roles, _, _) = Make();
+        runner.Outcome = AnalysisOutcome.NoResult;
+        vm.StartCommand.Execute(null);
+        await Until(() => vm.HostChoice is not null);
+        vm.HostChoice!.Rows[1].IsSelected = true;
+        vm.HostChoice.ConfirmCommand.Execute(null);
+        await Until(() => runner.Runs == 1 && !vm.IsCapturing);
+        Assert.Null(roles.Prepared);
+    }
 }

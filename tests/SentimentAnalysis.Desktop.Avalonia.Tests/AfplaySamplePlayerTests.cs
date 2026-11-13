@@ -25,11 +25,12 @@ public sealed class AfplaySamplePlayerTests : IDisposable
         public readonly List<string> Played = new();
         public readonly List<bool> FileExistedDuringPlay = new();
         public TaskCompletionSource? Gate;
+        public Exception? Throw;
         public async Task<ProcessResult> RunAsync(string fileName, IEnumerable<string> arguments, CancellationToken ct)
         {
             var p = arguments.Single();
-            Played.Add(p);
-            FileExistedDuringPlay.Add(File.Exists(p));
+            lock (Played) { Played.Add(p); FileExistedDuringPlay.Add(File.Exists(p)); }
+            if (Throw is not null) throw Throw;
             if (Gate is not null) await Gate.Task.WaitAsync(ct);
             return new ProcessResult(0, "", "");
         }
@@ -62,10 +63,11 @@ public sealed class AfplaySamplePlayerTests : IDisposable
         var player = new AfplaySamplePlayer(r, new Platform(true), _dir);
         var first = player.PlayAsync(new float[1600], default);
         var second = player.PlayAsync(new float[1600], default);
-        await first.WaitAsync(TimeSpan.FromSeconds(5));
+        await first.WaitAsync(TimeSpan.FromSeconds(5));   // ilk çağrı iptal edilip biter (dosya yazımında ya da çalarken)
+        Assert.True(Directory.GetFiles(_dir).Length <= 1); // yalnız ikinci örnek kalabilir
         r.Gate.SetResult();
         await second;
-        Assert.Equal(2, r.Played.Count);
+        Assert.InRange(r.Played.Count, 1, 2);
         Assert.Empty(Directory.GetFiles(_dir));
     }
 
@@ -85,5 +87,14 @@ public sealed class AfplaySamplePlayerTests : IDisposable
         var b = AfplaySamplePlayer.Wav(new float[100]);
         Assert.Equal(44 + 200, b.Length);
         Assert.Equal("RIFF", System.Text.Encoding.ASCII.GetString(b, 0, 4));
+    }
+
+    [Fact]
+    public async Task AfplayBaslatilamaz_HataYutulur_DosyaSilinir()
+    {
+        // Dinle düğmesi async komut: istisna UI iş parçacığında uygulamayı çökertir — oynatıcı yutmalı.
+        var r = new Runner { Throw = new InvalidOperationException("afplay yok") };
+        await new AfplaySamplePlayer(r, new Platform(true), _dir).PlayAsync(new float[1600], default);
+        Assert.Empty(Directory.GetFiles(_dir));
     }
 }

@@ -30,9 +30,37 @@ public sealed class ResourceManagedSpeakerPreparation(
         bool truncated = audio.Length >= (long)(max.TotalSeconds * 16000) - 16000 / 10;
         if (audio.Length == 0) return SpeakerPreparationResult.Failed(audio, false);
 
-        using var lease = await queue.AcquireAsync(ct).ConfigureAwait(false);
-        await using var session = createSession();
-        return await Task.Run(() => session.Service.RunAsync(audio, expectedSpeakers, truncated, lease.Token), lease.Token)
-            .ConfigureAwait(false);
+        var lease = await queue.AcquireAsync(ct).ConfigureAwait(false);
+        OwnedModelSession<SpeakerPreparation> session;
+        try { session = createSession(); }
+        catch { lease.Dispose(); throw; }
+
+        // sherpa'nın Process çağrısı senkron ve iptali dinlemez: Durdur'da çağıran hemen döner (UI dakikalarca
+        // beklemez); model oturumu ve kuyruk yeri yerel iş GERÇEKTEN bitince bırakılır (iş sürerken model kapatılmaz).
+        // Normal yolda oturum dönmeden ÖNCE kapanır — analiz modelleri ayrım modeliyle aynı anda bellekte olmasın.
+        var work = Task.Run(() => session.Service.RunAsync(audio, expectedSpeakers, truncated, lease.Token));
+        bool detached = false;
+        try
+        {
+            await work.WaitAsync(lease.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!work.IsCompleted)
+        {
+            detached = true;
+            _ = work.ContinueWith(_ => ReleaseAsync(session, lease), CancellationToken.None,
+                TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+            throw;
+        }
+        finally
+        {
+            if (!detached) await ReleaseAsync(session, lease).ConfigureAwait(false);
+        }
+        return await work.ConfigureAwait(false);
+    }
+
+    private static async Task ReleaseAsync(OwnedModelSession<SpeakerPreparation> session, ModelWorkQueue.Lease lease)
+    {
+        try { await session.DisposeAsync().ConfigureAwait(false); }
+        finally { lease.Dispose(); }
     }
 }

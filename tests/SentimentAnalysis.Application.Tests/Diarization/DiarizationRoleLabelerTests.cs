@@ -54,4 +54,15 @@ public class DiarizationRoleLabelerTests
         var t = new DiarizationRoleLabeler(new[] { Seg(A, 0, 2), Seg(B, 2, 5), Seg(C, 5, 8) }, B).Label(Chunk(0, 10));
         Assert.Equal(new[] { SpeakerRole.KarsiTaraf, SpeakerRole.Yoneten, SpeakerRole.KarsiTaraf }, t.Spans.Select(s => s.Role));
     }
+
+    [Fact]
+    public void AyrimSinirindanSonra_RolsuzKarisikYol()
+    {
+        // Uzun dosya: ayrım ilk 20 sn'yi kapsadı (sınır); sonrası rolsüz → karışık yol + kısmi not.
+        var l = new DiarizationRoleLabeler(new[] { Seg(A, 0, 10), Seg(B, 10, 20) }, A, TimeSpan.FromSeconds(20));
+        Assert.True(l.Label(Chunk(10, 20)).Enrolled);
+        var past = l.Label(Chunk(20, 30));
+        Assert.False(past.Enrolled);
+        Assert.Empty(past.Spans);
+    }
 }

@@ -464,7 +464,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
     private async Task RunAsync(CancellationToken ct)
     {
-        bool analysisStarted = false;
+        bool completed = false;
         try
         {
             CaptureError = string.Empty;
@@ -486,13 +486,13 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
             StartCommand.NotifyCanExecuteChanged();
             StopCommand.NotifyCanExecuteChanged();
 
-            analysisStarted = true;
             var summary = await _runner.RunAsync(this, ct).ConfigureAwait(true);
             SkippedChunkCount = _runner.SkippedChunkCount;
             LastSessionId = _runner.LastSessionId;   // 10b: arka plan konuşmacı geçişinin hedefi
             
             if (summary.Outcome == AnalysisOutcome.Success)
             {
+                completed = true;
                 Completed?.Invoke(summary);
             }
             else if (summary.Outcome == AnalysisOutcome.NoResult)
@@ -506,18 +506,19 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         }
         catch (OperationCanceledException)
         {
-            // Stop ile iptal — normal. Ön ayrım sırasında durdurulduysa analiz hiç başlamadı: seçimi bırak.
-            if (!analysisStarted) _fileRoles?.Clear();
+            // Stop ile iptal — normal.
         }
         // Sessiz yutma yok (08 deferred fix): hata uzun/açıklayıcı olabileceğinden (örn. mikrofon
         // izni reddi veya model yüklenememesi) tam metni gösterebilen CaptureError'a yazılır.
         catch (Exception ex) 
         { 
-            if (!analysisStarted) _fileRoles?.Clear();
             CaptureError = ex.Message; 
         }
         finally 
         { 
+            // Rapor açılmadıysa (iptal, hata, sonuçsuz) oturum sonrası geçiş seçimi bırakmaz: bayat rol ve bellekteki ses
+            // (90 dk ≈ 345 MB) burada bırakılır.
+            if (!completed) _fileRoles?.Clear();
             IsCapturing = false; 
             OnPropertyChanged(nameof(CanClearEnrollment));
             Decision.IsLocked = false;

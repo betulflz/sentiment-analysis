@@ -71,10 +71,14 @@ public sealed partial class FollowUpPanelViewModel : ObservableObject
 
     public IReadOnlyList<double> CurrentWeights => Weights.Select(w => w.Value).ToArray();
 
+    public const string SilentCounterpartText = "Karşı taraf konuşmadı — takip önerisi üretilmedi.";
+
     public void Load(DecisionSession session)
     {
         _session = session;
-        HasDecision = session.Windows.Count > 0;
+        // Karşı tarafın sustuğu pencereler takip kararına girmez; hepsi sessizse karar yok (sessizlik nötr sayılmaz).
+        var spoken = session.Windows.Where(w => !w.CounterpartSilent).ToArray();
+        HasDecision = spoken.Length > 0;
         if (!HasDecision)
         {
             _meeting = null;
@@ -84,12 +88,11 @@ public sealed partial class FollowUpPanelViewModel : ObservableObject
             MeetingIndicators = Array.Empty<IndicatorBarVm>();
             Ranking = Array.Empty<RankingRowVm>();
             Sensitivity = Array.Empty<SensitivityRowVm>();
+            if (session.Windows.Count > 0) DirectionText = SilentCounterpartText;
             return;
         }
 
-        // Karşı tarafın sustuğu pencereler takip kararına girmez; hepsi sessizse tüm pencerelerle (bugünkü yol).
-        var spoken = session.Windows.Where(w => !w.CounterpartSilent).ToArray();
-        _meeting = FollowUpAdvisor.AggregateMeeting((spoken.Length > 0 ? spoken : session.Windows).Select(w => w.Indicators).ToArray(), _cfg);
+        _meeting = FollowUpAdvisor.AggregateMeeting(spoken.Select(w => w.Indicators).ToArray(), _cfg);
         var cr = Ahp.Compute(DecisionKnowledgeBase.Get(session.Profile).Pairwise).ConsistencyRatio;
         ProfileText = $"Profil: {DecisionText.Name(session.Profile)} · AHP tutarlılık oranı CR = {cr.ToString("0.00", Tr)}";
         MeetingIndicators = Enum.GetValues<Criterion>()

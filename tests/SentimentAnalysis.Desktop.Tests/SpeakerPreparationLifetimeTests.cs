@@ -64,6 +64,26 @@ public sealed class SpeakerPreparationLifetimeTests
         using var cts = new CancellationTokenSource();
         var (prep, owners) = Make(async ct => { cts.Cancel(); await Task.Delay(Timeout.Infinite, ct); return Array.Empty<SpeakerSegment>(); }, q);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => prep.PrepareAsync("x.wav", 2, cts.Token));
+        // Oturum, iş bittiğinde arka planda kapanır (çağıran beklemez).
+        for (int i = 0; i < 200 && !Assert.Single(owners).Disposed; i++) await Task.Delay(10);
         Assert.True(Assert.Single(owners).Disposed);
+    }
+
+    [Fact]
+    public async Task Iptal_IptaliDinlemeyenAyrim_HemenDoner_OturumAyrimBitinceKapanir()
+    {
+        // sherpa Process senkron ve iptali dinlemez: Durdur beklememeli; model oturumu ve kuyruk yeri ayrım bitince bırakılır.
+        await using var q = new ModelWorkQueue();
+        using var cts = new CancellationTokenSource();
+        var gate = new TaskCompletionSource<IReadOnlyList<SpeakerSegment>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (prep, owners) = Make(_ => { cts.Cancel(); return gate.Task; }, q);
+        var run = prep.PrepareAsync("x.wav", 2, cts.Token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.False(Assert.Single(owners).Disposed);          // native iş sürerken model kapatılmaz
+
+        gate.SetResult(Array.Empty<SpeakerSegment>());
+        using (var next = await q.AcquireAsync(default).WaitAsync(TimeSpan.FromSeconds(5))) { }
+        for (int i = 0; i < 200 && !owners[0].Disposed; i++) await Task.Delay(10);
+        Assert.True(owners[0].Disposed);
     }
 }
