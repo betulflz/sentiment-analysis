@@ -160,7 +160,8 @@ public static class CompositionRoot
             sp.GetRequiredService<ISpeakerAnalysis>(),
             sp.GetRequiredService<AppConfig>(),
             action => global::Avalonia.Threading.Dispatcher.UIThread.Post(action),
-            sp.GetRequiredService<IDecisionStore>()));
+            sp.GetRequiredService<IDecisionStore>(),
+            sp.GetRequiredService<IFileRoleSelection>()));
 
         return services.BuildServiceProvider();
     }

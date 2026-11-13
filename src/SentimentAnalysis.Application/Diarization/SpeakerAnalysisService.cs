@@ -32,6 +32,11 @@ public interface ISpeakerAnalysis
 
     /// <param name="expectedSpeakers">Görüşme başında seçilen kişi sayısı; 0 = bilinmiyor.</param>
     Task<SpeakerAnalysisResult> RunAsync(Guid sessionId, int expectedSpeakers, CancellationToken ct);
+
+    /// <summary>Dosya modu (karşı tarafa odak): analizden ÖNCE yapılmış ayrımın bölgeleri ve bellekteki ses ile çalışır —
+    /// diarizer çağrılmaz, oturum sesi depodan okunmaz; "Konuşmacı ayırımı" ayarından bağımsızdır.</summary>
+    Task<SpeakerAnalysisResult> RunPrecomputedAsync(Guid sessionId, IReadOnlyList<SpeakerSegment> segments, float[] mono16k,
+        CancellationToken ct) => Task.FromResult(SpeakerAnalysisResult.Disabled);
 }
 
 /// <inheritdoc cref="ISpeakerAnalysis"/>
@@ -82,5 +87,17 @@ public sealed class SpeakerAnalysisService : ISpeakerAnalysis
         var prosody = await _prosody.AnalyzeAsync(audio, speakers, ct).ConfigureAwait(false);
 
         return new SpeakerAnalysisResult(outcome, transcript, speakers, chunks) { SpeakerProsody = prosody };
+    }
+
+    public async Task<SpeakerAnalysisResult> RunPrecomputedAsync(Guid sessionId, IReadOnlyList<SpeakerSegment> segments,
+        float[] mono16k, CancellationToken ct)
+    {
+        await _job.SaveSegmentsAsync(sessionId, segments, ct).ConfigureAwait(false);
+        var transcript = TranscriptDeduper.Dedupe(
+            await _reader.GetTranscriptSegmentsAsync(sessionId, ct).ConfigureAwait(false));
+        var speakers = await _reader.GetSpeakerSegmentsAsync(sessionId, ct).ConfigureAwait(false);
+        var chunks = await _reader.GetChunkResultsAsync(sessionId, ct).ConfigureAwait(false);
+        var prosody = await _prosody.AnalyzeAsync(mono16k, speakers, ct).ConfigureAwait(false);
+        return new SpeakerAnalysisResult(DiarizationOutcome.Completed, transcript, speakers, chunks) { SpeakerProsody = prosody };
     }
 }

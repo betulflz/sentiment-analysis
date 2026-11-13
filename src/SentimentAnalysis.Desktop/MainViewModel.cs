@@ -14,6 +14,7 @@ namespace SentimentAnalysis.Desktop;
 public sealed partial class MainViewModel : ObservableObject
 {
     private readonly ISpeakerAnalysis? _speakers;
+    private readonly IFileRoleSelection? _fileRoles;
     private readonly AppConfig? _config;
     private readonly Action<Action> _dispatch;
     private readonly IDecisionStore? _decisions;
@@ -43,9 +44,10 @@ public sealed partial class MainViewModel : ObservableObject
     public MainViewModel(LiveViewModel live, ReportViewModel report, HistoryViewModel history,
                          SettingsViewModel settings, ISpeakerAnalysis? speakers = null,
                          AppConfig? config = null, Action<Action>? dispatch = null,
-                         IDecisionStore? decisions = null)
+                         IDecisionStore? decisions = null, IFileRoleSelection? fileRoles = null)
     {
         Live = live; Report = report; History = history; Settings = settings;
+        _fileRoles = fileRoles;
         _speakers = speakers;
         _config = config;
         _dispatch = dispatch ?? (a => a());
@@ -97,8 +99,31 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async Task StartSpeakerAnalysisAsync()
     {
-        if (_speakers is null || !_speakers.Enabled) return;
         if (Live.LastSessionId is not Guid sessionId) return;
+
+        // Karşı tarafa odak: dosya modunda ayrım analizden önce yapıldı — bölgeler ve bellekteki ses kullanılır,
+        // "Konuşmacı ayırımı" ayarından bağımsız. Bitince seçim (ve ses) bırakılır.
+        if (_speakers is not null && _fileRoles?.Prepared is { } prepared && _fileRoles.Host is SpeakerId host)
+        {
+            _dispatch(Report.SetDiarizationRunning);
+            try
+            {
+                var r = await _speakers.RunPrecomputedAsync(sessionId, prepared.Segments, prepared.Audio, CancellationToken.None)
+                    .ConfigureAwait(false);
+                _dispatch(() => ApplySpeakerResult(r, host));
+            }
+            catch (Exception)
+            {
+                _dispatch(() => Report.SetDiarizationOutcome(DiarizationOutcome.Failed));
+            }
+            finally
+            {
+                _fileRoles.Clear();
+            }
+            return;
+        }
+
+        if (_speakers is null || !_speakers.Enabled) return;
 
         _dispatch(Report.SetDiarizationRunning);
 
@@ -114,19 +139,21 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        _dispatch(() =>
-        {
-            if (result.Outcome == DiarizationOutcome.Completed)
-            {
-                var minOverlap = _config?.Diarization.MinOverlapRatio ?? 0.5;
-                Report.ApplySpeakers(result.Transcript, result.Speakers, minOverlap);
-                Report.ApplySpeakerEmotions(result.Chunks, result.Speakers, minOverlap, result.SpeakerProsody);
-            }
+        _dispatch(() => ApplySpeakerResult(result, host: null));
+    }
 
-            // Sonuç DAİMA bildirilir — ApplySpeakers'tan SONRA çağrılır, çünkü durum metni
-            // satır üretilip üretilmediğine bakar ("ayırt edilemedi" ile "hazır" ayrımı).
-            Report.SetDiarizationOutcome(result.Outcome);
-        });
+    private void ApplySpeakerResult(SpeakerAnalysisResult result, SpeakerId? host)
+    {
+        if (result.Outcome == DiarizationOutcome.Completed)
+        {
+            var minOverlap = _config?.Diarization.MinOverlapRatio ?? 0.5;
+            Report.ApplySpeakers(result.Transcript, result.Speakers, minOverlap);
+            Report.ApplySpeakerEmotions(result.Chunks, result.Speakers, minOverlap, result.SpeakerProsody);
+        }
+
+        // Sonuç DAİMA bildirilir — ApplySpeakers'tan SONRA çağrılır, çünkü durum metni
+        // satır üretilip üretilmediğine bakar ("ayırt edilemedi" ile "hazır" ayrımı).
+        Report.SetDiarizationOutcome(result.Outcome);
     }
 
     [RelayCommand] private void ShowLive() => CurrentView = Live;

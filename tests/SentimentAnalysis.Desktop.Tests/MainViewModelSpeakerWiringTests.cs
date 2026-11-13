@@ -43,6 +43,17 @@ public class MainViewModelSpeakerWiringTests
             SeenExpected = expectedSpeakers;
             return Task.FromResult(result);
         }
+
+        public bool PrecomputedCalled;
+        public IReadOnlyList<SpeakerSegment>? SeenSegments;
+        public Task<SpeakerAnalysisResult> RunPrecomputedAsync(Guid sessionId, IReadOnlyList<SpeakerSegment> segments,
+            float[] mono16k, CancellationToken ct)
+        {
+            PrecomputedCalled = true;
+            SeenSessionId = sessionId;
+            SeenSegments = segments;
+            return Task.FromResult(result);
+        }
     }
 
     private sealed class ThrowingSpeakers : ISpeakerAnalysis
@@ -57,7 +68,7 @@ public class MainViewModelSpeakerWiringTests
         Array.Empty<ChunkResult>(), ValenceArousal.Neutral, 1.0, "özet");
 
     private static MainViewModel Build(ISpeakerAnalysis? speakers, Guid? sessionId,
-        out ReportViewModel report, bool enabled = true)
+        out ReportViewModel report, bool enabled = true, IFileRoleSelection? fileRoles = null)
     {
         var runner = new FakeRunner(sessionId);
         var live = new LiveViewModel(runner);
@@ -68,7 +79,7 @@ public class MainViewModelSpeakerWiringTests
         {
             Diarization = AppConfig.Default.Diarization with { Enabled = enabled }
         };
-        return new MainViewModel(live, report, history, settings, speakers, cfg);
+        return new MainViewModel(live, report, history, settings, speakers, cfg, fileRoles: fileRoles);
     }
 
     private sealed class NullSessionStore : ISessionStore
@@ -104,6 +115,31 @@ public class MainViewModelSpeakerWiringTests
         Assert.Equal(2, report.SpeakerLines.Count);
         Assert.Equal("Konuşmacı A", report.SpeakerLines[0].Label);
         Assert.Equal("Konuşmacılar hazır.", report.DiarizationStatus);
+    }
+
+    [Fact]
+    public async Task DosyaRolu_AyarKapaliyken_DePrecomputedCalisir_SonraSecimTemizlenir()
+    {
+        var id = Guid.NewGuid();
+        var segs = new[] { new SpeakerSegment(new SpeakerId(0), TimeSpan.Zero, TimeSpan.FromSeconds(2)),
+                           new SpeakerSegment(new SpeakerId(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4)) };
+        var speakers = new FakeSpeakers(new SpeakerAnalysisResult(DiarizationOutcome.Completed,
+            [T("Merhaba", 0, 2), T("iyiyim", 2, 4)], segs), enabled: false);
+        var roles = new FileRoleSelection();
+        roles.Set(new SpeakerPreparationResult(DiarizationOutcome.Completed, segs,
+            Array.Empty<SpeakerChoice>(), new float[4 * 16000], false), new SpeakerId(0));
+        var vm = Build(speakers, id, out var report, enabled: false, fileRoles: roles);
+
+        vm.Live.StartCommand.Execute(null);
+        await vm.Live.WaitForIdleAsync();
+        await (vm.SpeakerAnalysisTask ?? Task.CompletedTask);
+
+        Assert.True(speakers.PrecomputedCalled);
+        Assert.False(speakers.WasCalled);
+        Assert.Equal(id, speakers.SeenSessionId);
+        Assert.Equal(segs, speakers.SeenSegments);
+        Assert.Equal(2, report.SpeakerLines.Count);
+        Assert.Null(roles.Prepared);
     }
 
     [Fact]

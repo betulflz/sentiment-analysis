@@ -1,3 +1,4 @@
+using SentimentAnalysis.Core;
 using SentimentAnalysis.Application.Abstractions;
 using SentimentAnalysis.Application.Runtime;
 
@@ -18,6 +19,16 @@ public sealed class ResourceManagedSpeakerAnalysis(
         if (!Enabled) return SpeakerAnalysisResult.Disabled;
         await using var session = createSession();
         return await Task.Run(() => session.Service.RunAsync(sessionId, expectedSpeakers, lease.Token))
+            .ConfigureAwait(false);
+    }
+
+    public async Task<SpeakerAnalysisResult> RunPrecomputedAsync(Guid sessionId, IReadOnlyList<SpeakerSegment> segments,
+        float[] mono16k, CancellationToken ct)
+    {
+        using var lease = await queue.AcquireAsync(ct).ConfigureAwait(false);
+        lease.Token.ThrowIfCancellationRequested();
+        await using var session = createSession();
+        return await Task.Run(() => session.Service.RunPrecomputedAsync(sessionId, segments, mono16k, lease.Token))
             .ConfigureAwait(false);
     }
 }

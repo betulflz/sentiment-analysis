@@ -62,6 +62,34 @@ public class SpeakerAnalysisServiceTests
             Task.FromResult(new ProsodyEmotion(new ValenceArousal(0.6, 0.7), 0.9));
     }
 
+    // --- Karşı tarafa odak: dosya modunda ön-hesaplı bölgeler ---
+    private sealed class ThrowingDiarizer : IDiarizer
+    {
+        public Task<IReadOnlyList<SpeakerSegment>> DiarizeAsync(float[] mono16k, int expectedSpeakers, CancellationToken ct) =>
+            throw new InvalidOperationException("ön-hesaplı yolda diarizer çağrılmamalı");
+    }
+
+    [Fact]
+    public async Task Precomputed_DiarizerCagrilmaz_SesOkunmaz_BolgelerKaydedilir_ProzodiVerilenSesten()
+    {
+        var speakers = new[]
+        {
+            new SpeakerSegment(new SpeakerId(0), TimeSpan.Zero, TimeSpan.FromSeconds(4)),
+            new SpeakerSegment(new SpeakerId(1), TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(8)),
+        };
+        var store = new FakeStore(null, Array.Empty<SpeakerSegment>());
+        var job = new DiarizationJob(new ThrowingDiarizer(), store, AppConfig.Default);
+        var service = new SpeakerAnalysisService(job, new FakeReader(speakers), new FakeState { Enabled = false },
+            new SpeakerProsodyAnalyzer(new FakeProsody(), AppConfig.Default));
+
+        var result = await service.RunPrecomputedAsync(Guid.NewGuid(), speakers, new float[8 * 16000], CancellationToken.None);
+
+        Assert.Equal(DiarizationOutcome.Completed, result.Outcome);
+        Assert.Equal(0, store.GetSessionAudioCalls);
+        Assert.Equal(speakers, store.Saved);
+        Assert.Equal(2, result.SpeakerProsody.Count);
+    }
+
     [Fact]
     public async Task RunAsync_KonusmaciProzodisiniDeUretir()
     {
