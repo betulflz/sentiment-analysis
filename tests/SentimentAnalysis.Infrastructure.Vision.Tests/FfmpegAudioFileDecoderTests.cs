@@ -54,6 +54,31 @@ public class FfmpegAudioFileDecoderTests
         Skip.IfNot(FfmpegPresent(), "ffmpeg yok");
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             new FfmpegAudioFileDecoder().DecodeMono16kAsync("/yok/boyle-bir-dosya.wav", TimeSpan.FromMinutes(1), default));
-        Assert.Contains("çözülemedi", ex.Message);
+        Assert.Contains("yerel", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("https://ornek.com/ses.mp3")]
+    [InlineData("concat:/etc/hosts|/etc/hosts")]
+    [InlineData("-i")]
+    public async Task YerelOlmayanGirdi_Reddedilir(string path)
+    {
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new FfmpegAudioFileDecoder().DecodeMono16kAsync(path, TimeSpan.FromMinutes(1), default));
+        Assert.Contains("yerel", ex.Message);
+    }
+
+    [SkippableFact]
+    public async Task UzakAdresIcerenOynatmaListesi_AgaCikmaz()
+    {
+        Skip.IfNot(FfmpegPresent(), "ffmpeg yok");
+        var p = Path.Combine(Path.GetTempPath(), $"liste-{Guid.NewGuid():N}.m3u8");
+        File.WriteAllText(p, "#EXTM3U\n#EXT-X-TARGETDURATION:10\n#EXTINF:10,\nhttp://127.0.0.1:9/ses.ts\n#EXT-X-ENDLIST\n");
+        try
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                new FfmpegAudioFileDecoder().DecodeMono16kAsync(p, TimeSpan.FromMinutes(1), default));
+        }
+        finally { File.Delete(p); }
     }
 }

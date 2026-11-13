@@ -120,6 +120,7 @@ public static class CompositionRoot
         services.AddSingleton<IVoiceEnrollment, MicrophoneVoiceEnrollment>();
         // Karşı tarafa odak (2026-11-13): dosya modunda analizden önce konuşmacı ayrımı. Ses bellekte çözülür;
         // ayrım modeli ortak kuyrukta kendi iş oturumunda yüklenip kapatılır (kökte model yok).
+        services.AddSingleton<IFileRoleSelection, FileRoleSelection>();
         services.AddSingleton<IAudioFileDecoder, FfmpegAudioFileDecoder>();
         services.AddSingleton<ISpeakerSamplePlayer>(sp => new AfplaySamplePlayer(
             sp.GetRequiredService<IExternalProcessRunner>(), sp.GetRequiredService<IRuntimePlatform>()));
@@ -134,7 +135,10 @@ public static class CompositionRoot
             sp.GetRequiredService<AppConfig>(),
             sp.GetRequiredService<ICaptureModeState>(),
             sp.GetRequiredService<IDiarizationState>(),
-            sp.GetRequiredService<IVoiceEnrollment>()));
+            sp.GetRequiredService<IVoiceEnrollment>(),
+            sp.GetRequiredService<ISpeakerPreparation>(),
+            sp.GetRequiredService<ISpeakerSamplePlayer>(),
+            sp.GetRequiredService<IFileRoleSelection>()));
         services.AddSingleton<ReportViewModel>();
         services.AddSingleton<HistoryViewModel>();
         services.AddSingleton<SettingsViewModel>(sp =>

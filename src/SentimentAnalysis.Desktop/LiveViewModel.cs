@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SentimentAnalysis.Application.Abstractions;
 using SentimentAnalysis.Application.Configuration;
+using SentimentAnalysis.Application.Diarization;
 using SentimentAnalysis.Core;
 
 namespace SentimentAnalysis.Desktop;
@@ -144,6 +145,51 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     /// yanlış atanır — kullanıcı uyarılır (güvenlik incelemesi 2026-11-12).</summary>
     private bool _enrollmentUsed;
 
+    // --- Karşı tarafa odak (2026-11-13): dosya modunda önce konuşmacı ayrımı, sonra "Siz hangisiniz?" ---
+    private readonly ISpeakerPreparation? _speakerPreparation;
+    private readonly ISpeakerSamplePlayer? _samplePlayer;
+    private readonly IFileRoleSelection? _fileRoles;
+
+    [ObservableProperty] private bool _isPreparingSpeakers;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasHostChoice))] private HostChoiceViewModel? _hostChoice;
+    [ObservableProperty] private string _preparationStatus = string.Empty;
+    public bool HasHostChoice => HostChoice is not null;
+
+    public const string PreparingText = "Konuşmacılar ayrılıyor… (kayıt süresinin yaklaşık yarısı kadar sürer)";
+    public const string PreparationFailedText =
+        "Konuşmacılar ayrılamadı; analiz karışık ses üzerinden yapılacak ve raporda öyle belirtilecek.";
+
+    /// <summary>Dosya modu ön ayrımı. Dönüşte <see cref="IFileRoleSelection"/> doludur (rol bilgili) ya da boştur (karışık).</summary>
+    private async Task PrepareFileRolesAsync(string path, CancellationToken ct)
+    {
+        IsPreparingSpeakers = true;
+        PreparationStatus = PreparingText;
+        try
+        {
+            var prepared = await _speakerPreparation!.PrepareAsync(path, LastSpeakerCount, ct).ConfigureAwait(true);
+            if (prepared.Outcome != DiarizationOutcome.Completed || prepared.Choices.Count < 2)
+            {
+                _fileRoles!.SetMixed();
+                PreparationStatus = string.Empty;
+                Warn(PreparationFailedText);
+                return;
+            }
+            PreparationStatus = string.Empty;
+            var choice = new HostChoiceViewModel(prepared, _samplePlayer);
+            HostChoice = choice;
+            using var reg = ct.Register(choice.Cancel);
+            var host = await choice.Result.ConfigureAwait(true);
+            if (host is SpeakerId h) _fileRoles!.Set(prepared, h);
+            else _fileRoles!.SetMixed();
+        }
+        finally
+        {
+            HostChoice = null;
+            IsPreparingSpeakers = false;
+            PreparationStatus = string.Empty;
+        }
+    }
+
     /// <summary>"Tanıtmayı sil" görünsün mü: tanıtma var ve kayıt/görüşme sürmüyor.</summary>
     public bool CanClearEnrollment => _enrollment?.IsEnrolled == true && !IsEnrolling && !IsCapturing;
 
@@ -276,9 +322,13 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     public LiveViewModel(IAnalysisRunner runner, IAudioFilePicker? picker = null,
                          ISelectedAudio? selected = null, AppConfig? config = null,
                          ICaptureModeState? captureMode = null, IDiarizationState? diarization = null,
-                         IVoiceEnrollment? enrollment = null)
+                         IVoiceEnrollment? enrollment = null, ISpeakerPreparation? speakerPreparation = null,
+                         ISpeakerSamplePlayer? samplePlayer = null, IFileRoleSelection? fileRoles = null)
     {
         _enrollment = enrollment;
+        _speakerPreparation = speakerPreparation;
+        _samplePlayer = samplePlayer;
+        _fileRoles = fileRoles;
         if (enrollment is not null) _enrollmentStatus = IdleEnrollmentText;
         _selectedSpeakerCount = SpeakerCountOptions[0];
         _runner = runner;
@@ -312,6 +362,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
     private void SyncCaptureMode()
     {
+        _fileRoles?.Clear();
         if (_captureMode is not null)
             _captureMode.Mode = UseCamera ? CaptureMode.Kamera : UseMicrophone ? CaptureMode.Mikrofon : CaptureMode.Dosya;
         RefreshStartState();
@@ -372,6 +423,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         var path = await _picker.PickAudioFileAsync().ConfigureAwait(true);
         if (string.IsNullOrEmpty(path)) return;
         if (_selected is not null) _selected.Path = path;
+        _fileRoles?.Clear();
         SelectedFile = System.IO.Path.GetFileName(path);
         StartCommand.NotifyCanExecuteChanged();
     }
@@ -412,11 +464,16 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
     private async Task RunAsync(CancellationToken ct)
     {
+        bool analysisStarted = false;
         try
         {
             CaptureError = string.Empty;
             CongruenceBadge = string.Empty; // önceki koşudan kalan rozet ("Maskeleme" vb.) sarkmasın
             SkippedChunkCount = 0; // önceki koşudan kalan sayı sarkmasın
+
+            _fileRoles?.Clear();
+            if (IsFileMode && _speakerPreparation is not null && _fileRoles is not null && _selected?.Path is string file)
+                await PrepareFileRolesAsync(file, ct).ConfigureAwait(true);
 
             // Modelleri asenkron olarak warm-up ediyoruz
             IsPreparingModels = true;
@@ -429,6 +486,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
             StartCommand.NotifyCanExecuteChanged();
             StopCommand.NotifyCanExecuteChanged();
 
+            analysisStarted = true;
             var summary = await _runner.RunAsync(this, ct).ConfigureAwait(true);
             SkippedChunkCount = _runner.SkippedChunkCount;
             LastSessionId = _runner.LastSessionId;   // 10b: arka plan konuşmacı geçişinin hedefi
@@ -446,11 +504,16 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
                 CaptureError = "Analiz başarısız oldu.";
             }
         }
-        catch (OperationCanceledException) { /* Stop ile iptal — normal */ }
+        catch (OperationCanceledException)
+        {
+            // Stop ile iptal — normal. Ön ayrım sırasında durdurulduysa analiz hiç başlamadı: seçimi bırak.
+            if (!analysisStarted) _fileRoles?.Clear();
+        }
         // Sessiz yutma yok (08 deferred fix): hata uzun/açıklayıcı olabileceğinden (örn. mikrofon
         // izni reddi veya model yüklenememesi) tam metni gösterebilen CaptureError'a yazılır.
         catch (Exception ex) 
         { 
+            if (!analysisStarted) _fileRoles?.Clear();
             CaptureError = ex.Message; 
         }
         finally 

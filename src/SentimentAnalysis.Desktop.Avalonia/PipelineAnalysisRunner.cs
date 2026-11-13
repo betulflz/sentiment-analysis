@@ -30,6 +30,7 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner, IDisposable
     private readonly Func<VisionAnalyzer>? _visionFactory;
     private VisionAnalyzer? _vision;
     private readonly IRoleLabeler? _roles;
+    private readonly IFileRoleSelection? _fileRoles;
     private volatile VisionAnalyzer? _activeVision;
 
     public PipelineAnalysisRunner(EmotionPipeline pipeline, Func<IAudioCaptureSource?> sourceFactory,
@@ -38,9 +39,10 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner, IDisposable
                                   IDiarizationState? diarization = null,
                                   Func<IVideoCaptureSource?>? videoFactory = null,
                                   Func<VisionAnalyzer>? visionFactory = null,
-                                  IRoleLabeler? roles = null)
+                                  IRoleLabeler? roles = null, IFileRoleSelection? fileRoles = null)
     {
         _roles = roles;
+        _fileRoles = fileRoles;
         // 11b: görüntü kanalı additive — fabrika yoksa ya da null dönerse (ses dosyası, mikrofon) davranış değişmez.
         _videoFactory = videoFactory;
         _visionFactory = visionFactory;
@@ -166,7 +168,9 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner, IDisposable
 
             var summary = await _pipeline.RunAsync(pipelineSource, options, sessionId, startedAt, language, uiThreadProgress, ct,
                     enrich: WithFace,
-                    roles: _captureMode?.Mode is CaptureMode.Mikrofon or CaptureMode.Kamera ? _roles : null, // 12: rol ayrımı yalnız canlı modlarda
+                    // 12: canlıda tanıtma; dosyada (karşı tarafa odak) "Siz hangisiniz?" seçiminden gelen rol etiketi.
+                    roles: _captureMode?.Mode is CaptureMode.Mikrofon or CaptureMode.Kamera ? _roles
+                        : _captureMode?.Mode == CaptureMode.Dosya ? _fileRoles?.Roles : null,
                     mode: _captureMode?.Mode == CaptureMode.Dosya && video is null
                         ? PipelineExecutionMode.Offline : PipelineExecutionMode.Realtime)
                 .ConfigureAwait(false);

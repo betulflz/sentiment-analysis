@@ -112,6 +112,35 @@
                            Classes.warn="{Binding EnrollmentWarning}" MaxWidth="640" />
             </StackPanel>
 
+            <!-- Karşı tarafa odak (2026-11-13): dosya modunda önce konuşmacı ayrımı, sonra "Siz hangisiniz?". -->
+            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsPreparingSpeakers}">
+                <ProgressBar IsIndeterminate="True" Width="120" VerticalAlignment="Center"
+                             IsVisible="{Binding PreparationStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <TextBlock Text="{Binding PreparationStatus}" VerticalAlignment="Center" FontSize="12" />
+            </StackPanel>
+            <Border Classes="card" Padding="14,12" IsVisible="{Binding HasHostChoice}">
+                <StackPanel Spacing="8" DataContext="{Binding HostChoice}">
+                    <TextBlock Text="Siz hangisiniz?" FontWeight="SemiBold" FontSize="15" />
+                    <TextBlock FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource SystemBaseMediumColor}"
+                               Text="Dinleyip kendinizi seçin. Öneriler ve rapor yalnız karşı tarafın sesine ve sözlerine göre hesaplanır." />
+                    <ItemsControl ItemsSource="{Binding Rows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,2">
+                                    <RadioButton GroupName="HostChoice" IsChecked="{Binding IsSelected}" Content="{Binding Label}"
+                                                 VerticalAlignment="Center" MinWidth="130" />
+                                    <TextBlock Text="{Binding TalkText}" VerticalAlignment="Center" FontSize="12" MinWidth="140" />
+                                    <Button Content="▶ Dinle" Command="{Binding PlayCommand}" IsVisible="{Binding CanPlay}"
+                                            AutomationProperties.Name="Bu konuşmacının sesini dinle" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <RadioButton GroupName="HostChoice" IsChecked="{Binding NotSure}" Content="Emin değilim (karışık sesle analiz et)" />
+                    <Button Content="Seçimi onayla ve analiz et" Command="{Binding ConfirmCommand}" HorizontalAlignment="Left" />
+                </StackPanel>
+            </Border>
+
             <TextBlock Text="{Binding DiarizationHint}" FontSize="11" TextWrapping="Wrap"
                        IsVisible="{Binding DiarizationHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                        Foreground="{DynamicResource SystemBaseMediumColor}" FontStyle="Italic" />

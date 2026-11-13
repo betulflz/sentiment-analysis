@@ -39,7 +39,8 @@ internal static class ModelSessions
                 app.GetService<IDiarizationState>(),
                 app.GetRequiredService<Func<IVideoCaptureSource?>>(),
                 app.GetRequiredService<Func<VisionAnalyzer>>(),
-                app.GetRequiredService<SpeakerRoleTracker>());
+                app.GetRequiredService<SpeakerRoleTracker>(),
+                app.GetService<IFileRoleSelection>());
             return new OwnedModelSession<IAnalysisRunner>(runner, new AnalysisOwner(runner, models));
         }
         catch { models.Dispose(); throw; }
