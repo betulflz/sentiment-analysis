@@ -129,7 +129,10 @@ public sealed record CriticalMoment(System.TimeSpan Start, System.TimeSpan End, 
 public sealed record RecommendationChange(System.TimeSpan At, LiveAction Action, string Reason, Confidence Confidence);
 
 /// <summary>Görüşme sonrası takip kararı.</summary>
-public sealed record FollowUpDecision(FollowUpAction Best, IReadOnlyList<Ranked<FollowUpAction>> Ranking, string Reason);
+/// <param name="Direction">Önerilen yön: <paramref name="Best"/>'in kategorisi.</param>
+/// <param name="Options">Ekranda gösterilecek 1–3 seçenek; ilki <paramref name="Best"/>.</param>
+public sealed record FollowUpDecision(FollowUpAction Best, IReadOnlyList<Ranked<FollowUpAction>> Ranking, string Reason,
+    FollowUpCategory Direction, IReadOnlyList<FollowUpAction> Options);
 
 /// <summary>Duyarlılık analizi satırı: bir kriterin ağırlığı <paramref name="Delta"/> oranında
 /// değişince en iyi seçenek.</summary>

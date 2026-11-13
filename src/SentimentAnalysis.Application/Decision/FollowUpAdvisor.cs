@@ -7,6 +7,9 @@ namespace SentimentAnalysis.Application.Decision;
 /// canlı danışmanla AYNI motor (kural + ihtiyaç-ağırlıklı TOPSIS), profile özgü seçeneklerle. Saf.</summary>
 public static class FollowUpAdvisor
 {
+    /// <summary>Ekranda "ilk 3 seçenek".</summary>
+    public const int MaxOptions = 3;
+
     /// <summary>Kriter başına 0,5·ortalama + 0,5·p90 — tek bir gergin an görüşmeyi tek başına
     /// belirlemesin, ama tekrarlayan tepeler de ortalamada kaybolmasın.</summary>
     public static Indicators AggregateMeeting(IReadOnlyList<Indicators> windows, DecisionConfig cfg)
@@ -38,12 +41,16 @@ public static class FollowUpAdvisor
 
         if (profile == MeetingProfile.Mulakat && meeting.DataQuality < cfg.LowQuality)
             return new FollowUpDecision(FollowUpAction.GorusmeyiTekrarla, none,
-                "Görüşme verisi yetersiz (yüz/ses kalitesi düşük) — sağlıklı bir değerlendirme için görüşme tekrarlanmalı.");
+                "Görüşme verisi yetersiz (yüz/ses kalitesi düşük) — sağlıklı bir değerlendirme için görüşme tekrarlanmalı.",
+                FollowUpCategory.IliskiyiGozetin, new[] { FollowUpAction.GorusmeyiTekrarla });
 
         if (meeting.Values.Max() < cfg.InterventionThreshold)
-            return new FollowUpDecision(def.PositiveFollowUp, none, "Görüşme boyunca belirgin bir sorun görülmedi.");
+            return new FollowUpDecision(def.PositiveFollowUp, none, "Görüşme boyunca belirgin bir sorun görülmedi.",
+                FollowUpCategory.Ilerletin, def.AdvanceOptions.Take(MaxOptions).ToArray());
 
         var ranking = ActionRanker.Rank(def.FollowUps, DecisionKnowledgeBase.FollowUpImpact, weights, meeting.Values);
-        return new FollowUpDecision(ranking[0].Alternative, ranking, DecisionText.Reason(meeting, ranking[0].TopCriteria));
+        var best = ranking[0].Alternative;
+        return new FollowUpDecision(best, ranking, DecisionText.Reason(meeting, ranking[0].TopCriteria),
+            DecisionKnowledgeBase.CategoryOf(best), ranking.Take(MaxOptions).Select(r => r.Alternative).ToArray());
     }
 }

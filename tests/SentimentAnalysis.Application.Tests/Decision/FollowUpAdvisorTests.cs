@@ -19,20 +19,52 @@ public class FollowUpAdvisorTests
     private static readonly double[] Ilgisiz = { .1, .9, .1, .1, .6, .2 };
     private static readonly double[] Uyumsuz = { .2, .1, .2, .9, .1, .1 };
 
-    [Fact]
-    public void Satis_Gergin_Beklet()
+    private static readonly double[] Kotulesen = { .3, .2, .4, .2, .2, .9 };
+    private static readonly double[] Olumsuz = { .2, .1, .9, .3, .1, .3 };
+    private static readonly double[] DusukEnerji = { .1, .3, .1, .1, .9, .2 };
+
+    [Theory]
+    [InlineData(MeetingProfile.Satis, "Gergin", FollowUpAction.IliskiyiOnar, FollowUpCategory.IliskiyiGozetin)]
+    [InlineData(MeetingProfile.Satis, "Ilgisiz", FollowUpAction.IkinciGorusme, FollowUpCategory.Netlestirin)]
+    [InlineData(MeetingProfile.Satis, "Uyumsuz", FollowUpAction.ItirazBilgisi, FollowUpCategory.Netlestirin)]
+    [InlineData(MeetingProfile.Satis, "Kotulesen", FollowUpAction.Beklet, FollowUpCategory.Bekleyin)]
+    [InlineData(MeetingProfile.Mulakat, "Uyumsuz", FollowUpAction.EkGorusme, FollowUpCategory.Netlestirin)]
+    [InlineData(MeetingProfile.Mulakat, "Gergin", FollowUpAction.GorusmeyiTekrarla, FollowUpCategory.IliskiyiGozetin)]
+    [InlineData(MeetingProfile.Mulakat, "Olumsuz", FollowUpAction.IkinciGorusAl, FollowUpCategory.Netlestirin)]
+    [InlineData(MeetingProfile.Mulakat, "Kotulesen", FollowUpAction.AdaylarlaKarsilastir, FollowUpCategory.Bekleyin)]
+    [InlineData(MeetingProfile.Toplanti, "Gergin", FollowUpAction.BireBirGorusme, FollowUpCategory.IliskiyiGozetin)]
+    [InlineData(MeetingProfile.Toplanti, "Ilgisiz", FollowUpAction.TakipToplantisi, FollowUpCategory.Netlestirin)]
+    [InlineData(MeetingProfile.Toplanti, "DusukEnerji", FollowUpAction.YaziliGorus, FollowUpCategory.Netlestirin)]
+    [InlineData(MeetingProfile.Toplanti, "Kotulesen", FollowUpAction.KarariErtele, FollowUpCategory.Bekleyin)]
+    public void Senaryo_BestVeYon(MeetingProfile p, string scenario, FollowUpAction best, FollowUpCategory direction)
     {
-        var d = Decide(MeetingProfile.Satis, Gergin);
-        Assert.Equal(FollowUpAction.Beklet, d.Best);
-        Assert.Equal(0.6365, d.Ranking[0].Closeness, 1e-3);
+        var n = scenario switch
+        {
+            "Gergin" => Gergin, "Ilgisiz" => Ilgisiz, "Uyumsuz" => Uyumsuz, "Kotulesen" => Kotulesen,
+            "Olumsuz" => Olumsuz, "DusukEnerji" => DusukEnerji, _ => throw new ArgumentException(scenario),
+        };
+        var d = Decide(p, n);
+        Assert.Equal(best, d.Best);
+        Assert.Equal(direction, d.Direction);
     }
 
-    [Fact] public void Satis_Ilgisiz_IkinciGorusme() => Assert.Equal(FollowUpAction.IkinciGorusme, Decide(MeetingProfile.Satis, Ilgisiz).Best);
-    [Fact] public void Satis_Uyumsuz_ItirazBilgisi() => Assert.Equal(FollowUpAction.ItirazBilgisi, Decide(MeetingProfile.Satis, Uyumsuz).Best);
-    [Fact] public void Mulakat_Uyumsuz_EkGorusme() => Assert.Equal(FollowUpAction.EkGorusme, Decide(MeetingProfile.Mulakat, Uyumsuz).Best);
-    [Fact] public void Mulakat_Gergin_Tekrarla() => Assert.Equal(FollowUpAction.GorusmeyiTekrarla, Decide(MeetingProfile.Mulakat, Gergin).Best);
-    [Fact] public void Toplanti_Gergin_BireBir() => Assert.Equal(FollowUpAction.BireBirGorusme, Decide(MeetingProfile.Toplanti, Gergin).Best);
-    [Fact] public void Toplanti_Ilgisiz_Takip() => Assert.Equal(FollowUpAction.TakipToplantisi, Decide(MeetingProfile.Toplanti, Ilgisiz).Best);
+    [Fact]
+    public void Topsis_OptionsIlkUcVeIlkiBest()
+    {
+        var d = Decide(MeetingProfile.Satis, Gergin);
+        Assert.Equal(3, d.Options.Count);
+        Assert.Equal(d.Best, d.Options[0]);
+        Assert.Equal(d.Ranking.Take(3).Select(r => r.Alternative), d.Options);
+    }
+
+    [Fact]
+    public void Topsis_IlerletinSiralanmaz()
+    {
+        foreach (var p in Enum.GetValues<MeetingProfile>())
+            foreach (var n in new[] { Gergin, Ilgisiz, Uyumsuz, Kotulesen, Olumsuz, DusukEnerji })
+                Assert.DoesNotContain(Decide(p, n).Ranking,
+                    r => DecisionKnowledgeBase.CategoryOf(r.Alternative) == FollowUpCategory.Ilerletin);
+    }
 
     [Theory]
     [InlineData(MeetingProfile.Satis, FollowUpAction.TeklifGonder)]
@@ -43,6 +75,16 @@ public class FollowUpAdvisorTests
         var d = Decide(p, Enumerable.Repeat(0.1, 6).ToArray());
         Assert.Equal(expected, d.Best);
         Assert.Contains("belirgin bir sorun görülmedi", d.Reason);
+        Assert.Equal(FollowUpCategory.Ilerletin, d.Direction);
+        Assert.Equal(DecisionKnowledgeBase.Get(p).AdvanceOptions.Take(3), d.Options);
+        Assert.Empty(d.Ranking);
+    }
+
+    [Fact]
+    public void Calm_Toplanti_TekSecenek()
+    {
+        var d = Decide(MeetingProfile.Toplanti, Enumerable.Repeat(0.1, 6).ToArray());
+        Assert.Single(d.Options);
     }
 
     [Fact]
@@ -51,6 +93,8 @@ public class FollowUpAdvisorTests
         var d = Decide(MeetingProfile.Mulakat, Enumerable.Repeat(0.1, 6).ToArray(), q: 0.3);
         Assert.Equal(FollowUpAction.GorusmeyiTekrarla, d.Best);
         Assert.Contains("yetersiz", d.Reason);
+        Assert.Equal(FollowUpCategory.IliskiyiGozetin, d.Direction);
+        Assert.Equal(new[] { FollowUpAction.GorusmeyiTekrarla }, d.Options);
     }
 
     [Fact]

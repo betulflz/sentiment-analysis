@@ -89,10 +89,10 @@ public static class DecisionKnowledgeBase
         [FollowUpAction.NetlestirmeGorusmesi] = new[] { 0.4, 0.5, 0.4, 0.7, 0.4, 0.4 },
         [FollowUpAction.TeknikDemo]           = new[] { 0.2, 0.6, 0.3, 0.7, 0.6, 0.3 },
         [FollowUpAction.CalismaGrubu]         = new[] { 0.2, 0.6, 0.3, 0.6, 0.5, 0.4 },
-        [FollowUpAction.YaziliGorus]          = new[] { 0.1, 0.6, 0.2, 0.4, 0.9, 0.3 },
-        [FollowUpAction.AdaylarlaKarsilastir] = new[] { 0.4, 0.3, 0.4, 0.4, 0.3, 0.8 },
+        [FollowUpAction.YaziliGorus]          = new[] { 0.1, 0.7, 0.2, 0.4, 1.0, 0.3 },
+        [FollowUpAction.AdaylarlaKarsilastir] = new[] { 0.6, 0.3, 0.6, 0.4, 0.3, 1.0 },
         [FollowUpAction.BilgiListesi]         = new[] { 0.2, 0.6, 0.2, 0.2, 0.6, 0.4 },
-        [FollowUpAction.KarariErtele]         = new[] { 0.4, 0.3, 0.4, 0.6, 0.3, 0.8 },
+        [FollowUpAction.KarariErtele]         = new[] { 0.5, 0.4, 0.6, 0.6, 0.3, 1.0 },
         [FollowUpAction.IliskiyiOnar]         = new[] { 0.9, 0.3, 0.8, 0.4, 0.2, 0.7 },
     };
 

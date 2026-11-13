@@ -13,6 +13,7 @@ public class FollowUpPanelViewModelTests
     private static readonly DecisionConfig Cfg = new();
     private static readonly double[] Gergin = { .8, .1, .7, .2, .1, .3 };
     private static readonly double[] Sakin = { .1, .1, .1, .1, .1, .1 };
+    private static readonly double[] Uyumsuz = { .2, .1, .2, .9, .1, .1 };
     private static readonly double[] FinalW = { 0.1, 0.1, 0.6, 0.1, 0.05, 0.05 };
 
     internal static DecisionWindow Window(double start, double[] values, double quality = 0.8) =>
@@ -119,8 +120,9 @@ public class FollowUpPanelViewModelTests
     [Fact]
     public void Duyarlilik_DegisenSenaryo_OzetteSayilir()
     {
-        // Bu ağırlıklarda gergin satış görüşmesinin kararı sınırdadır: 24 senaryonun 4'ünde değişir (motorla tarandı).
-        var s = Session(Gergin, final: new[] { 0.4, 0.2, 0.9, 0.1, 1.0, 0.5 });
+        // Bu ağırlıklarda söz–his çelişkili satış görüşmesinin kararı sınırdadır: 24 senaryonun 4'ünde değişir
+        // (motorla tarandı, 2026-11-13 kategorili seçeneklerle; gergin senaryo artık "ilişkiyi onar"da net).
+        var s = Session(Uyumsuz, final: new[] { 0.4, 0.2, 0.9, 0.1, 1.0, 0.5 });
         var vm = Loaded(s);
         var rows = Sensitivity.Analyze(s.FinalWeights, w => Expected(s, w.ToArray()).Best);
         Assert.Contains(rows, r => r.Changed);
