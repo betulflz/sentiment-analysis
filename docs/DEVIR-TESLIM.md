@@ -61,3 +61,8 @@ Henüz **kanıtlanmış doğruluk kazancı yok**. Ölçüm hazır, ama gerçek T
 - Codex oturum kayıtları yalnız Ilkay'ın bilgisayarında (`~/.codex/sessions/2026/11/13/`); bu belgeler onların özetidir, ek bağlam gerekmez.
 - Kod değişiklikleri doğruluk artışı olarak sunulmamalı; her iterasyonun çıkışı aynı kayıtlarda önce/sonra ölçümdür.
 - Strateji hedefleri (%20 DER azalması, %80 öneri ilgililiği vb.) ölçülmüş sonuç değil, proje hedefleridir.
+
+## Birleştirme notu (12. aşama ile)
+
+Bu çalışma, Betül'ün `origin/11-karar-destek` üzerindeki 12. aşama commit'lerinin (Sesimi tanıt, SpeakerRoleTracker, rol çizelgesi) **üstüne rebase edildi**. Çakışmalar `EmotionPipeline` (hem `roles` hem `mode` parametresi), `PipelineAnalysisRunner` ve `CompositionRoot`'ta çözüldü. Ses imzası (TitaNet) ve VAD modelleri, "kökte yerel model olmaz" kuralını bozmamak için `RoleModels.cs` içinde tembel yüklenen özel bir alt sağlayıcıda tutulur (`SpeakerRoleTracker` buradan beslenir). Bunlar iş-başı model ömrüne henüz bağlı değil: ilk tanıtmada yüklenir, uygulama kapanınca kapanır.
+- [ ] Gerçek cihazda "Sesimi tanıt" → canlı analiz akışını elle dene (birleştirme testlerle doğrulandı, modelle denenmedi).
