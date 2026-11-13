@@ -40,8 +40,9 @@ Henüz **kanıtlanmış doğruluk kazancı yok**. Ölçüm hazır, ama gerçek T
 - [ ] Whisper turbo vs daha küçük model (FLEURS ön ölçümünde küçük modeller belirgin kötüydü: WER base %39, small %27, turbo %8,7).
 
 ### İterasyon 3 — duygu
-- [ ] Metin ONNX modelinin etiket sırası/logitlerini referansla doğrula; `TextVaLookup` softmax ↔ modelin sigmoid tanımı.
-- [ ] Prozodi güvenini (`ProsodyOutputMapper`) nötr uzaklığından ayır; kalibre güven politikası.
+- [x] Metin ONNX modelinin etiket sırası/logitlerini referansla doğrula; `TextVaLookup` softmax ↔ modelin sigmoid tanımı. (2026-11-14: yerel model çok etiketli/sigmoid; sıra doğru → sigmoid'e geçildi.)
+- [x] Prozodi güvenini (`ProsodyOutputMapper`) nötr uzaklığından ayır. (2026-11-14: sabit `ProsodyModelConfidence`=0,6; şiddetten/kazançtan bağımsız.)
+- [ ] Kalibre güven politikası (etiketli Türkçe kayıtlarla; `ProsodyModelConfidence` ve eşikler).
 - [ ] emotion2vec+ base ile karşılaştırma; ses/metin/birlikte deneyleri; "etiket üretme" seçeneği.
 - [ ] Lisans notu: audEERING ses modeli CC-BY-NC-SA-4.0 — ürün kullanımı için değerlendir.
 

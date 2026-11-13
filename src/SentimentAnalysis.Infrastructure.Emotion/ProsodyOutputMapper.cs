@@ -4,7 +4,9 @@ namespace SentimentAnalysis.Infrastructure.Emotion;
 
 /// <summary>audeering çıktısını (`logits` = [arousal, dominance, valence], 0..1) domain
 /// <see cref="ProsodyEmotion"/>'a eşler. valence 0..1 → −1..1; arousal direkt.
-/// modelConfidence = nötr merkeze (0, 0.5) uzaklık (PROVISIONAL heuristik; Alt-Proje 09 kalibre eder).
+/// modelConfidence = sabit, ayarlanabilir model güveni. Regresyon modeli belirsizlik vermez; eskiden kullanılan
+/// "nötr merkeze uzaklık" ŞİDDETTİ, güvenilirlik değil — nötr sesi düşük güvenli sayıyor, kazanç artınca
+/// güveni de şişiriyordu (İt.3). Ses kalitesi füzyonda ayrı (rAudio); kalibrasyon etiketli veriyle yapılır.
 /// <para><b>Kazanç (gain):</b> ham model çıktısı nötr merkez etrafında sıkışıktır (msp-dim
 /// valence'ı pratikte 0,35–0,65 bandında kalır → domain'de −0,3…+0,3). Bu aralık
 /// <see cref="EmotionWheel"/>'in nötr havzasının içinde olduğundan, kazanç uygulanmazsa
@@ -13,10 +15,10 @@ namespace SentimentAnalysis.Infrastructure.Emotion;
 /// Kazanç POLİTİKASI <c>EmotionConfig</c>'te yaşar; burada varsayılan kimliktir (1,0).</para></summary>
 public static class ProsodyOutputMapper
 {
-    // Merkezden en büyük Öklid uzaklık: sqrt(1^2 + 0.5^2).
-    private static readonly double MaxDistance = Math.Sqrt(1.0 + 0.25);
+    public const double DefaultModelConfidence = 0.6;
 
-    public static ProsodyEmotion Map(float[] logits, double valenceGain = 1.0, double arousalGain = 1.0)
+    public static ProsodyEmotion Map(float[] logits, double valenceGain = 1.0, double arousalGain = 1.0,
+        double modelConfidence = DefaultModelConfidence)
     {
         double arousal01 = logits.Length > 0 ? logits[0] : 0.5;
         double valence01 = logits.Length > 2 ? logits[2] : 0.5;
@@ -25,12 +27,6 @@ public static class ProsodyOutputMapper
         double valence = (valence01 - 0.5) * 2.0 * valenceGain;
         double arousal = 0.5 + (arousal01 - 0.5) * arousalGain;
 
-        var va = ValenceArousal.Clamp(valence, arousal);
-
-        double dv = va.Valence;                 // nötr valence 0
-        double da = va.Arousal - 0.5;           // nötr arousal 0.5
-        double confidence = Math.Clamp(Math.Sqrt(dv * dv + da * da) / MaxDistance, 0.0, 1.0);
-
-        return new ProsodyEmotion(va, confidence);
+        return new ProsodyEmotion(ValenceArousal.Clamp(valence, arousal), Math.Clamp(modelConfidence, 0.0, 1.0));
     }
 }

@@ -69,7 +69,10 @@ public sealed record EmotionConfig(
     // etrafında simetrik genişletmedir — işareti değil yayılımı düzeltir.
     // BAŞLANGIÇ DEĞERİ, KALİBRE EDİLMEMİŞ (eval-09 Türkçe etiketli veriyle ölçecek).
     double ProsodyValenceGain = 2.0,
-    double ProsodyArousalGain = 2.0);
+    double ProsodyArousalGain = 2.0,
+    // Ses modelinin sabit güveni (şiddetten bağımsız). audeering msp-dim yayınlanan CCC: valence ~0,64,
+    // arousal ~0,75 → ~0,6 başlangıç. KALİBRE EDİLMEMİŞ; etiketli Türkçe kayıtlarla ölçülecek.
+    double ProsodyModelConfidence = 0.6);
 
 /// <summary>VAD (Silero) ayarları (spec 05). Eşik eval-09 kalibre eder.</summary>
 public sealed record VadConfig(
