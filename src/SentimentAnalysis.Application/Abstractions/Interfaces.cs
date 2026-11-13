@@ -188,6 +188,14 @@ public interface IRoleLabeler
     void Reset();
 }
 
+/// <summary>Ses/video dosyasının sesini BELLEKTE 16 kHz mono float'a çözer (karşı tarafa odak, 2026-11-13: dosya
+/// modunda analizden önce konuşmacı ayrımı). Diske ara dosya yazmaz.</summary>
+public interface IAudioFileDecoder
+{
+    /// <param name="maxDuration">Bu süreden sonrası çözülmez (8 GB bellek sınırı).</param>
+    Task<float[]> DecodeMono16kAsync(string path, TimeSpan maxDuration, CancellationToken ct);
+}
+
 /// <summary>Tüm kaydı görüp konuşmacı bölgeleri üretir (Alt-proje 10b; sherpa-onnx offline
 /// diarization). Canlı hatta ÇAĞRILMAZ — oturum bittikten sonra arka planda bir kez çalışır
 /// (spec 10 S2: sherpa'nın diarization'ı yalnızca offline'dır ve 10a ölçümünde RTF ~0,44

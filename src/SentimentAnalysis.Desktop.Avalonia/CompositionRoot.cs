@@ -118,6 +118,12 @@ public static class CompositionRoot
             return new SpeakerRoleTracker(embedder, vad, sp.GetRequiredService<AppConfig>());
         });
         services.AddSingleton<IVoiceEnrollment, MicrophoneVoiceEnrollment>();
+        // Karşı tarafa odak (2026-11-13): dosya modunda analizden önce konuşmacı ayrımı. Ses bellekte çözülür;
+        // ayrım modeli ortak kuyrukta kendi iş oturumunda yüklenip kapatılır (kökte model yok).
+        services.AddSingleton<IAudioFileDecoder, FfmpegAudioFileDecoder>();
+        services.AddSingleton<ISpeakerPreparation>(sp => new ResourceManagedSpeakerPreparation(
+            sp.GetRequiredService<IAudioFileDecoder>(), sp.GetRequiredService<ModelWorkQueue>(),
+            () => ModelSessions.CreatePreparation(sp), sp.GetRequiredService<AppConfig>()));
 
         services.AddSingleton<LiveViewModel>(sp => new LiveViewModel(
             sp.GetRequiredService<IAnalysisRunner>(),

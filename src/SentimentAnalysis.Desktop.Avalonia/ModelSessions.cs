@@ -61,6 +61,18 @@ internal static class ModelSessions
         catch { models.Dispose(); throw; }
     }
 
+    /// <summary>Dosya modu ön ayrımı: yalnız sherpa konuşmacı ayrımı modelleri (karşı tarafa odak).</summary>
+    internal static OwnedModelSession<SpeakerPreparation> CreatePreparation(IServiceProvider app)
+    {
+        var services = new ServiceCollection();
+        services.AddApplicationCore(app.GetRequiredService<AppConfig>());
+        services.AddSherpaDiarization();
+        services.AddSingleton<SpeakerPreparation>();
+        var models = services.BuildServiceProvider();
+        try { return new OwnedModelSession<SpeakerPreparation>(models.GetRequiredService<SpeakerPreparation>(), models); }
+        catch { models.Dispose(); throw; }
+    }
+
     private sealed class AnalysisOwner(PipelineAnalysisRunner runner, ServiceProvider models) : IDisposable
     {
         public void Dispose()
