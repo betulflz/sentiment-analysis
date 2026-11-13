@@ -267,5 +267,9 @@ public sealed record IndicatorBarVm(string Name, double Value, string Subject);
 /// <summary>Eylem sıralamasında bir satır: "1. Empati kur", yakınlık (0..1) ve yüzde metni.</summary>
 public sealed record RankingRowVm(string Label, double Closeness, string PercentText);
 
+/// <summary>Takip kartındaki "İlk 3 seçenek" satırı; kural yolunda <paramref name="PercentText"/> ve
+/// <paramref name="WhyText"/> boştur.</summary>
+public sealed record TopOptionRowVm(string Label, string PercentText, string WhyText);
+
 /// <summary>Bir yüzün son penceredeki çubukları (0..1).</summary>
 public sealed record FaceBarsVm(string Label, double LookAway, double Negative, double Smile);

@@ -160,6 +160,15 @@ public class DecisionKnowledgeBaseTests
     }
 
     [Fact]
+    public void TakipEtiketleri_OlculmeyenGerginligiIddiaEtmez()
+    {
+        // TOPSIS bu seçenekleri gerilim düşükken de (olumsuz duygu/kötüleşme yüzünden) seçebilir:
+        // etiket görüşmeyi değil, yalnız eylemi anlatmalı (final inceleme bulgusu 1).
+        foreach (var a in Enum.GetValues<FollowUpAction>())
+            Assert.DoesNotContain("gergin", DecisionText.Name(a), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void KategoriAdlari()
     {
         Assert.Equal("İlerletin", DecisionText.Name(FollowUpCategory.Ilerletin));

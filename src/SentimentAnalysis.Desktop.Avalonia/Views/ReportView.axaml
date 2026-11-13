@@ -74,9 +74,26 @@
                         <StackPanel Spacing="6" DataContext="{Binding FollowUp}">
                             <TextBlock Text="Görüşmeden sonra ne yapmalı?" Classes="cardTitle" />
                             <TextBlock Text="{Binding ProfileText}" Classes="muted" />
+                            <Border Classes="pill neutral" Padding="14,6" HorizontalAlignment="Left">
+                                <TextBlock Text="{Binding DirectionText}" FontSize="14" FontWeight="SemiBold" />
+                            </Border>
                             <TextBlock Text="{Binding BestText}" FontSize="26" FontWeight="Bold" TextWrapping="Wrap"
                                        Foreground="{DynamicResource SystemAccentColor}" />
                             <TextBlock Text="{Binding ReasonText}" TextWrapping="Wrap" />
+                            <TextBlock Text="İlk 3 seçenek" Classes="sectionTitle" Margin="0,8,0,0" />
+                            <ItemsControl ItemsSource="{Binding TopOptions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid ColumnDefinitions="*,48,Auto" Margin="0,2">
+                                            <TextBlock Text="{Binding Label}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="{Binding PercentText}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2" Text="{Binding WhyText}" Classes="muted" Margin="12,0,0,0" VerticalAlignment="Center" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Classes="muted" TextWrapping="Wrap"
+                                       Text="Bu bir öneridir; kararı siz verirsiniz. Sistem yalnız ses tonu, yüz ifadesi ve konuşma payını ölçer." />
 
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="24" Margin="0,12,0,0">
                                 <StackPanel Spacing="8">
@@ -100,8 +117,8 @@
                                         <ItemsControl ItemsSource="{Binding Ranking}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <Grid ColumnDefinitions="180,*,48" Margin="0,2">
-                                                        <TextBlock Text="{Binding Label}" FontSize="12" VerticalAlignment="Center" />
+                                                    <Grid ColumnDefinitions="240,*,48" Margin="0,2">
+                                                        <TextBlock Text="{Binding Label}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
                                                         <ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Closeness}" Height="6" VerticalAlignment="Center" />
                                                         <TextBlock Grid.Column="2" Text="{Binding PercentText}" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" />
                                                     </Grid>

@@ -72,7 +72,7 @@ public static class DecisionText
         FollowUpAction.EkGorusme => "Ek teknik değerlendirme veya örnek ödev isteyin",
         FollowUpAction.GorusmeyiTekrarla => "Görüşmeyi daha rahat bir ortamda tekrarlayın",
         FollowUpAction.KararEpostasi => "Kararları ve sorumluları yazan özet e-postası gönderin",
-        FollowUpAction.BireBirGorusme => "Gerginlik yaşanan kişiyle birebir görüşün",
+        FollowUpAction.BireBirGorusme => "Sorun yaşanan kişiyle birebir görüşün",
         FollowUpAction.TakipToplantisi => "Takip toplantısı planlayın",
         FollowUpAction.ReferansKontrolu => "Referans kontrolüne geçmeyi düşünün",
         FollowUpAction.DemoOner => "Deneme sürümü ya da demo önerin",
@@ -84,7 +84,7 @@ public static class DecisionText
         FollowUpAction.AdaylarlaKarsilastir => "Diğer adaylarla karşılaştırıp kararı sonra verin",
         FollowUpAction.BilgiListesi => "Bilgilendirme listesine alın",
         FollowUpAction.KarariErtele => "Kararı erteleyin, eksik bilgiyi toplayın",
-        FollowUpAction.IliskiyiOnar => "Gergin geçti: önce kısa bir telefonla ilişkiyi onarın",
+        FollowUpAction.IliskiyiOnar => "Önce kısa bir telefonla ilişkiyi güçlendirin",
         _ => a.ToString(),
     };
 

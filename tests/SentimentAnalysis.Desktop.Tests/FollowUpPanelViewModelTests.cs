@@ -37,6 +37,64 @@ public class FollowUpPanelViewModelTests
         return vm;
     }
 
+    // --- Kategorili takip: yön + ilk 3 (2026-11-13) ---
+
+    [Fact]
+    public void Gergin_Satis_YonVeIlkUc()
+    {
+        var s = Session(Gergin);
+        var vm = Loaded(s);
+        var expected = Expected(s, FinalW);
+        Assert.Equal($"Önerilen yön: {DecisionText.Name(expected.Direction)}", vm.DirectionText);
+        Assert.Equal(3, vm.TopOptions.Count);
+        Assert.Equal($"1. {DecisionText.Name(expected.Options[0])}", vm.TopOptions[0].Label);
+        Assert.All(vm.TopOptions, r => Assert.StartsWith("%", r.PercentText));
+        Assert.All(vm.TopOptions, r => Assert.False(string.IsNullOrEmpty(r.WhyText)));
+        var top = expected.Ranking[0].TopCriteria.Select(DecisionText.Name);
+        Assert.Equal(string.Join(", ", top), vm.TopOptions[0].WhyText);
+    }
+
+    [Fact]
+    public void NedenSutunu_GorusmedeDusukKalanSorunuYazmaz()
+    {
+        // İlgisiz mülakat (gerilim 0,1): "daha rahat ortamda tekrarla" satırı "gerilim" dememeli (final inceleme bulgusu 2).
+        var ilgisiz = new[] { .1, .9, .1, .1, .6, .2 };
+        var vm = Loaded(Session(ilgisiz, MeetingProfile.Mulakat, DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Mulakat).ToArray()));
+        Assert.NotEmpty(vm.TopOptions);
+        Assert.All(vm.TopOptions, r => Assert.DoesNotContain("gerilim", r.WhyText));
+        Assert.Contains(vm.TopOptions, r => r.WhyText.Contains("ilgi kaybı"));
+    }
+
+    [Fact]
+    public void Sakin_YonIlerletin_PuansizListe()
+    {
+        var vm = Loaded(Session(Sakin));
+        Assert.Equal("Önerilen yön: İlerletin", vm.DirectionText);
+        Assert.Equal(new[] { "1. Teklif veya fiyat önerisi gönderin", "2. Deneme sürümü ya da demo önerin" },
+            vm.TopOptions.Select(r => r.Label));
+        Assert.All(vm.TopOptions, r => Assert.Equal(string.Empty, r.PercentText));
+        Assert.All(vm.TopOptions, r => Assert.Equal(string.Empty, r.WhyText));
+    }
+
+    [Fact]
+    public void Sakin_AgirlikDegisince_YonAyniKalir()
+    {
+        var vm = Loaded(Session(Sakin));
+        vm.Weights[(int)Criterion.Gerilim].Value = 0.95;
+        Assert.Equal("Önerilen yön: İlerletin", vm.DirectionText);
+        Assert.Equal(2, vm.TopOptions.Count);
+    }
+
+    [Fact]
+    public void Bos_Oturum_YonVeIlkUcTemizlenir()
+    {
+        var vm = Loaded(Session(Gergin));
+        vm.Load(new DecisionSession(MeetingProfile.Satis, DecisionKnowledgeBase.DefaultWeights(MeetingProfile.Satis),
+            FinalW, Array.Empty<DecisionWindow>()));
+        Assert.Equal(string.Empty, vm.DirectionText);
+        Assert.Empty(vm.TopOptions);
+    }
+
     [Fact]
     public void Load_GorusmeSonuAgirliklariylaBaslar()
     {

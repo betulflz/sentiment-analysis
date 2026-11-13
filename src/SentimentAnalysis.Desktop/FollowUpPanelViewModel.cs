@@ -24,6 +24,10 @@ public sealed partial class FollowUpPanelViewModel : ObservableObject
     [ObservableProperty] private string _profileText = string.Empty;
     [ObservableProperty] private string _bestText = string.Empty;
     [ObservableProperty] private string _reasonText = string.Empty;
+    /// <summary>"Önerilen yön: Netleştirin" — kararın kategorisi.</summary>
+    [ObservableProperty] private string _directionText = string.Empty;
+    /// <summary>Ekrandaki "İlk 3 seçenek"; kural yolunda puansız.</summary>
+    [ObservableProperty] private IReadOnlyList<TopOptionRowVm> _topOptions = Array.Empty<TopOptionRowVm>();
     [ObservableProperty] private IReadOnlyList<IndicatorBarVm> _meetingIndicators = Array.Empty<IndicatorBarVm>();
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasRanking))]
@@ -39,6 +43,10 @@ public sealed partial class FollowUpPanelViewModel : ObservableObject
     public bool SensitivityStable => SensitivityVerdict == Stable;
     public bool SensitivityMostlyStable => SensitivityVerdict == MostlyStable;
     public bool SensitivityFragile => SensitivityVerdict == Fragile;
+
+    /// <summary>"Neden" sütununa yazılacak sorunun görüşmedeki en düşük değeri — seçeneğin hedeflediği ama
+    /// görüşmede belirgin olmayan sorun yazılmaz (<see cref="DecisionText.Reason"/> ile aynı 0,2 eşiği).</summary>
+    private const double WhyMinValue = 0.2;
 
     private const string Stable = "Karar sağlam";
     private const string MostlyStable = "Karar büyük ölçüde sağlam";
@@ -71,7 +79,8 @@ public sealed partial class FollowUpPanelViewModel : ObservableObject
         {
             _meeting = null;
             Current = null;
-            BestText = ReasonText = ProfileText = SensitivitySummary = SensitivityVerdict = string.Empty;
+            BestText = ReasonText = ProfileText = SensitivitySummary = SensitivityVerdict = DirectionText = string.Empty;
+            TopOptions = Array.Empty<TopOptionRowVm>();
             MeetingIndicators = Array.Empty<IndicatorBarVm>();
             Ranking = Array.Empty<RankingRowVm>();
             Sensitivity = Array.Empty<SensitivityRowVm>();
@@ -117,6 +126,17 @@ public sealed partial class FollowUpPanelViewModel : ObservableObject
         Current = decision;
         BestText = DecisionText.Name(decision.Best);
         ReasonText = decision.Reason;
+        DirectionText = $"Önerilen yön: {DecisionText.Name(decision.Direction)}";
+        TopOptions = decision.Ranking.Count > 0
+            ? decision.Ranking.Take(decision.Options.Count)
+                .Select((r, i) => new TopOptionRowVm($"{i + 1}. {DecisionText.Name(r.Alternative)}",
+                    $"%{Math.Round(r.Closeness * 100, MidpointRounding.AwayFromZero)}",
+                    string.Join(", ", r.TopCriteria
+                        .Where(c => meeting.Values[(int)c] >= WhyMinValue).Select(DecisionText.Name))))
+                .ToArray()
+            : decision.Options
+                .Select((a, i) => new TopOptionRowVm($"{i + 1}. {DecisionText.Name(a)}", string.Empty, string.Empty))
+                .ToArray();
         Ranking = decision.Ranking
             .Select((r, i) => new RankingRowVm($"{i + 1}. {DecisionText.Name(r.Alternative)}", r.Closeness,
                 $"%{Math.Round(r.Closeness * 100, MidpointRounding.AwayFromZero)}"))
