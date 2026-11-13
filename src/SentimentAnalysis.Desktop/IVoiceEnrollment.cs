@@ -8,6 +8,10 @@ public interface IVoiceEnrollment
 {
     bool IsEnrolled { get; }
 
+    /// <summary>Tanıtma yapılabilir mi (ses imzası modeli var, özellik açık)? Değilse canlı görüşme tanıtmasız,
+    /// karışık sesle başlar (Başlat kilitlenmez).</summary>
+    bool IsAvailable => true;
+
     /// <summary>Kayıt süresi (sn) — arayüz geri sayım gösterir.</summary>
     double RecordSeconds { get; }
 

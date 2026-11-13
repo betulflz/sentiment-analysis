@@ -73,6 +73,9 @@
                            Foreground="{DynamicResource SystemBaseMediumColor}" />
                 <Button Content="Başlat" Command="{Binding StartCommand}" IsEnabled="{Binding !IsCapturing}" />
                 <Button Content="Durdur" Command="{Binding StopCommand}" IsEnabled="{Binding IsCapturing}" />
+                <TextBlock Text="{Binding StartHint}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="360"
+                           Foreground="{DynamicResource SystemAccentColor}"
+                           IsVisible="{Binding StartHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                 <Border Background="{DynamicResource SystemAccentColor}" CornerRadius="4" Padding="8,4"
                         IsVisible="{Binding IsCapturing}" VerticalAlignment="Center">
                     <TextBlock Text="{Binding CaptureStatusText}" Foreground="White" FontSize="12" />

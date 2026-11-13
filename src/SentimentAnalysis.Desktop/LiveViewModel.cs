@@ -157,6 +157,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         EnrollmentStatus = "Ses tanıtması silindi. " + IdleEnrollmentText;
         OnPropertyChanged(nameof(EnrollButtonText));
         OnPropertyChanged(nameof(CanClearEnrollment));
+        RefreshStartState();
     }
 
     /// <summary>Tanıtma düğmesi yalnız canlı modlarda (mikrofon/kamera): ses dosyasında yöneten kişi kayıtta olmayabilir.</summary>
@@ -188,7 +189,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         finally
         {
             IsEnrolling = false;
-            StartCommand.NotifyCanExecuteChanged();
+            RefreshStartState();
         }
     }
 
@@ -313,7 +314,20 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     {
         if (_captureMode is not null)
             _captureMode.Mode = UseCamera ? CaptureMode.Kamera : UseMicrophone ? CaptureMode.Mikrofon : CaptureMode.Dosya;
+        RefreshStartState();
+    }
+
+    /// <summary>Canlı modda tanıtma zorunlu (karşı tarafa odak, 2026-11-13); tanıtma imkânsızsa kilitlenmez.</summary>
+    private bool NeedsEnrollment => !IsFileMode && _enrollment is { IsAvailable: true, IsEnrolled: false };
+
+    public string StartHint => NeedsEnrollment
+        ? "Başlamadan önce 'Sesimi tanıt' ile sesinizi tanıtın — öneriler yalnız karşı tarafa göre hesaplanır."
+        : string.Empty;
+
+    private void RefreshStartState()
+    {
         StartCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(StartHint));
     }
 
     /// <summary>Koşuyu durdurmayan uyarı (ör. görüntü kanalı hatası): ses analizi sürerken gösterilir.</summary>
@@ -393,7 +407,8 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         _run = RunAsync(_cts.Token);
     }
 
-    private bool CanStart() => !IsCapturing && !IsPreparingModels && !IsEnrolling && (!IsFileMode || _selected?.Path != null);
+    private bool CanStart() => !IsCapturing && !IsPreparingModels && !IsEnrolling && !NeedsEnrollment
+        && (!IsFileMode || _selected?.Path != null);
 
     private async Task RunAsync(CancellationToken ct)
     {

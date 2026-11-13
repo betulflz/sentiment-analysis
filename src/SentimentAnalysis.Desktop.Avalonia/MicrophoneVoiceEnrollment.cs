@@ -1,3 +1,4 @@
+using SentimentAnalysis.Infrastructure.Diarization;
 using SentimentAnalysis.Application.Abstractions;
 using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Application.Diarization;
@@ -22,6 +23,17 @@ public sealed class MicrophoneVoiceEnrollment : IVoiceEnrollment
     }
 
     public bool IsEnrolled => _tracker.Enrolled;
+
+    /// <summary>Ses imzası modeli çözülebiliyorsa (dosya var, boyutu doğru) ve özellik açıksa tanıtma yapılabilir.</summary>
+    public bool IsAvailable
+    {
+        get
+        {
+            if (!_config.Role.Enabled) return false;
+            try { _ = new FileDiarizationModelProvider(_config).RoleEmbeddingModelPath; return true; }
+            catch (Exception) { return false; }
+        }
+    }
 
     public double RecordSeconds => _config.Role.EnrollRecordSeconds;
 

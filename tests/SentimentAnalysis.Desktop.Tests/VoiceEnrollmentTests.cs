@@ -23,6 +23,8 @@ public class VoiceEnrollmentTests
         public EnrollmentResult Result = new(true, false, 6, "Sesiniz tanındı.");
         public TaskCompletionSource<EnrollmentResult>? Gate;
         public bool IsEnrolled { get; private set; }
+        public bool Available = true;
+        public bool IsAvailable => Available;
         public double RecordSeconds => 8;
         public void Clear() => IsEnrolled = false;
         public async Task<EnrollmentResult> RecordAsync(CancellationToken ct)
@@ -34,6 +36,78 @@ public class VoiceEnrollmentTests
     }
 
     private static LiveViewModel Vm(FakeEnrollment? e) => new(new FakeRunner(), enrollment: e) { UseMicrophone = true };
+
+    private const string Hint = "Başlamadan önce 'Sesimi tanıt' ile sesinizi tanıtın — öneriler yalnız karşı tarafa göre hesaplanır.";
+
+    [Fact]
+    public void Mikrofon_TanitmaYok_BaslatKapali()
+    {
+        var vm = Vm(new FakeEnrollment());
+        Assert.False(vm.StartCommand.CanExecute(null));
+        Assert.Equal(Hint, vm.StartHint);
+    }
+
+    [Fact]
+    public async Task Mikrofon_TanitmaVar_BaslatAcik()
+    {
+        var vm = Vm(new FakeEnrollment());
+        await vm.EnrollCommand.ExecuteAsync(null);
+        Assert.True(vm.StartCommand.CanExecute(null));
+        Assert.Equal(string.Empty, vm.StartHint);
+    }
+
+    [Fact]
+    public void Kamera_TanitmaYok_BaslatKapali()
+    {
+        var vm = new LiveViewModel(new FakeRunner(), enrollment: new FakeEnrollment()) { UseCamera = true };
+        Assert.False(vm.StartCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Dosya_TanitmaGerekmez()
+    {
+        var vm = new LiveViewModel(new FakeRunner(), enrollment: new FakeEnrollment());
+        Assert.Equal(string.Empty, vm.StartHint);
+        vm.UseMicrophone = true;
+        Assert.Equal(Hint, vm.StartHint);
+        vm.UseMicrophone = false;
+        Assert.Equal(string.Empty, vm.StartHint);
+    }
+
+    [Fact]
+    public void TanitmaImkansiz_BaslatAcik()
+    {
+        var vm = Vm(new FakeEnrollment { Available = false });
+        Assert.True(vm.StartCommand.CanExecute(null));
+        Assert.Equal(string.Empty, vm.StartHint);
+    }
+
+    [Fact]
+    public async Task TanitmaSilinince_BaslatKapanir()
+    {
+        var vm = Vm(new FakeEnrollment());
+        await vm.EnrollCommand.ExecuteAsync(null);
+        vm.ClearEnrollmentCommand.Execute(null);
+        Assert.False(vm.StartCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task SupheliTanitma_BaslatAcik()
+    {
+        var vm = Vm(new FakeEnrollment { Result = new(true, true, 6, "Kayıtta birden fazla ses var gibi.") });
+        await vm.EnrollCommand.ExecuteAsync(null);
+        Assert.True(vm.StartCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void ModDegisince_CanExecuteChanged()
+    {
+        var vm = new LiveViewModel(new FakeRunner(), enrollment: new FakeEnrollment());
+        int raised = 0;
+        vm.StartCommand.CanExecuteChanged += (_, _) => raised++;
+        vm.UseMicrophone = true;
+        Assert.True(raised > 0);
+    }
 
     [Fact]
     public void TanitmaServisiYoksa_DugmeGorunmez()
