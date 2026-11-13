@@ -121,6 +121,8 @@ public static class CompositionRoot
         // Karşı tarafa odak (2026-11-13): dosya modunda analizden önce konuşmacı ayrımı. Ses bellekte çözülür;
         // ayrım modeli ortak kuyrukta kendi iş oturumunda yüklenip kapatılır (kökte model yok).
         services.AddSingleton<IAudioFileDecoder, FfmpegAudioFileDecoder>();
+        services.AddSingleton<ISpeakerSamplePlayer>(sp => new AfplaySamplePlayer(
+            sp.GetRequiredService<IExternalProcessRunner>(), sp.GetRequiredService<IRuntimePlatform>()));
         services.AddSingleton<ISpeakerPreparation>(sp => new ResourceManagedSpeakerPreparation(
             sp.GetRequiredService<IAudioFileDecoder>(), sp.GetRequiredService<ModelWorkQueue>(),
             () => ModelSessions.CreatePreparation(sp), sp.GetRequiredService<AppConfig>()));
