@@ -123,4 +123,80 @@ public class DecisionKnowledgeBaseTests
         Assert.Equal(1, (int)LiveAction.KonuyuDegistir);
         Assert.Equal(5, (int)LiveAction.KapanisaGec);
     }
+
+    // --- Takip kararı: kategorili seçenekler (2026-11-13) ---
+
+    [Fact]
+    public void FollowUpAction_EskiDegerlerinSayisiSabit()
+    {
+        // SQLite FollowUp sütunu int saklar: eski raporların anlamı bu sayılara bağlı.
+        Assert.Equal(0, (int)FollowUpAction.TeklifGonder);
+        Assert.Equal(1, (int)FollowUpAction.IkinciGorusme);
+        Assert.Equal(2, (int)FollowUpAction.ItirazBilgisi);
+        Assert.Equal(3, (int)FollowUpAction.Beklet);
+        Assert.Equal(4, (int)FollowUpAction.DegerlendirmeyeGec);
+        Assert.Equal(5, (int)FollowUpAction.EkGorusme);
+        Assert.Equal(6, (int)FollowUpAction.GorusmeyiTekrarla);
+        Assert.Equal(7, (int)FollowUpAction.KararEpostasi);
+        Assert.Equal(8, (int)FollowUpAction.BireBirGorusme);
+        Assert.Equal(9, (int)FollowUpAction.TakipToplantisi);
+    }
+
+    [Fact]
+    public void HerTakipSeceneginin_TurkceAdiVeKategorisiVar()
+    {
+        foreach (var a in Enum.GetValues<FollowUpAction>())
+        {
+            Assert.NotEqual(a.ToString(), DecisionText.Name(a));
+            _ = DecisionKnowledgeBase.CategoryOf(a);
+        }
+    }
+
+    [Fact]
+    public void HerTakipSeceneginin_EtkiSatiriVar()
+    {
+        foreach (var a in Enum.GetValues<FollowUpAction>())
+            Assert.True(DecisionKnowledgeBase.FollowUpImpact.ContainsKey(a), a.ToString());
+    }
+
+    [Fact]
+    public void KategoriAdlari()
+    {
+        Assert.Equal("İlerletin", DecisionText.Name(FollowUpCategory.Ilerletin));
+        Assert.Equal("Netleştirin", DecisionText.Name(FollowUpCategory.Netlestirin));
+        Assert.Equal("Bekleyin", DecisionText.Name(FollowUpCategory.Bekleyin));
+        Assert.Equal("İlişkiyi gözetin", DecisionText.Name(FollowUpCategory.IliskiyiGozetin));
+    }
+
+    [Theory]
+    [InlineData(MeetingProfile.Satis)]
+    [InlineData(MeetingProfile.Mulakat)]
+    [InlineData(MeetingProfile.Toplanti)]
+    public void AdvanceOptions_IlerletinVeIlkiPozitif(MeetingProfile p)
+    {
+        var d = DecisionKnowledgeBase.Get(p);
+        Assert.Equal(d.PositiveFollowUp, d.AdvanceOptions[0]);
+        Assert.All(d.AdvanceOptions, a => Assert.Equal(FollowUpCategory.Ilerletin, DecisionKnowledgeBase.CategoryOf(a)));
+        Assert.All(d.FollowUps, a => Assert.NotEqual(FollowUpCategory.Ilerletin, DecisionKnowledgeBase.CategoryOf(a)));
+        Assert.Empty(d.AdvanceOptions.Intersect(d.FollowUps));
+    }
+
+    [Fact]
+    public void ProfilListeleri_SpecTablosu()
+    {
+        var m = DecisionKnowledgeBase.Get(MeetingProfile.Mulakat);
+        Assert.Equal(new[] { FollowUpAction.DegerlendirmeyeGec, FollowUpAction.ReferansKontrolu }, m.AdvanceOptions);
+        Assert.Equal(new[] { FollowUpAction.EkGorusme, FollowUpAction.IkinciGorusAl, FollowUpAction.NetlestirmeGorusmesi,
+            FollowUpAction.AdaylarlaKarsilastir, FollowUpAction.GorusmeyiTekrarla }, m.FollowUps);
+
+        var s = DecisionKnowledgeBase.Get(MeetingProfile.Satis);
+        Assert.Equal(new[] { FollowUpAction.TeklifGonder, FollowUpAction.DemoOner }, s.AdvanceOptions);
+        Assert.Equal(new[] { FollowUpAction.ItirazBilgisi, FollowUpAction.IkinciGorusme, FollowUpAction.TeknikDemo,
+            FollowUpAction.Beklet, FollowUpAction.BilgiListesi, FollowUpAction.IliskiyiOnar }, s.FollowUps);
+
+        var t = DecisionKnowledgeBase.Get(MeetingProfile.Toplanti);
+        Assert.Equal(new[] { FollowUpAction.KararEpostasi }, t.AdvanceOptions);
+        Assert.Equal(new[] { FollowUpAction.TakipToplantisi, FollowUpAction.CalismaGrubu, FollowUpAction.YaziliGorus,
+            FollowUpAction.KarariErtele, FollowUpAction.BireBirGorusme }, t.FollowUps);
+    }
 }

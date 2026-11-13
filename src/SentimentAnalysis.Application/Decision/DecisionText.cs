@@ -64,17 +64,37 @@ public static class DecisionText
 
     public static string Name(FollowUpAction a) => a switch
     {
-        FollowUpAction.TeklifGonder => "Teklif gönder",
-        FollowUpAction.IkinciGorusme => "İkinci görüşme ayarla",
-        FollowUpAction.ItirazBilgisi => "İtirazları ele alan bilgi gönder",
-        FollowUpAction.Beklet => "Beklet, acele etme",
-        FollowUpAction.DegerlendirmeyeGec => "Değerlendirmeye geç",
-        FollowUpAction.EkGorusme => "Ek / teknik görüşme planla",
-        FollowUpAction.GorusmeyiTekrarla => "Görüşmeyi daha rahat bir ortamda tekrarla",
-        FollowUpAction.KararEpostasi => "Karar e-postası gönder",
-        FollowUpAction.BireBirGorusme => "Birebir görüşme ayarla",
-        FollowUpAction.TakipToplantisi => "Takip toplantısı planla",
+        FollowUpAction.TeklifGonder => "Teklif veya fiyat önerisi gönderin",
+        FollowUpAction.IkinciGorusme => "Karar vericiyle ikinci görüşme ayarlayın",
+        FollowUpAction.ItirazBilgisi => "İtirazları yanıtlayan bilgi ve örnekler gönderin",
+        FollowUpAction.Beklet => "Acele etmeyin, bir hafta sonra kısa bir hatırlatma yapın",
+        FollowUpAction.DegerlendirmeyeGec => "Bir sonraki aşamaya davet etmeyi değerlendirin",
+        FollowUpAction.EkGorusme => "Ek teknik değerlendirme veya örnek ödev isteyin",
+        FollowUpAction.GorusmeyiTekrarla => "Görüşmeyi daha rahat bir ortamda tekrarlayın",
+        FollowUpAction.KararEpostasi => "Kararları ve sorumluları yazan özet e-postası gönderin",
+        FollowUpAction.BireBirGorusme => "Gerginlik yaşanan kişiyle birebir görüşün",
+        FollowUpAction.TakipToplantisi => "Takip toplantısı planlayın",
+        FollowUpAction.ReferansKontrolu => "Referans kontrolüne geçmeyi düşünün",
+        FollowUpAction.DemoOner => "Deneme sürümü ya da demo önerin",
+        FollowUpAction.IkinciGorusAl => "İK'dan ya da başka bir uzmandan ikinci görüş alın",
+        FollowUpAction.NetlestirmeGorusmesi => "Netleşmeyen konular için kısa bir ikinci görüşme yapın",
+        FollowUpAction.TeknikDemo => "Teknik ekiple ayrıntılı demo planlayın",
+        FollowUpAction.CalismaGrubu => "Açık konular için küçük bir çalışma grubu kurun",
+        FollowUpAction.YaziliGorus => "Az konuşanlardan yazılı görüş isteyin",
+        FollowUpAction.AdaylarlaKarsilastir => "Diğer adaylarla karşılaştırıp kararı sonra verin",
+        FollowUpAction.BilgiListesi => "Bilgilendirme listesine alın",
+        FollowUpAction.KarariErtele => "Kararı erteleyin, eksik bilgiyi toplayın",
+        FollowUpAction.IliskiyiOnar => "Gergin geçti: önce kısa bir telefonla ilişkiyi onarın",
         _ => a.ToString(),
+    };
+
+    public static string Name(FollowUpCategory c) => c switch
+    {
+        FollowUpCategory.Ilerletin => "İlerletin",
+        FollowUpCategory.Netlestirin => "Netleştirin",
+        FollowUpCategory.Bekleyin => "Bekleyin",
+        FollowUpCategory.IliskiyiGozetin => "İlişkiyi gözetin",
+        _ => c.ToString(),
     };
 
     public static string Name(MeetingProfile p) => p switch

@@ -75,7 +75,7 @@ public class FollowUpPanelViewModelTests
     public void Sakin_Gorusme_OlumluTakip_SiralamaBos()
     {
         var vm = Loaded(Session(Sakin));
-        Assert.Equal("Teklif gönder", vm.BestText);
+        Assert.Equal("Teklif veya fiyat önerisi gönderin", vm.BestText);
         Assert.Empty(vm.Ranking);
         Assert.All(vm.Sensitivity.SelectMany(r => r.Cells), c => Assert.Equal("aynı", c.Text));
         // Karar kuraldan geldi (TOPSIS çalışmadı): "ağırlıklara duyarlı değil" demek yanıltır.

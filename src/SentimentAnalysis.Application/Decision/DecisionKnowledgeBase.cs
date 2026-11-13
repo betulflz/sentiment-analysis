@@ -8,7 +8,8 @@ public sealed record ProfileDefinition(
     double[,] Pairwise,
     IReadOnlyList<LiveAction> Interventions,
     IReadOnlyList<FollowUpAction> FollowUps,
-    FollowUpAction PositiveFollowUp);
+    FollowUpAction PositiveFollowUp,
+    IReadOnlyList<FollowUpAction> AdvanceOptions);
 
 /// <summary>KDS bilgi tabanı: profil AHP karşılaştırmaları ve eylem etki tabloları.
 /// <para><b>Uzman bilgisi, KALİBRE EDİLMEMİŞ.</b> Değerler plan 11c'de makul varsayımlarla
@@ -77,6 +78,22 @@ public static class DecisionKnowledgeBase
         [FollowUpAction.GorusmeyiTekrarla] = new[] { 0.9, 0.5, 0.5, 0.3, 0.6, 0.5 },
         [FollowUpAction.BireBirGorusme]    = new[] { 0.9, 0.3, 0.8, 0.7, 0.2, 0.6 },
         [FollowUpAction.TakipToplantisi]   = new[] { 0.3, 0.9, 0.4, 0.5, 0.8, 0.6 },
+        // 2026-11-13 kategorili takip — geliştirici tahmini, KALİBRE EDİLMEMİŞ. İlerletin seçenekleri
+        // TOPSIS'e girmez (yalnız sakin görüşmede listelenir); satırları tablo bütünlüğü için var.
+        [FollowUpAction.TeklifGonder]         = new[] { 0.2, 0.5, 0.3, 0.3, 0.5, 0.3 },
+        [FollowUpAction.DegerlendirmeyeGec]   = new[] { 0.2, 0.4, 0.3, 0.3, 0.4, 0.3 },
+        [FollowUpAction.KararEpostasi]        = new[] { 0.2, 0.5, 0.2, 0.4, 0.4, 0.4 },
+        [FollowUpAction.ReferansKontrolu]     = new[] { 0.2, 0.3, 0.3, 0.5, 0.3, 0.3 },
+        [FollowUpAction.DemoOner]             = new[] { 0.2, 0.7, 0.3, 0.4, 0.6, 0.3 },
+        [FollowUpAction.IkinciGorusAl]        = new[] { 0.3, 0.3, 0.8, 0.6, 0.3, 0.5 },
+        [FollowUpAction.NetlestirmeGorusmesi] = new[] { 0.4, 0.5, 0.4, 0.7, 0.4, 0.4 },
+        [FollowUpAction.TeknikDemo]           = new[] { 0.2, 0.6, 0.3, 0.7, 0.6, 0.3 },
+        [FollowUpAction.CalismaGrubu]         = new[] { 0.2, 0.6, 0.3, 0.6, 0.5, 0.4 },
+        [FollowUpAction.YaziliGorus]          = new[] { 0.1, 0.6, 0.2, 0.4, 0.9, 0.3 },
+        [FollowUpAction.AdaylarlaKarsilastir] = new[] { 0.4, 0.3, 0.4, 0.4, 0.3, 0.8 },
+        [FollowUpAction.BilgiListesi]         = new[] { 0.2, 0.6, 0.2, 0.2, 0.6, 0.4 },
+        [FollowUpAction.KarariErtele]         = new[] { 0.4, 0.3, 0.4, 0.6, 0.3, 0.8 },
+        [FollowUpAction.IliskiyiOnar]         = new[] { 0.9, 0.3, 0.8, 0.4, 0.2, 0.7 },
     };
 
     // AHP üst üçgeni, satır sırasıyla (1,2)(1,3)…(1,6)(2,3)…(5,6); alt üçgen = 1/a.
@@ -87,24 +104,46 @@ public static class DecisionKnowledgeBase
             [MeetingProfile.Satis] = new(MeetingProfile.Satis,
                 Reciprocal(1, 1 / 2.0, 3, 3, 1, 1 / 2.0, 2, 3, 1, 3, 4, 2, 2, 1 / 2.0, 1 / 3.0),
                 For(LiveAction.FaydayaDon),
-                new[] { FollowUpAction.IkinciGorusme, FollowUpAction.ItirazBilgisi, FollowUpAction.Beklet },
-                FollowUpAction.TeklifGonder),
+                new[] { FollowUpAction.ItirazBilgisi, FollowUpAction.IkinciGorusme, FollowUpAction.TeknikDemo,
+                        FollowUpAction.Beklet, FollowUpAction.BilgiListesi, FollowUpAction.IliskiyiOnar },
+                FollowUpAction.TeklifGonder,
+                new[] { FollowUpAction.TeklifGonder, FollowUpAction.DemoOner }),
             [MeetingProfile.Mulakat] = new(MeetingProfile.Mulakat,
                 Reciprocal(3, 2, 2, 5, 3, 1 / 2.0, 1 / 2.0, 2, 1, 1, 3, 2, 3, 2, 1 / 2.0),
                 For(LiveAction.KolaySoruSor),
-                new[] { FollowUpAction.EkGorusme, FollowUpAction.GorusmeyiTekrarla },
-                FollowUpAction.DegerlendirmeyeGec),
+                new[] { FollowUpAction.EkGorusme, FollowUpAction.IkinciGorusAl, FollowUpAction.NetlestirmeGorusmesi,
+                        FollowUpAction.AdaylarlaKarsilastir, FollowUpAction.GorusmeyiTekrarla },
+                FollowUpAction.DegerlendirmeyeGec,
+                new[] { FollowUpAction.DegerlendirmeyeGec, FollowUpAction.ReferansKontrolu }),
             [MeetingProfile.Toplanti] = new(MeetingProfile.Toplanti,
                 Reciprocal(1 / 3.0, 1, 2, 1 / 2.0, 2, 3, 4, 2, 3, 2, 1 / 2.0, 1, 1 / 3.0, 1 / 2.0, 2),
                 For(LiveAction.SozVer),
-                new[] { FollowUpAction.BireBirGorusme, FollowUpAction.TakipToplantisi },
-                FollowUpAction.KararEpostasi),
+                new[] { FollowUpAction.TakipToplantisi, FollowUpAction.CalismaGrubu, FollowUpAction.YaziliGorus,
+                        FollowUpAction.KarariErtele, FollowUpAction.BireBirGorusme },
+                FollowUpAction.KararEpostasi,
+                new[] { FollowUpAction.KararEpostasi }),
         };
 
     private static readonly IReadOnlyDictionary<MeetingProfile, IReadOnlyList<double>> Weights =
         Profiles.ToDictionary(p => p.Key, p => Ahp.Compute(p.Value.Pairwise).Weights);
 
     public static ProfileDefinition Get(MeetingProfile p) => Profiles[p];
+
+    /// <summary>Takip seçeneğinin ekrandaki yön kategorisi (spec 2026-11-13).</summary>
+    public static FollowUpCategory CategoryOf(FollowUpAction a) => a switch
+    {
+        FollowUpAction.DegerlendirmeyeGec or FollowUpAction.ReferansKontrolu or FollowUpAction.TeklifGonder
+            or FollowUpAction.DemoOner or FollowUpAction.KararEpostasi => FollowUpCategory.Ilerletin,
+        FollowUpAction.EkGorusme or FollowUpAction.IkinciGorusAl or FollowUpAction.NetlestirmeGorusmesi
+            or FollowUpAction.ItirazBilgisi or FollowUpAction.IkinciGorusme or FollowUpAction.TeknikDemo
+            or FollowUpAction.TakipToplantisi or FollowUpAction.CalismaGrubu or FollowUpAction.YaziliGorus
+            => FollowUpCategory.Netlestirin,
+        FollowUpAction.AdaylarlaKarsilastir or FollowUpAction.Beklet or FollowUpAction.BilgiListesi
+            or FollowUpAction.KarariErtele => FollowUpCategory.Bekleyin,
+        FollowUpAction.GorusmeyiTekrarla or FollowUpAction.IliskiyiOnar or FollowUpAction.BireBirGorusme
+            => FollowUpCategory.IliskiyiGozetin,
+        _ => throw new ArgumentOutOfRangeException(nameof(a), a, "Kategorisi tanımlanmamış takip seçeneği."),
+    };
 
     public static IReadOnlyList<double> DefaultWeights(MeetingProfile p) => Weights[p];
 

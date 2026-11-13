@@ -48,8 +48,14 @@ public enum FollowUpAction
 {
     TeklifGonder, IkinciGorusme, ItirazBilgisi, Beklet,
     DegerlendirmeyeGec, EkGorusme, GorusmeyiTekrarla,
-    KararEpostasi, BireBirGorusme, TakipToplantisi
+    KararEpostasi, BireBirGorusme, TakipToplantisi,
+    // 2026-11-13 kategorili takip: SQLite int saklar — yalnız SONA ekle, sıra değişmez.
+    ReferansKontrolu, DemoOner, IkinciGorusAl, NetlestirmeGorusmesi, TeknikDemo, CalismaGrubu,
+    YaziliGorus, AdaylarlaKarsilastir, BilgiListesi, KarariErtele, IliskiyiOnar
 }
+
+/// <summary>Takip seçeneğinin ekrandaki yön kategorisi.</summary>
+public enum FollowUpCategory { Ilerletin, Netlestirin, Bekleyin, IliskiyiGozetin }
 
 /// <summary>Görüşme profili: kriter ağırlıklarını ve seçenek listelerini belirler.</summary>
 public enum MeetingProfile { Satis, Mulakat, Toplanti }
