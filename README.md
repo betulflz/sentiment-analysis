@@ -149,6 +149,11 @@ Windows:  %APPDATA%\SentimentAnalysis\models\
 
 > **Not:** Metin modelinin ONNX export'u için `optimum` 2.x kullanıyorsanız ONNX exporter
 > ayrı bir pakettedir — `pip install optimum optimum-onnx` gerekir.
+>
+> **Bellek (8 GB Mac):** export edilen fp32 dosyayı `tools/models/quantize_text_model.py` ile
+> sıkıştırıp `text-emotion-xlmr.onnx` adıyla kullanın (yalnız kelime tablosu int8; 1,11 → 0,54 GB,
+> tam hat tepe bellek 4,75 → 3,42 GB, çıktı fp32 ile pratikte aynı — bkz.
+> `docs/research/2026-11-13-m1-bellek-olcumu.md`).
 
 Model konumları `AppConfig` üzerinden değiştirilebilir (`SttConfig.ModelDirectory`,
 `EmotionConfig.ModelDirectory`, `VadConfig.ModelDirectory`).

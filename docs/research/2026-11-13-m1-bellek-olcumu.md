@@ -43,3 +43,21 @@ Toplamlar tam hat ölçümüyle tutarlı (≈4,3 GB + taban ≈ 4,7 GB).
 - 6 elle yazılmış Türkçe cümlede gerçek model: açık cümlelerde iki yöntem aynı etiketi veriyor; karışık cümlede ("biraz endişeliyim…") softmax korkuyu 0,16'ya bastırıyor, sigmoid 0,55 ile korkuyu da eşik üstü buluyor (valans −0,11 → −0,28). Bu bir doğruluk ölçümü değil, davranış farkının örneğidir. Ayrıca "Fiyat çok yüksek ama ürün güzel, emin değilim" iki yöntemde de %99 nötr çıktı.
 
 **Tekrar üretim:** komutlar `quality-local/memory/*.log` başında değil; şu biçim: `/usr/bin/time -l dotnet tools/SentimentAnalysis.Benchmark/bin/Release/net9.0/SentimentAnalysis.Benchmark.dll analyze --input <wav> --output <json> --models "<models>" --threads 2`.
+
+**Ek deney: metin modelini sıkıştırma (int8 dinamik kuantizasyon)**
+
+Araç: `onnxruntime` 1.32 `quantize_dynamic` (Python, geçici sanal ortam; uygulama bağımlılığı değil). Karşılaştırma: aynı tokenizer, 60 elle yazılmış Türkçe cümle (mülakat/satış/toplantı dili, farklı duygular), referans = mevcut fp32 model. **Bu doğruluk değil, fp32 ile aynılık ölçümüdür.**
+
+| Sürüm | Dosya | Tek başına tepe ayak izi | Baskın duygu fp32 ile aynı | Etiket kümesi (sigmoid ≥0,5) aynı | Valans farkı en büyük |
+|---|---:|---:|---:|---:|---:|
+| fp32 (mevcut) | 1,11 GB | 2,67 GB | – | – | – |
+| MatMul+Gemm int8 | 0,86 GB | ölçülmedi | ölçülmedi | ölçülmedi | ölçülmedi |
+| MatMul+Gemm+Gather int8 | 0,28 GB | 0,70 GB | 50/60 | 44/60 | 0,63 |
+| aynısı, kanal başına ölçek | 0,28 GB | 0,70 GB | 53/60 | 47/60 | 0,58 |
+| **yalnız Gather (kelime tablosu) int8** | **0,54 GB** | **0,93 GB** | **57/60** | **60/60** | **0,02** |
+
+Tam ölçekli sıkıştırma sonuçları belirgin biçimde nötre kaydırıyor ("Harika, sonunda anlaştık, çok sevindim": sevinç → nötr); kabul edilmedi. Yalnız kelime tablosunu sıkıştırmak çıktıyı pratikte değiştirmiyor (farklı baskın duygu çıkan 3 cümlede iki duygu zaten başa baş; valans farkı ≤0,02).
+
+**Tam hatta doğrulama (231 sn, aynı ses):** yalnız-Gather modeliyle tepe ayak izi **4,75 → 3,42 GB** (−1,33 GB; tek başına ölçümden beklenen −1,75 GB'tan az), RSS 2,27 → 2,33 GB, süre 101 → 95 sn, swap 0. Transkript, takip kararı ve karar göstergeleri aynı; metin valansı farkı ≤0,0006, metin güveni farkı ≤0,006.
+
+Sınırlar: tek kayıt + 60 cümle; Türkçe doğruluk ölçülmedi (fp32'nin kendisi de ölçülmedi). Arayüzün kendisinde (uygulama + konuşmacı ayrımı) ölçüm yapılmadı.
