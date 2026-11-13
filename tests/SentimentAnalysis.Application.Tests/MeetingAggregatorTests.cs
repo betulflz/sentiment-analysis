@@ -185,4 +185,15 @@ public class MeetingAggregatorTests
         Assert.Equal(0.5, s.TimeShareByEmotion[Emotion.Uzgun], 3);
         Assert.Equal(0.5, s.TimeShareByEmotion[Emotion.Mutlu], 3);
     }
+
+    [Fact]
+    public void RolsuzVeMetinsizParca_OzeteGirmez_NotKosuluylaAyni()
+    {
+        // Rapor notu yalnız metinli parçaları sayar; not'un söylemediği karışık ses özete girmesin.
+        var s = Agg.Aggregate(Session(
+            WithRoles(Chunk(0, 10, 0.8, 0.5, Emotion.Mutlu), Fused(-0.6, 0.3, Emotion.Uzgun)),
+            Chunk(10, 20, 0.8, 0.5, Emotion.Mutlu) with { Transcript = "  " }));
+        Assert.Equal(1.0, s.TimeShareByEmotion[Emotion.Uzgun], 3);
+        Assert.False(s.TimeShareByEmotion.ContainsKey(Emotion.Mutlu));
+    }
 }
