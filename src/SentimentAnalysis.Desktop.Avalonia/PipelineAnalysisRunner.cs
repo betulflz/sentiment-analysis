@@ -18,7 +18,7 @@ namespace SentimentAnalysis.Desktop.Avalonia;
 /// "Başlat" gerçek bir kaynak seçilene dek sahte veri UYDURMAZ; bunun yerine anlaşılır bir
 /// <see cref="InvalidOperationException"/> fırlatır.
 /// </summary>
-public sealed class PipelineAnalysisRunner : IAnalysisRunner
+public sealed class PipelineAnalysisRunner : IAnalysisRunner, IDisposable
 {
     private readonly EmotionPipeline _pipeline;
     private readonly Func<IAudioCaptureSource?> _sourceFactory;
@@ -92,33 +92,33 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
         _activeVision = null;
         using var visionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var visionTask = Task.CompletedTask;
-        var video = _videoFactory?.Invoke();
-        if (video is not null)
-        {
-            if (_captureMode?.Mode == CaptureMode.Kamera) video = new ClockedVideoSource(video);
-            try
-            {
-                var vision = _vision ??= _visionFactory?.Invoke()
-                    ?? throw new VideoSourceException("Görüntü analizi yapılandırılmamış.");
-                _activeVision = vision;
-                visionTask = Task.Run(async () =>
-                {
-                    try { await vision.RunAsync(video, visionCts.Token).ConfigureAwait(false); }
-                    catch (OperationCanceledException) { }
-                    catch (Exception ex) { Warn($"Görüntü analizi durdu: {ex.Message}"); }
-                }, CancellationToken.None);
-            }
-            catch (VideoSourceException ex)
-            {
-                Warn($"Görüntü analizi başlatılamadı: {ex.Message}");
-            }
-            // Videonun sesi yoksa (ya da ses okunamazsa) ses hattı hemen biter; görüntü yine de
-            // video boyunca sürsün diye ses kaynağı, görüntü bitene kadar "sessizce" bekletilir.
-            source = new VisionTolerantAudioSource(source, visionTask, Warn);
-        }
-
         try
         {
+            var video = _videoFactory?.Invoke();
+            if (video is not null)
+            {
+                if (_captureMode?.Mode == CaptureMode.Kamera) video = new ClockedVideoSource(video);
+                try
+                {
+                    var vision = _vision ??= _visionFactory?.Invoke()
+                        ?? throw new VideoSourceException("Görüntü analizi yapılandırılmamış.");
+                    _activeVision = vision;
+                    visionTask = Task.Run(async () =>
+                    {
+                        try { await vision.RunAsync(video, visionCts.Token).ConfigureAwait(false); }
+                        catch (OperationCanceledException) { }
+                        catch (Exception ex) { Warn($"Görüntü analizi durdu: {ex.Message}"); }
+                    }, CancellationToken.None);
+                }
+                catch (VideoSourceException ex)
+                {
+                    Warn($"Görüntü analizi başlatılamadı: {ex.Message}");
+                }
+                // Videonun sesi yoksa (ya da ses okunamazsa) ses hattı hemen biter; görüntü yine de
+                // video boyunca sürsün diye ses kaynağı, görüntü bitene kadar "sessizce" bekletilir.
+                source = new VisionTolerantAudioSource(source, visionTask, Warn);
+            }
+
             // Canlı mikrofonda kısa parça = hızlı geri bildirim; dosyada uzun parça = daha iyi bağlam.
             // Video/kamera da canlı akış gibi davranır (gerçek hızda).
             var options = _captureMode?.Mode is CaptureMode.Mikrofon or CaptureMode.Kamera || video is not null
@@ -166,8 +166,9 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
 
             var summary = await _pipeline.RunAsync(pipelineSource, options, sessionId, startedAt, language, uiThreadProgress, ct,
                     enrich: WithFace,
-                    // 12: rol ayrımı yalnız canlı modlarda — ses dosyasında tanıtılan kişi kayıtta olmayabilir.
-                    roles: _captureMode?.Mode is CaptureMode.Mikrofon or CaptureMode.Kamera ? _roles : null)
+                    roles: _captureMode?.Mode is CaptureMode.Mikrofon or CaptureMode.Kamera ? _roles : null, // 12: rol ayrımı yalnız canlı modlarda
+                    mode: _captureMode?.Mode == CaptureMode.Dosya && video is null
+                        ? PipelineExecutionMode.Offline : PipelineExecutionMode.Realtime)
                 .ConfigureAwait(false);
 
             // Ses, özet ÜRETİLDİKTEN SONRA saklanır: rapor bu yüzden gecikmez (spec 10 S2).
@@ -198,6 +199,22 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner
     }
 
     public Task WarmUpAsync(CancellationToken ct) => _pipeline.WarmUpAsync(ct);
+
+    public AnalysisRunSnapshot CaptureSnapshot()
+    {
+        // Capture only the pure timeline, never the runner or native model graph.
+        var timeline = _activeVision?.Timeline;
+        return new AnalysisRunSnapshot(LastSessionId, SkippedChunkCount,
+            timeline is null ? null : chunk => timeline.Summarize(chunk.TimeStart, chunk.TimeEnd));
+    }
+
+    public void Dispose()
+    {
+        _activeVision = null;
+        var vision = _vision;
+        _vision = null;
+        vision?.Dispose();
+    }
 
     private static DetectedLanguage ParseLanguage(string? code) => code switch
     {

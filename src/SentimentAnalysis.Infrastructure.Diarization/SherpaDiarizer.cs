@@ -115,6 +115,12 @@ public sealed class SherpaDiarizer : IDiarizer, IDisposable
 
     public void Dispose()
     {
-        lock (_sync) { _disposed = true; _sd = null; }
+        lock (_sync)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            try { _sd?.Dispose(); }
+            finally { _sd = null; }
+        }
     }
 }

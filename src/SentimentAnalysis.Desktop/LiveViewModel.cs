@@ -462,7 +462,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         _cts?.Cancel();
     }
 
-    private bool CanStop() => IsCapturing && !IsFinishing && !IsPreparingModels;
+    private bool CanStop() => IsCapturing && !IsFinishing;
 
     /// <summary>Test yardımcısı: aktif koşu görevini bekler (yoksa hemen döner).</summary>
     public Task WaitForIdleAsync() => _run ?? Task.CompletedTask;

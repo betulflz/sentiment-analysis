@@ -3,6 +3,10 @@
 Ses kayıtlarından ve canlı konuşmadan duygu analizi yapan, **tamamen yerel** çalışan
 cross-platform .NET masaüstü uygulaması.
 
+M1 Air üzerinde doğruluk, süre ve bellek karşılaştırması için
+[kalite pilotu aracını](tools/quality/README.md) kullanabilirsiniz. Bu araç mevcut Whisper ve
+sherpa bileşenlerini ayrı ölçer; gerçek model ve etiketli kayıt gerektirir.
+
 Hiçbir ses kaydı veya metin cihazı terk etmez. Bulut API'si yoktur, telemetri yoktur —
 tüm modeller makinenizde çalışır.
 
@@ -177,6 +181,12 @@ Bu testler süs değildir: iki gerçek hatayı yakaladılar — metin modelinin 
 yanlış olması ve Silero VAD'ın 64 örnekli context penceresini beslemediğimiz için gerçek
 konuşmada bile sıfıra yakın olasılık üretmesi. Model uçları gerçek veriyle doğrulanır,
 varsayımla değil.
+
+## Yerel model kaynakları
+
+Masaüstü uygulamasında modeller her analiz için oluşturulur; analiz tamamlanınca, hata verince veya durdurma işlemi bitince kapatılır. Sonraki analiz modelleri yeniden yükler. Canlı analiz/hazırlık ve görüşme sonrası konuşmacı analizi ortak tek işlik kuyruğu kullanır; birinin model temizliği bitmeden diğeri model açmaz. Görüntü modelleri de aynı analiz ömrüne bağlıdır.
+
+Hazırlık UI iş parçacığının dışında çalışır ve hazırlık sırasında **Durdur** kullanılabilir. Devam eden bazı native yükleme/çıkarım çağrıları hemen kesilemediğinden güvenli kapanış bu çağrının dönmesini bekleyebilir. Uygulamadan çıkışta çalışan işler iptal edilir, bitmeleri beklenir ve servisler kapatılır. Native oturumların kapatılması, macOS bellek/swap göstergelerinin anında düşeceğini garanti etmez.
 
 ## Gizlilik
 

@@ -58,9 +58,9 @@ public static class SpeakerAligner
         return result;
     }
 
-    /// <summary>En çok örtüşen konuşmacıyı ve atamanın kesin olup olmadığını döndürür.
-    /// Beraberlikte İLK bölge kazanır (kesin ">" karşılaştırması) — sonuç koşudan koşuya
-    /// değişmesin diye.</summary>
+    /// <summary>Kişi başına tüm bölgelerin birleşim süresini karşılaştırır. Yinelenen veya
+    /// örtüşen aynı-kişi bölgeleri bir kez sayılır. Beraberlikte ilk kişi seçilir ama atama
+    /// belirsizdir; Unknown bölgeleri gerçek bir kişinin kanıtını bastırmaz.</summary>
     private static (SpeakerId Speaker, bool Uncertain) BestSpeaker(
         TimeSpan start, TimeSpan end, IReadOnlyList<SpeakerSegment> speakers, double minOverlapRatio)
     {
@@ -69,16 +69,38 @@ public static class SpeakerAligner
 
         SpeakerId best = SpeakerId.Unknown;
         double bestOverlap = 0;
+        bool tied = false;
 
-        foreach (var sp in speakers)
+        foreach (var group in speakers.Where(s => s.Speaker.Index >= 0).GroupBy(s => s.Speaker))
         {
-            double overlap =
-                Math.Min(end.TotalSeconds, sp.End.TotalSeconds) -
-                Math.Max(start.TotalSeconds, sp.Start.TotalSeconds);
-            if (overlap > bestOverlap) { bestOverlap = overlap; best = sp.Speaker; }
+            var intervals = group.Select(s => (
+                    Start: Math.Max(start.TotalSeconds, s.Start.TotalSeconds),
+                    End: Math.Min(end.TotalSeconds, s.End.TotalSeconds)))
+                .Where(s => s.End > s.Start).OrderBy(s => s.Start);
+            double overlap = 0, regionStart = 0, regionEnd = 0;
+            bool hasRegion = false;
+            foreach (var interval in intervals)
+            {
+                if (!hasRegion || interval.Start > regionEnd)
+                {
+                    if (hasRegion) overlap += regionEnd - regionStart;
+                    regionStart = interval.Start;
+                    regionEnd = interval.End;
+                    hasRegion = true;
+                }
+                else regionEnd = Math.Max(regionEnd, interval.End);
+            }
+            if (hasRegion) overlap += regionEnd - regionStart;
+            if (overlap > bestOverlap + 1e-9)
+            {
+                bestOverlap = overlap;
+                best = group.Key;
+                tied = false;
+            }
+            else if (overlap > 0 && Math.Abs(overlap - bestOverlap) <= 1e-9) tied = true;
         }
 
         if (bestOverlap <= 0) return (SpeakerId.Unknown, true);   // aday yok
-        return (best, bestOverlap / duration < minOverlapRatio);
+        return (best, tied || bestOverlap / duration < minOverlapRatio);
     }
 }

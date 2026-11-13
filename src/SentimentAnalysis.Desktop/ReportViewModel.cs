@@ -264,6 +264,7 @@ public sealed partial class ReportViewModel : ObservableObject
     /// veya hiç denenmedi → UI şeridi görünmez. 08e dersi: kullanıcı ne gördüğünü ve neye
     /// güvenebileceğini bilmelidir.</summary>
     [ObservableProperty] private string _diarizationStatus = string.Empty;
+    [ObservableProperty] private string _analysisQualityNotice = string.Empty;
 
     /// <summary>Gösterilecek konuşmacı satırı var mı? Yoksa rapor bugünkü düz transkripti
     /// gösterir (davranış değişmez).</summary>
@@ -547,6 +548,7 @@ public sealed partial class ReportViewModel : ObservableObject
     public void Load(MeetingSession session)
     {
         var s = _aggregator.Aggregate(session);
+        AnalysisQualityNotice = AnalysisQualityText.Format(s.Diagnostics);
         DominantEmotion = EmotionLocalizer.Emotion(s.DominantEmotion);
         TurkishSummary = s.TurkishSummary;
         ValenceTrend = s.ValenceTrend;
@@ -564,6 +566,7 @@ public sealed partial class ReportViewModel : ObservableObject
     /// yapmadan lokalize gösterir.</summary>
     public void LoadSummary(MeetingSummary s)
     {
+        AnalysisQualityNotice = AnalysisQualityText.Format(s.Diagnostics);
         DominantEmotion = EmotionLocalizer.Emotion(s.DominantEmotion);
         TurkishSummary = s.TurkishSummary;
         ValenceTrend = s.ValenceTrend;

@@ -1,0 +1,18 @@
+{
+  "description": "Sentetik kullanım örneği; gerçek kayıt veya model sonucu değildir.",
+  "recordings": [
+    {
+      "id": "sample",
+      "audio": "sample.wav",
+      "durationSeconds": 10,
+      "expectedSpeakers": 0,
+      "reference": {
+        "transcript": "Merhaba bugün toplantı yapıyoruz",
+        "speakers": [
+          { "speaker": "A", "start": 0, "end": 5 },
+          { "speaker": "B", "start": 5, "end": 10 }
+        ]
+      }
+    }
+  ]
+}

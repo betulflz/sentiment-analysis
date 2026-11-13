@@ -8,6 +8,47 @@ namespace SentimentAnalysis.Application.Tests.Diarization;
 
 public class SpeakerAlignerTests
 {
+    [Fact]
+    public void Align_FragmentedTurns_UsesTotalTimePerSpeaker()
+    {
+        var result = SpeakerAligner.Align([T(0, 10)],
+            [S(0, 0, 2), S(1, 2, 5), S(0, 5, 7), S(1, 7, 8), S(0, 8, 10)], 0.5);
+        Assert.Equal(new SpeakerId(0), result[0].Speaker);
+        Assert.False(result[0].Uncertain);
+    }
+
+    [Fact]
+    public void Align_DuplicateRegions_DoNotCountTwice()
+    {
+        var result = SpeakerAligner.Align([T(0, 10)],
+            [S(0, 0, 4), S(0, 0, 4), S(1, 4, 7), S(1, 7, 10)], 0.5);
+        Assert.Equal(new SpeakerId(1), result[0].Speaker);
+        Assert.False(result[0].Uncertain);
+    }
+
+    [Fact]
+    public void Align_OverlappingRegionsOfSameSpeaker_UseUnion()
+    {
+        var result = SpeakerAligner.Align([T(0, 10)], [S(0, 0, 3), S(0, 2, 6)], 0.5);
+        Assert.Equal(new SpeakerId(0), result[0].Speaker);
+        Assert.False(result[0].Uncertain);
+    }
+
+    [Fact]
+    public void Align_EqualSpeakers_IsUncertainEvenAtThreshold()
+    {
+        var result = SpeakerAligner.Align([T(0, 10)], [S(0, 0, 5), S(1, 5, 10)], 0.5);
+        Assert.Equal(new SpeakerId(0), result[0].Speaker);
+        Assert.True(result[0].Uncertain);
+    }
+
+    [Fact]
+    public void Align_UnknownRegions_DoNotOutvoteKnownSpeaker()
+    {
+        var result = SpeakerAligner.Align([T(0, 10)], [S(-1, 0, 10), S(0, 0, 6)], 0.5);
+        Assert.Equal(new SpeakerId(0), result[0].Speaker);
+    }
+
     private static TranscriptSegment T(double a, double b, string text = "x") =>
         new(text, TimeSpan.FromSeconds(a), TimeSpan.FromSeconds(b));
 

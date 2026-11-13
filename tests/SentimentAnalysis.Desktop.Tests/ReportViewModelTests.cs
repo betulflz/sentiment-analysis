@@ -11,6 +11,24 @@ namespace SentimentAnalysis.Desktop.Tests;
 
 public class ReportViewModelTests
 {
+    [Fact]
+    public void LoadSummary_ShowsProcessingFailuresEvenWhenOverlappingInputWasCovered()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        var summary = new FakeAggregator().Aggregate(Session()) with
+        {
+            Diagnostics = new AnalysisDiagnostics(
+                [new(0, 0, 10, ChunkDisposition.ProcessingFailed, FailureType: "IOException")],
+                10, 10, 0, "completed")
+        };
+        vm.LoadSummary(summary);
+        Assert.Contains("%100", vm.AnalysisQualityNotice);
+        Assert.Contains("İşleme hatası: 1", vm.AnalysisQualityNotice);
+        vm.Load(Session());
+        Assert.Contains("ölçülmemiş", vm.AnalysisQualityNotice);
+        Assert.DoesNotContain("%100", vm.AnalysisQualityNotice);
+    }
+
     private sealed class FakeAggregator : IMeetingAggregator
     {
         public MeetingSummary Aggregate(MeetingSession s) => new(

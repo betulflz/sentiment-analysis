@@ -4,15 +4,11 @@ using SentimentAnalysis.Application.Abstractions;
 using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Application.Diarization;
 using SentimentAnalysis.Application.Fusion;
-using SentimentAnalysis.Application.Pipeline;
+using SentimentAnalysis.Application.Runtime;
 using SentimentAnalysis.Application.Vision;
 using SentimentAnalysis.Desktop;
 using SentimentAnalysis.Infrastructure.Audio;
-using SentimentAnalysis.Infrastructure.Diarization;
-using SentimentAnalysis.Infrastructure.Emotion;
 using SentimentAnalysis.Infrastructure.Storage;
-using SentimentAnalysis.Infrastructure.Stt;
-using SentimentAnalysis.Infrastructure.Vad;
 using SentimentAnalysis.Infrastructure.Vision;
 
 namespace SentimentAnalysis.Desktop.Avalonia;
@@ -22,19 +18,15 @@ namespace SentimentAnalysis.Desktop.Avalonia;
 /// yalnızca somut implementasyonlar bağlanır.</summary>
 public static class CompositionRoot
 {
-    public static IServiceProvider BuildServiceProvider()
+    public static IServiceProvider BuildServiceProvider(AppConfig? config = null)
     {
         var services = new ServiceCollection();
 
         services
-            .AddApplicationCore()
+            .AddApplicationCore(config)
             .AddFusion()
-            .AddStt()
-            .AddProsodyEmotion()
-            .AddTextEmotion()
-            .AddSileroVad()
-            .AddPipeline()
-            .AddSqliteStorage(); // AddPipeline'ın InMemorySessionStore TryAdd'ini ezer (kalıcı SQLite kazanır)
+            .AddSqliteStorage();
+        services.AddSingleton<ModelWorkQueue>();
 
         // Dosya seçimi (08c): kullanıcı bir ses dosyası seçer, ISelectedAudio bunu Live/PipelineAnalysisRunner
         // arasında paylaşır. Kaynak fabrikası seçili dosyayı gerçek IAudioCaptureSource'a çevirir (afconvert).
@@ -108,26 +100,23 @@ public static class CompositionRoot
                 }
             };
         });
-        services.AddSingleton<IAnalysisRunner>(sp => new PipelineAnalysisRunner(
-            sp.GetRequiredService<EmotionPipeline>(),
-            sp.GetRequiredService<Func<IAudioCaptureSource?>>(),
-            sp.GetRequiredService<AppConfig>(),
-            sp.GetRequiredService<ICaptureModeState>(),
-            sp.GetService<ISessionAudioSink>(),
-            sp.GetService<IDiarizationState>(),
-            sp.GetRequiredService<Func<IVideoCaptureSource?>>(),
-            sp.GetRequiredService<Func<VisionAnalyzer>>(),
-            sp.GetRequiredService<SpeakerRoleTracker>()));
-
-        // Konuşmacı ayrımı (10b): motor + arka plan geçişi + UI'nin dokunduğu servis.
-        // Model YÜKLENMEZ; ilk gerçek çağrıya kadar maliyeti sıfırdır (özellik kapalıysa hiç).
+        // Native model graphs belong to one job, not to the application root.
+        services.AddSingleton<ResourceManagedAnalysisRunner>(sp => new ResourceManagedAnalysisRunner(
+            sp.GetRequiredService<ModelWorkQueue>(), () => ModelSessions.CreateAnalysis(sp)));
+        services.AddSingleton<IAnalysisRunner>(sp => sp.GetRequiredService<ResourceManagedAnalysisRunner>());
         services.AddSingleton<IDiarizationState, DiarizationState>();
-        services.AddSherpaDiarization();
-        services.AddSingleton<DiarizationJob>();
-        services.AddSingleton<SpeakerProsodyAnalyzer>();
-        services.AddSingleton<ISpeakerAnalysis, SpeakerAnalysisService>();
+        services.AddSingleton<ISpeakerAnalysis>(sp => new ResourceManagedSpeakerAnalysis(
+            sp.GetRequiredService<IDiarizationState>(), sp.GetRequiredService<ModelWorkQueue>(),
+            () => ModelSessions.CreateSpeaker(sp)));
         // 12: canlı "Yöneten / Karşı taraf" — tanıtma örneği uygulama ömrü boyunca bellekte (diske yazılmaz).
-        services.AddSingleton<SpeakerRoleTracker>();
+        // Tanıtma analizden bağımsız olduğundan ses imzası (TitaNet) ve VAD modelleri RoleModels'te tembel yüklenir,
+        // kapanışta kapatılır; kök sağlayıcıda IVadGate/ISpeakerEmbedder olarak kayıtlı DEĞİLDİR.
+        services.AddSingleton<RoleModels>(sp => new RoleModels(sp.GetRequiredService<AppConfig>()));
+        services.AddSingleton<SpeakerRoleTracker>(sp =>
+        {
+            var (embedder, vad) = sp.GetRequiredService<RoleModels>().Create();
+            return new SpeakerRoleTracker(embedder, vad, sp.GetRequiredService<AppConfig>());
+        });
         services.AddSingleton<IVoiceEnrollment, MicrophoneVoiceEnrollment>();
 
         services.AddSingleton<LiveViewModel>(sp => new LiveViewModel(

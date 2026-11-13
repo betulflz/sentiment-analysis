@@ -67,6 +67,32 @@ public class VisionAnalyzerTests
         public float[] Classify(VideoFrame frame, FaceBox box) => new float[] { 1, 0, 0, 0, 0, 0, 0, 0 };
     }
 
+    private sealed class DisposableDetector : IFaceDetector, IDisposable
+    {
+        public int Disposals;
+        public IReadOnlyList<DetectedFace> Detect(VideoFrame frame) => Array.Empty<DetectedFace>();
+        public void Dispose() => Disposals++;
+    }
+
+    private sealed class DisposableExpression : IFaceExpressionModel, IDisposable
+    {
+        public int Disposals;
+        public float[] Classify(VideoFrame frame, FaceBox box) => Array.Empty<float>();
+        public void Dispose() => Disposals++;
+    }
+
+    [Fact]
+    public void Dispose_releases_both_native_models_once()
+    {
+        var detector = new DisposableDetector();
+        var expression = new DisposableExpression();
+        var analyzer = new VisionAnalyzer(detector, expression, new VisionTimeline(Cfg), Cfg);
+        analyzer.Dispose();
+        analyzer.Dispose();
+        Assert.Equal(1, detector.Disposals);
+        Assert.Equal(1, expression.Disposals);
+    }
+
     [Fact]
     public async Task ProcessesEveryNthFrame()
     {

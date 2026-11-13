@@ -1,0 +1,11 @@
+{
+  "engine": "hand-written-synthetic-example-not-a-model",
+  "task": "transcribe",
+  "records": [
+    {
+      "id": "sample",
+      "status": "ok",
+      "prediction": { "transcript": "Merhaba bugün görüşme yapıyoruz" }
+    }
+  ]
+}

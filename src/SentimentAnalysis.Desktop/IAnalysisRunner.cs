@@ -23,6 +23,8 @@ public interface IAnalysisRunner
     /// Additive üye: varsayılan olarak no-op döner, sahte implementasyonları bozmaz.</summary>
     Task WarmUpAsync(CancellationToken ct) => Task.CompletedTask;
 
+    AnalysisRunSnapshot CaptureSnapshot() => new(LastSessionId, SkippedChunkCount);
+
     /// <summary>Bu chunk'ın zaman aralığında görülen yüzlerin özeti (11b; video/kamera modu).
     /// Additive üye: varsayılan boş — görüntü kanalı olmayan koşularda satırda yüz notu çıkmaz.</summary>
     IReadOnlyList<FaceWindowSummary> FacesFor(ChunkResult r) => Array.Empty<FaceWindowSummary>();

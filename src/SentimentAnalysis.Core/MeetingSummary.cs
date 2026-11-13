@@ -26,6 +26,9 @@ public sealed record MeetingSummary(
     string TurkishSummary,
     AnalysisOutcome Outcome = AnalysisOutcome.Success)
 {
+    /// <summary>Null for old/unmeasured summaries; absence must not be presented as full coverage.</summary>
+    public AnalysisDiagnostics? Diagnostics { get; init; }
+
     /// <summary>Analiz edilen konuşmanın süresi: parça aralıklarının BİRLEŞİMİ (örtüşme iki kez
     /// sayılmaz, parçalar arası sessizlik sayılmaz). Duygu paylarını süreye çevirmek için.</summary>
     public TimeSpan AnalyzedDuration { get; init; }

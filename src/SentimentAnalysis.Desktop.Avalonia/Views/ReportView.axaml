@@ -49,6 +49,7 @@
                     <StackPanel Spacing="6">
                         <TextBlock Text="Görüşme özeti" Classes="cardTitle" />
                         <TextBlock Text="{Binding TurkishSummary}" TextWrapping="Wrap" FontSize="16" LineHeight="24" Margin="0,4,0,4" />
+                        <TextBlock Text="{Binding AnalysisQualityNotice}" TextWrapping="Wrap" Classes="muted" />
                         <ItemsControl ItemsSource="{Binding SummaryTags}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>

@@ -8,7 +8,7 @@ namespace SentimentAnalysis.Application.Vision;
 /// <see cref="VisionTimeline"/>. Ses hattına paralel koşar. Bir karedeki model hatası yalnızca o kareyi
 /// atlar (<see cref="ErrorCount"/>); kaynak hatası (izin reddi, ffmpeg yok) yukarı fırlar. İptal,
 /// normal bitiştir — "Durdur" görüntü hattını bekletmez.</summary>
-public sealed class VisionAnalyzer
+public sealed class VisionAnalyzer : IDisposable
 {
     private readonly IFaceDetector _detector;
     private readonly IFaceExpressionModel _expression;
@@ -18,6 +18,7 @@ public sealed class VisionAnalyzer
     private volatile VideoFrame? _latestFrame;
     private volatile IReadOnlyList<(int Index, FaceBox Box)> _latestFaces = Array.Empty<(int, FaceBox)>();
     private int _errors;
+    private int _disposed;
 
     public VisionAnalyzer(IFaceDetector detector, IFaceExpressionModel expression, VisionTimeline timeline, VisionConfig cfg)
     {
@@ -39,6 +40,7 @@ public sealed class VisionAnalyzer
 
     public async Task RunAsync(IVideoCaptureSource source, CancellationToken ct)
     {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         // Önceki oturumun izleri ve gözlemleri yeni oturuma SIZMAMALI (aynı VisionAnalyzer/VisionTimeline
         // birden çok oturumda yeniden kullanılabilir — composition root singleton deseni).
         _tracker.Reset();
@@ -64,6 +66,16 @@ public sealed class VisionAnalyzer
             _latestFrame = null;
             _latestFaces = Array.Empty<(int, FaceBox)>();
         }
+    }
+
+    /// <summary>Call only after RunAsync has finished; the job owner enforces this ordering.</summary>
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        _latestFrame = null;
+        _latestFaces = Array.Empty<(int, FaceBox)>();
+        try { (_detector as IDisposable)?.Dispose(); }
+        finally { (_expression as IDisposable)?.Dispose(); }
     }
 
     private void Analyze(VideoFrame frame)
