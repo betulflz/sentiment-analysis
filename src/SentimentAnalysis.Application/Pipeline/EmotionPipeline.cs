@@ -20,48 +20,75 @@ public sealed class EmotionPipeline
     private readonly IChunkProcessor _processor;
     private readonly ISessionStore _store;
     private readonly IMeetingAggregator _aggregator;
+    private readonly IDiagnosticLog _log;
     private readonly int _capacity;
+    private readonly TimeSpan _drainTimeBudget;
 
     private readonly List<ChunkResult> _timeline = new();
     private int _droppedCount;
     private int _drainSkippedCount;
+    private readonly PipelineJournal _journal = new();
+    private sealed record WorkItem(int Index, AudioChunk Chunk);
 
-    private const int MaxDrainedChunksAfterStop = 8;
-    private static readonly TimeSpan DrainTimeBudget = TimeSpan.FromSeconds(90);
-
-    public EmotionPipeline(IChunkProcessor processor, ISessionStore store, IMeetingAggregator aggregator, AppConfig config)
+    public EmotionPipeline(
+        IChunkProcessor processor, ISessionStore store, IMeetingAggregator aggregator,
+        AppConfig config, IDiagnosticLog? log = null)
     {
         _processor = processor;
         _store = store;
         _aggregator = aggregator;
+        _log = log ?? NullDiagnosticLog.Instance;   // üretim varsayılanı: sessiz
         _capacity = Math.Max(1, config.Pipeline.ChannelCapacity);
+        _drainTimeBudget = TimeSpan.FromSeconds(Math.Max(1.0, config.Pipeline.DrainTimeBudgetSeconds));
+    }
+
+    /// <summary>Teşhis mesajını yalnızca günlük açıkken kurar ve yazar. Teşhis, analizi
+    /// çökertemez: günlük uygulaması fırlatırsa hata yutulur.</summary>
+    private void Diagnose(Func<string> message)
+    {
+        if (!_log.IsEnabled) return;
+        try { _log.Write(message()); } catch { /* teşhis, teşhis ettiği şeyi bozamaz */ }
     }
 
     public IReadOnlyList<ChunkResult> Timeline => _timeline;
     public int DroppedCount => Volatile.Read(ref _droppedCount);
     public int DrainSkippedCount => Volatile.Read(ref _drainSkippedCount);
+    public AnalysisDiagnostics Diagnostics => _journal.Snapshot();
 
     /// <summary>Modelleri asenkron olarak warm-up eder ve ilk çıkarım gecikmesini önler.
     /// Yüklenemeyen modelin hatasını açıklayıcı bir şekilde fırlatır.</summary>
     public Task WarmUpAsync(CancellationToken ct) => _processor.WarmUpAsync(ct);
 
+    /// <param name="roles">İsteğe bağlı (12): canlı "Yöneten / Karşı taraf" etiketleyicisi; koşu başında sıfırlanır.</param>
+    /// <param name="enrich">İsteğe bağlı (11d): işlenen chunk timeline/progress/depoya yazılmadan önce
+    /// dönüştürülür — ör. aynı aralığın yüz özetiyle üç kaynaklı füzyon. Fırlatırsa chunk olduğu gibi kalır.</param>
     public async Task<MeetingSummary> RunAsync(
         IAudioCaptureSource source, CaptureOptions options, Guid sessionId,
         DateTimeOffset startedAt, DetectedLanguage language,
-        IProgress<ChunkResult>? progress, CancellationToken ct)
+        IProgress<ChunkResult>? progress, CancellationToken ct,
+        Func<ChunkResult, ChunkResult>? enrich = null, IRoleLabeler? roles = null,
+        PipelineExecutionMode mode = PipelineExecutionMode.Realtime)
     {
         _timeline.Clear();
+        roles?.Reset();
         _droppedCount = 0;
         _drainSkippedCount = 0;
+        _journal.Reset();
+        using var producerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        using var writerCts = new CancellationTokenSource();
 
-        var channel = Channel.CreateBounded<AudioChunk>(
+        var channel = Channel.CreateBounded<WorkItem>(
             new BoundedChannelOptions(_capacity)
             {
-                FullMode = BoundedChannelFullMode.DropOldest,
+                FullMode = mode == PipelineExecutionMode.Offline ? BoundedChannelFullMode.Wait : BoundedChannelFullMode.DropOldest,
                 SingleReader = true,
                 SingleWriter = true,
             },
-            itemDropped: _ => Interlocked.Increment(ref _droppedCount));
+            itemDropped: item =>
+            {
+                Interlocked.Increment(ref _droppedCount);
+                _journal.Complete(item.Index, ChunkDisposition.QueueDropped);
+            });
 
         // Üretici: Mikrofon yakalamayı durdurma (ct) token'ı ile yönetir.
         var producer = Task.Run(async () =>
@@ -69,18 +96,24 @@ public sealed class EmotionPipeline
             Exception? producerError = null;
             try
             {
-                await foreach (var chunk in source.CaptureAsync(options, ct).ConfigureAwait(false))
+                await foreach (var chunk in source.CaptureAsync(options, producerCts.Token).ConfigureAwait(false))
                 {
-                    await channel.Writer.WriteAsync(chunk, CancellationToken.None).ConfigureAwait(false);
+                    int index = _journal.Capture(chunk);
+                    // A capture source may yield its final partial chunk AFTER user stop.
+                    // Keep writing until the consumer ends or its drain budget expires.
+                    await channel.Writer.WriteAsync(new(index, chunk), writerCts.Token).ConfigureAwait(false);
                 }
+                _journal.SourceEnded(producerCts.IsCancellationRequested ? "stopped" : "completed");
             }
             catch (OperationCanceledException)
             {
+                _journal.SourceEnded("stopped");
                 // Durdurma tetiklendi
             }
             catch (Exception ex)
             {
                 producerError = ex;
+                _journal.SourceEnded("failed", ex);
             }
             finally
             {
@@ -88,30 +121,38 @@ public sealed class EmotionPipeline
             }
         });
 
-        // Tüketici için 90 saniye güvenlik bütçeli bağımsız token
-        using var processingCts = new CancellationTokenSource(DrainTimeBudget);
+        // Tüketici için bağımsız token: bütçe "Durdur" (ct) ANINDA başlar, koşunun başında değil —
+        // aksi halde bütçeden uzun her canlı görüşmenin geri kalanı atılırdı.
+        using var processingCts = new CancellationTokenSource();
+        using var startDrainBudget = ct.Register(() => processingCts.CancelAfter(_drainTimeBudget));
 
         try
         {
             // ct iptal olsa bile kanal writer tamamlanana ( Complete ) kadar tüm chunk'ları tüketiriz
-            await foreach (var chunk in channel.Reader.ReadAllAsync(processingCts.Token).ConfigureAwait(false))
+            await foreach (var item in channel.Reader.ReadAllAsync(processingCts.Token).ConfigureAwait(false))
             {
-                await ProcessOneAsync(chunk, sessionId, progress, processingCts.Token).ConfigureAwait(false);
+                await ProcessOneAsync(item, sessionId, progress, enrich, roles, processingCts.Token).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
         {
             // Zaman bütçesi doldu: elimizdeki kalan işlenemeyenler atlanmış sayılır
-            var pendingChunks = new List<AudioChunk>();
+            var pendingChunks = new List<WorkItem>();
             while (channel.Reader.TryRead(out var pending))
+            {
                 pendingChunks.Add(pending);
+                _journal.Complete(pending.Index, ChunkDisposition.DrainSkipped);
+            }
 
             if (pendingChunks.Count > 0)
                 Interlocked.Add(ref _drainSkippedCount, pendingChunks.Count);
         }
         finally
         {
+            writerCts.Cancel();
+            producerCts.Cancel(); // unblock offline writers when processing/storage failed
             try { await producer.ConfigureAwait(false); } catch { }
+            _journal.FinishPending();
         }
 
         var outcome = _timeline.Count > 0 ? AnalysisOutcome.Success : AnalysisOutcome.NoResult;
@@ -123,36 +164,59 @@ public sealed class EmotionPipeline
     /// iptal (<see cref="OperationCanceledException"/>) yukarı akar, çünkü o bir chunk hatası
     /// değil, koşunun kendisinin durumudur.</summary>
     private async Task ProcessOneAsync(
-        AudioChunk chunk, Guid sessionId, IProgress<ChunkResult>? progress, CancellationToken ct)
+        WorkItem item, Guid sessionId, IProgress<ChunkResult>? progress,
+        Func<ChunkResult, ChunkResult>? enrich, IRoleLabeler? roles, CancellationToken ct)
     {
+        var chunk = item.Chunk;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         ChunkResult? result = null;
         try
         {
-            var rms = Math.Sqrt(chunk.Samples.Select(s => (double)s * s).Average());
-            var peak = chunk.Samples.Max(Math.Abs);
-            System.Console.WriteLine($"[PIPELINE] Chunk işleme başladı: Start={chunk.Start.TotalSeconds}s, End={chunk.End.TotalSeconds}s, Samples={chunk.Samples.Length}, RMS={rms:F4}, Peak={peak:F4}, Canceled={ct.IsCancellationRequested}");
-            
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            result = await _processor.ProcessAsync(chunk, ct).ConfigureAwait(false);
+            // RMS/tepe hesabı chunk başına ~160 bin örnek gezer — yalnızca teşhis açıkken.
+            Diagnose(() =>
+            {
+                double rms = Math.Sqrt(chunk.Samples.Select(s => (double)s * s).Average());
+                float peak = chunk.Samples.Length > 0 ? chunk.Samples.Max(Math.Abs) : 0f;
+                return $"[PIPELINE] Chunk işleme başladı: Start={chunk.Start.TotalSeconds}s, " +
+                       $"End={chunk.End.TotalSeconds}s, Samples={chunk.Samples.Length}, " +
+                       $"RMS={rms:F4}, Peak={peak:F4}, Canceled={ct.IsCancellationRequested}";
+            });
+
+            result = await _processor.ProcessAsync(chunk, roles, ct).ConfigureAwait(false);
             sw.Stop();
-            
-            System.Console.WriteLine($"[PIPELINE] Chunk işleme bitti: Süre={sw.ElapsedMilliseconds}ms, VAD={(result != null ? "Konuşma var" : "Sessizlik")}");
+            _journal.Complete(item.Index, result is null ? ChunkDisposition.NoSpeech : ChunkDisposition.Speech, sw.Elapsed.TotalSeconds);
+
+            var outcome = result is not null ? "Konuşma var" : "Sessizlik";
+            Diagnose(() => $"[PIPELINE] Chunk işleme bitti: Süre={sw.ElapsedMilliseconds}ms, VAD={outcome}");
         }
         catch (OperationCanceledException ex)
         {
-            System.Console.WriteLine($"[PIPELINE_ERROR] Chunk işlemi iptal edildi (OperationCanceledException): {ex.Message}");
+            _journal.Complete(item.Index, ChunkDisposition.Cancelled, sw.Elapsed.TotalSeconds, ex.GetType().Name);
+            Diagnose(() => $"[PIPELINE] Chunk işlemi iptal edildi: {ex.Message}");
             throw;
         }
         catch (Exception ex)
         {
-            System.Console.WriteLine($"[PIPELINE_ERROR] Chunk işleminde beklenmedik hata yutuldu: {ex.GetType().Name} - {ex.Message}\n{ex.StackTrace}");
+            _journal.Complete(item.Index, ChunkDisposition.ProcessingFailed, sw.Elapsed.TotalSeconds, ex.GetType().Name);
+            Diagnose(() => $"[PIPELINE] Chunk işleminde beklenmedik hata yutuldu: " +
+                           $"{ex.GetType().Name} - {ex.Message}\n{ex.StackTrace}");
             return;
         }
 
         if (result is null) return; // VAD sessiz
+        if (enrich is not null)
+        {
+            try { result = enrich(result); }
+            catch (Exception ex)
+            {
+                _journal.EnrichmentFailed(item.Index, ex);
+                Diagnose(() => $"[PIPELINE] Chunk zenginleştirme hatası yutuldu: {ex.GetType().Name} - {ex.Message}");
+            }
+        }
         _timeline.Add(result);
         progress?.Report(result);
-        await _store.SaveChunkAsync(sessionId, result, ct).ConfigureAwait(false);
+        try { await _store.SaveChunkAsync(sessionId, result, ct).ConfigureAwait(false); }
+        catch (Exception ex) { _journal.StorageFailed(ex); throw; }
     }
 
     /// <summary>O ana kadar toplanan <see cref="Timeline"/>'dan bir <see cref="MeetingSummary"/> üretir.
@@ -164,6 +228,6 @@ public sealed class EmotionPipeline
     {
         var session = new MeetingSession(sessionId, startedAt, language, _timeline.ToList());
         var summary = _aggregator.Aggregate(session);
-        return summary with { Outcome = outcome };
+        return summary with { Outcome = outcome, Diagnostics = Diagnostics };
     }
 }

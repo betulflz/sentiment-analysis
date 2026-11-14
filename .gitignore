@@ -69,5 +69,9 @@ tmp/
 # Superpowers SDD çalışma alanı (ledger, brief, review paketleri)
 .superpowers/
 
+# Kalite pilotu: özel referans metinleri ve üretilen tahminler
+quality-local/
+__pycache__/
+
 # Üretilen macOS uygulama paketi
 dist/

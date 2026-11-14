@@ -3,6 +3,10 @@
 Ses kayıtlarından ve canlı konuşmadan duygu analizi yapan, **tamamen yerel** çalışan
 cross-platform .NET masaüstü uygulaması.
 
+M1 Air üzerinde doğruluk, süre ve bellek karşılaştırması için
+[kalite pilotu aracını](tools/quality/README.md) kullanabilirsiniz. Bu araç mevcut Whisper ve
+sherpa bileşenlerini ayrı ölçer; gerçek model ve etiketli kayıt gerektirir.
+
 Hiçbir ses kaydı veya metin cihazı terk etmez. Bulut API'si yoktur, telemetri yoktur —
 tüm modeller makinenizde çalışır.
 
@@ -145,6 +149,11 @@ Windows:  %APPDATA%\SentimentAnalysis\models\
 
 > **Not:** Metin modelinin ONNX export'u için `optimum` 2.x kullanıyorsanız ONNX exporter
 > ayrı bir pakettedir — `pip install optimum optimum-onnx` gerekir.
+>
+> **Bellek (8 GB Mac):** export edilen fp32 dosyayı `tools/models/quantize_text_model.py` ile
+> sıkıştırıp `text-emotion-xlmr.onnx` adıyla kullanın (yalnız kelime tablosu int8; 1,11 → 0,54 GB,
+> tam hat tepe bellek 4,75 → 3,42 GB, çıktı fp32 ile pratikte aynı — bkz.
+> `docs/research/2026-11-13-m1-bellek-olcumu.md`).
 
 Model konumları `AppConfig` üzerinden değiştirilebilir (`SttConfig.ModelDirectory`,
 `EmotionConfig.ModelDirectory`, `VadConfig.ModelDirectory`).
@@ -177,6 +186,12 @@ Bu testler süs değildir: iki gerçek hatayı yakaladılar — metin modelinin 
 yanlış olması ve Silero VAD'ın 64 örnekli context penceresini beslemediğimiz için gerçek
 konuşmada bile sıfıra yakın olasılık üretmesi. Model uçları gerçek veriyle doğrulanır,
 varsayımla değil.
+
+## Yerel model kaynakları
+
+Masaüstü uygulamasında modeller her analiz için oluşturulur; analiz tamamlanınca, hata verince veya durdurma işlemi bitince kapatılır. Sonraki analiz modelleri yeniden yükler. Canlı analiz/hazırlık ve görüşme sonrası konuşmacı analizi ortak tek işlik kuyruğu kullanır; birinin model temizliği bitmeden diğeri model açmaz. Görüntü modelleri de aynı analiz ömrüne bağlıdır.
+
+Hazırlık UI iş parçacığının dışında çalışır ve hazırlık sırasında **Durdur** kullanılabilir. Devam eden bazı native yükleme/çıkarım çağrıları hemen kesilemediğinden güvenli kapanış bu çağrının dönmesini bekleyebilir. Uygulamadan çıkışta çalışan işler iptal edilir, bitmeleri beklenir ve servisler kapatılır. Native oturumların kapatılması, macOS bellek/swap göstergelerinin anında düşeceğini garanti etmez.
 
 ## Gizlilik
 
@@ -218,6 +233,7 @@ Bu proje kesinlik gösterisi yerine dürüstlüğü tercih eder: sistem emin olm
 
 - [`docs/superpowers/specs/`](docs/superpowers/specs/) — master tasarım (kararlar kütüğü,
   riskler, ilkeler) ve alt-proje spec'leri
+  
 - [`docs/superpowers/plans/`](docs/superpowers/plans/) — uygulanmış TDD planları; her planın
   sonundaki "Post-Review Düzeltmeleri" bölümü uygulama sırasında alınan kararları anlatır
 - [`AGENT-CONVERSATION.md`](AGENT-CONVERSATION.md) — projenin tasarlandığı ilk planlama

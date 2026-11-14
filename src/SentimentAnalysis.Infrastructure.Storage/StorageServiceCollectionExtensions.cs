@@ -20,6 +20,7 @@ public static class StorageServiceCollectionExtensions
         services.AddSingleton<ISessionAudioSink>(sp => sp.GetRequiredService<SqliteSessionStore>());
         services.AddSingleton<IDiarizationStore>(sp => sp.GetRequiredService<SqliteSessionStore>());
         services.AddSingleton<ISpeakerDataReader>(sp => sp.GetRequiredService<SqliteSessionStore>());
+        services.AddSingleton<IDecisionStore>(sp => sp.GetRequiredService<SqliteSessionStore>());
         return services;
     }
 }

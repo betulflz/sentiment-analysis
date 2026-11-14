@@ -3,17 +3,20 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:desktop="clr-namespace:SentimentAnalysis.Desktop;assembly=SentimentAnalysis.Desktop"
+             xmlns:conv="using:SentimentAnalysis.Desktop.Avalonia.Converters"
+             xmlns:ctl="using:SentimentAnalysis.Desktop.Avalonia.Controls"
              mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="500"
              x:Class="SentimentAnalysis.Desktop.Avalonia.Views.ReportView">
 
     <UserControl.Resources>
+        <conv:UncertainOpacityConverter x:Key="UncertainOpacityConverter" />
+        <conv:EmotionColorConverter x:Key="EmotionColor" />
+        <conv:SpeakerColorConverter x:Key="SpeakerColor" />
         <DataTemplate x:Key="SourcePanel" DataType="desktop:SourceAnalysisVm">
-            <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1"
-                    CornerRadius="6" Padding="12" Margin="2" MinWidth="160">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13"
-                               Foreground="{DynamicResource SystemBaseMediumColor}" />
-                    <TextBlock Text="{Binding Emotion}" FontSize="18" FontWeight="Bold" />
+            <Border Background="{DynamicResource SubtleBg}" CornerRadius="10" Padding="10" Margin="0">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{Binding Title}" FontSize="12" Foreground="{DynamicResource MutedFg}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Emotion}" FontSize="16" FontWeight="Bold" />
                     <TextBlock FontSize="11" IsVisible="{Binding HasData}"
                                Foreground="{DynamicResource SystemBaseMediumColor}"
                                Text="{Binding AxisSummary}" TextWrapping="Wrap" />
@@ -22,87 +25,415 @@
         </DataTemplate>
     </UserControl.Resources>
 
+    <UserControl.Styles>
+        <!-- Sohbet balonu: A, C… solda; B, D… sağda. -->
+        <Style Selector="Border.bubble">
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Margin" Value="0,4" />
+            <Setter Property="MaxWidth" Value="560" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+        <Style Selector="Border.bubble.right">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+        </Style>
+    </UserControl.Styles>
+
     <Grid RowDefinitions="Auto,*">
         <TextBlock Grid.Row="0" Text="Rapor henüz yok. Bir oturum tamamlandığında veya Geçmiş'ten seçildiğinde burada görünür."
                    IsVisible="{Binding !HasReport}" FontStyle="Italic" Opacity="0.7" />
 
         <ScrollViewer Grid.Row="1" IsVisible="{Binding HasReport}">
-            <StackPanel Spacing="16">
-                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16">
+            <StackPanel Spacing="18" Margin="0,0,8,16">
+                <Border Classes="card">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Toplantı Özeti" FontWeight="SemiBold" FontSize="16" />
-                        <TextBlock Text="{Binding DominantEmotion, StringFormat='Baskın Duygu: {0}'}" />
-                        <TextBlock Text="{Binding ValenceTrend, StringFormat='Valence Eğilimi: {0:F2}'}" />
-                        <TextBlock Text="{Binding Volatility, StringFormat='Duygusal Oynaklık: {0:F2}'}" />
-                        <TextBlock Text="{Binding AverageCongruence, StringFormat='Ortalama Uyum: {0:F2}'}" />
-                        <TextBlock Text="{Binding TurkishSummary}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                        <TextBlock Text="Görüşme özeti" Classes="cardTitle" />
+                        <TextBlock Text="{Binding TurkishSummary}" TextWrapping="Wrap" FontSize="16" LineHeight="24" Margin="0,4,0,4" />
+                        <TextBlock Text="{Binding AnalysisQualityNotice}" TextWrapping="Wrap" Classes="muted" />
+                        <TextBlock Text="{Binding UncertainNotice}" TextWrapping="Wrap" Classes="muted"
+                                   IsVisible="{Binding HasUncertainNotice}" />
+                        <Border Classes="pill warn" Padding="12,5" IsVisible="{Binding HasRoleNotice}">
+                            <TextBlock Text="{Binding RoleNotice}" FontSize="13" TextWrapping="Wrap" />
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding SummaryTags}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="desktop:SummaryTagVm">
+                                    <Border Classes="pill" Classes.good="{Binding Good}" Classes.warn="{Binding Warn}"
+                                            Classes.bad="{Binding Bad}" Classes.neutral="{Binding Neutral}"
+                                            Padding="12,5" Margin="0,0,8,6">
+                                        <TextBlock Text="{Binding Text}" FontSize="13" />
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </Border>
 
-                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16">
+                <!-- 11e: görüşme sonrası karar bölümleri. Karar verisi yoksa (pencere yok) hiçbiri görünmez. -->
+                <Border Classes="card" BorderBrush="{DynamicResource SystemAccentColor}" BorderThickness="4,1,1,1"
+                        IsVisible="{Binding HasDecisionData}">
+                    <StackPanel Spacing="8">
+                        <StackPanel Spacing="6" DataContext="{Binding FollowUp}">
+                            <TextBlock Text="Görüşmeden sonra ne yapmalı?" Classes="cardTitle" />
+                            <TextBlock Text="{Binding ProfileText}" Classes="muted" />
+                            <Border Classes="pill neutral" Padding="14,6" HorizontalAlignment="Left">
+                                <TextBlock Text="{Binding DirectionText}" FontSize="14" FontWeight="SemiBold" />
+                            </Border>
+                            <TextBlock Text="{Binding BestText}" FontSize="26" FontWeight="Bold" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource SystemAccentColor}" />
+                            <TextBlock Text="{Binding ReasonText}" TextWrapping="Wrap" />
+                            <TextBlock Text="İlk 3 seçenek" Classes="sectionTitle" Margin="0,8,0,0" />
+                            <ItemsControl ItemsSource="{Binding TopOptions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid ColumnDefinitions="*,48,Auto" Margin="0,2">
+                                            <TextBlock Text="{Binding Label}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="{Binding PercentText}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2" Text="{Binding WhyText}" Classes="muted" Margin="12,0,0,0" VerticalAlignment="Center" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Classes="muted" TextWrapping="Wrap"
+                                       Text="Bu bir öneridir; kararı siz verirsiniz. Sistem yalnız ses tonu, yüz ifadesi ve konuşma payını ölçer." />
+
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="24" Margin="0,12,0,0">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="Görüşmede hangi sorunlar ne kadar görüldü?" Classes="sectionTitle" />
+                                    <ItemsControl ItemsSource="{Binding MeetingIndicators}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Spacing="4" Margin="0,0,0,10">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBlock Text="{Binding Name}" FontSize="12" TextWrapping="Wrap" />
+                                                        <TextBlock Grid.Column="1" Text="{Binding Subject}" FontSize="11" Margin="8,0,0,0" />
+                                                    </Grid>
+                                                    <ProgressBar Minimum="0" Maximum="1" Value="{Binding Value}" Height="8" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <StackPanel Spacing="4" IsVisible="{Binding HasRanking}">
+                                        <TextBlock Text="Seçeneklerin uygunluk puanı" Classes="sectionTitle" Margin="0,8,0,0" />
+                                        <TextBlock Text="Puan yüksekse o seçenek bu görüşmeye daha uygun (TOPSIS yöntemiyle hesaplanır)." Classes="muted" />
+                                        <ItemsControl ItemsSource="{Binding Ranking}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid ColumnDefinitions="240,*,48" Margin="0,2">
+                                                        <TextBlock Text="{Binding Label}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                        <ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Closeness}" Height="6" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="2" Text="{Binding PercentText}" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="8">
+                                    <TextBlock Text="Neye ne kadar önem verilsin?" Classes="sectionTitle" />
+                                    <Border Classes="why">
+                                        <TextBlock Text="Sistem öneri verirken altı sorunu birlikte tartar. Bir sorunun kaydırıcısını sağa çekersen sistem o soruna daha çok önem verir ve önerisi buna göre değişebilir. Yüzdeler her sorunun toplam içindeki payıdır." />
+                                    </Border>
+                                    <ItemsControl ItemsSource="{Binding Weights}" ItemTemplate="{StaticResource WeightRow}" />
+                                    <Button Content="Görüşme sonundaki ayarlara dön" Command="{Binding ResetWeightsCommand}" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                        <TextBlock Text="{Binding DecisionSaveStatus}" FontSize="12" FontStyle="Italic" TextWrapping="Wrap"
+                                   IsVisible="{Binding DecisionSaveStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   Foreground="{DynamicResource SystemBaseMediumColor}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="card"
+                        IsVisible="{Binding HasDecisionData}">
+                    <StackPanel Spacing="6" DataContext="{Binding FollowUp}">
+                        <!-- Duyarlılık analizi (KDS): tek satırlık hüküm; senaryo tablosu "Ayrıntı"da kapalı. -->
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Border Classes="pill" Classes.good="{Binding SensitivityStable}"
+                                    Classes.warn="{Binding SensitivityMostlyStable}" Classes.bad="{Binding SensitivityFragile}"
+                                    Padding="14,6" ToolTip.Tip="Duyarlılık analizi: önem ayarları biraz değişse öneri değişir miydi?">
+                                <TextBlock Text="{Binding SensitivityVerdict}" FontSize="14" />
+                            </Border>
+                            <TextBlock Grid.Column="1" Text="{Binding SensitivitySummary}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        </Grid>
+                        <Expander Header="Ayrıntıyı göster (duyarlılık analizi)" HorizontalAlignment="Stretch" Margin="0,6,0,0">
+                            <StackPanel Spacing="6">
+                                <TextBlock Classes="muted" Text="Her satırda bir sorunun önem ayarı biraz azaltılıp artırıldı. 'aynı' yazan yerde öneri değişmedi; değiştiği yerde yeni öneri vurgulu yazar." />
+                                <Grid ColumnDefinitions="160,*,*,*,*" Margin="0,4,0,0">
+                                    <TextBlock Grid.Column="0" Text="Sorun" FontWeight="SemiBold" FontSize="12" />
+                                    <TextBlock Grid.Column="1" Text="biraz azaltınca (−%20)" FontWeight="SemiBold" FontSize="12" />
+                                    <TextBlock Grid.Column="2" Text="−%10" FontWeight="SemiBold" FontSize="12" />
+                                    <TextBlock Grid.Column="3" Text="+%10" FontWeight="SemiBold" FontSize="12" />
+                                    <TextBlock Grid.Column="4" Text="biraz artırınca (+%20)" FontWeight="SemiBold" FontSize="12" />
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding Sensitivity}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid ColumnDefinitions="160,*" Margin="0,2">
+                                                <TextBlock Text="{Binding Criterion}" FontSize="12" />
+                                                <ItemsControl Grid.Column="1" ItemsSource="{Binding Cells}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <UniformGrid Rows="1" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Classes="pill" Classes.good="{Binding !Changed}" Classes.warn="{Binding Changed}"
+                                                                    HorizontalAlignment="Stretch" Margin="2" CornerRadius="8">
+                                                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" TextAlignment="Center" />
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="card"
+                        IsVisible="{Binding HasDecisionData}">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Duygu Payları" FontWeight="SemiBold" FontSize="16" />
-                        <ItemsControl ItemsSource="{Binding TimeShare}">
+                        <TextBlock Text="Görüşme boyunca ne değişti?" Classes="cardTitle" />
+                        <Border Classes="why">
+                            <TextBlock Text="Her satır bir sorunun görüşme boyunca nasıl seyrettiğini gösterir. Çizgi yükseliyorsa sorun büyüyor, alçalıyorsa azalıyor. Sağdaki etiket görüşmenin başını ve sonunu karşılaştırır: kırmızı kötüleşme, yeşil iyileşme, gri belirgin değişim yok." />
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding IndicatorTimeline}">
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid ColumnDefinitions="150,*">
-                                        <TextBlock Grid.Column="0" Text="{Binding Emotion}" />
-                                        <TextBlock Grid.Column="1" Text="{Binding Share, StringFormat='{}{0:P1}'}" />
+                                <DataTemplate DataType="desktop:IndicatorRowVm">
+                                    <Grid ColumnDefinitions="150,*,210" ColumnSpacing="12" Height="44">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                   TextWrapping="Wrap" />
+                                        <Border Grid.Column="1" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,0,0,1">
+                                            <ctl:Sparkline Values="{Binding Values}" Classes.up="{Binding TrendUp}"
+                                                           Classes.down="{Binding TrendDown}" Classes.flat="{Binding TrendFlat}" />
+                                        </Border>
+                                        <Border Grid.Column="2" Classes="pill" Classes.bad="{Binding TrendUp}"
+                                                Classes.good="{Binding TrendDown}" Classes.neutral="{Binding TrendFlat}">
+                                            <TextBlock Text="{Binding TrendText}" />
+                                        </Border>
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <Grid ColumnDefinitions="150,*,210" ColumnSpacing="12">
+                            <Grid Grid.Column="1" ColumnDefinitions="*,*">
+                                <TextBlock Text="{Binding TimelineStart, StringFormat='{}{0} başlangıç'}" Classes="muted" FontSize="11" />
+                                <TextBlock Grid.Column="1" Text="{Binding TimelineEnd, StringFormat='son {0}'}" Classes="muted" FontSize="11"
+                                           HorizontalAlignment="Right" />
+                            </Grid>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="card"
+                        IsVisible="{Binding HasDecisionData}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Görüşme sırasında verilen öneriler" Classes="cardTitle" />
+                        <ItemsControl ItemsSource="{Binding Recommendations}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="60,200,*" Margin="0,3"
+                                          Opacity="{Binding IsLowConfidence, Converter={StaticResource UncertainOpacityConverter}}">
+                                        <TextBlock Grid.Column="0" Text="{Binding Time}" Opacity="0.7" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Action}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Reason}" TextWrapping="Wrap" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="card"
+                        IsVisible="{Binding HasDecisionData}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Zorlu anlar" Classes="cardTitle" />
+                        <TextBlock Text="Belirgin bir kritik an yok." FontStyle="Italic" Opacity="0.7"
+                                   IsVisible="{Binding !HasCriticalMoments}" />
+                        <ItemsControl ItemsSource="{Binding CriticalMoments}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="110,*" Margin="0,3">
+                                        <TextBlock Grid.Column="0" Text="{Binding TimeRange}" Opacity="0.7" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="card">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Görüşmenin duygu haritası" Classes="cardTitle" />
+                        <Border Classes="why">
+                            <TextBlock Text="Konuşmanın ne kadarının hangi duygu içinde geçtiğini gösterir. Şerit ne kadar geniş bir renkle doluysa görüşmenin o kadarı o duyguda geçti; görüşmenin genel havasını tek bakışta anlatır." />
+                        </Border>
+                        <ctl:ShareBar Items="{Binding TimeShare}" Height="30" />
+                        <ItemsControl ItemsSource="{Binding TimeShare}" Margin="0,6,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="desktop:TimeShareVm">
+                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,18,4">
+                                        <Border Width="12" Height="12" CornerRadius="3" VerticalAlignment="Center"
+                                                Background="{Binding Key, Converter={StaticResource EmotionColor}}" />
+                                        <TextBlock Text="{Binding Emotion}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding Text}" Classes="muted" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="{Binding EmotionMapSummary}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,4,0,0"
+                                   IsVisible="{Binding EmotionMapSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     </StackPanel>
                 </Border>
 
                 <!-- Konuşmacı ayrımı (10b). Durum şeridi, özellik hiç denenmediyse (boş metin)
                      görünmez; denendiyse sonucu DÜRÜSTÇE söyler — başarısızlık sessizce
                      gizlenmez (08e dersi: kullanıcı ne gördüğünü bilmeli). -->
-                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16"
+                <Border Classes="card"
                         IsVisible="{Binding DiarizationStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Konuşmacılar" FontWeight="SemiBold" FontSize="16" />
-                        <TextBlock Text="{Binding DiarizationStatus}" TextWrapping="Wrap" FontStyle="Italic" Opacity="0.8" />
+                        <TextBlock Text="Kim ne söyledi, nasıl hissetti?" Classes="cardTitle" />
+                        <Border Classes="why">
+                            <TextBlock Text="Sistem sesleri birbirinden ayırarak kimin konuştuğunu tahmin eder. Her kişinin ne kadar konuştuğunu, genel olarak nasıl hissettiğini ve konuşmanın akışını gösterir. Soluk ve '?' işaretli satırlarda konuşanın kim olduğu kesin değildir." />
+                        </Border>
+                        <TextBlock Text="{Binding DiarizationStatus}" Classes="muted" FontStyle="Italic" />
 
-                        <ItemsControl ItemsSource="{Binding SpeakerLines}" IsVisible="{Binding HasSpeakers}" Margin="0,8,0,0">
+                        <!-- Konuşma dengesi (11e): konuşmacı başına pay, konuşmacı renginde tek şerit. -->
+                        <StackPanel Spacing="6" IsVisible="{Binding HasSpeakers}" Margin="0,6,0,0">
+                            <TextBlock Text="Kim ne kadar konuştu?" Classes="sectionTitle" />
+                            <ctl:ShareBar Items="{Binding TalkBalance}" Height="14" />
+                            <ItemsControl ItemsSource="{Binding TalkBalance}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="desktop:TalkShareVm">
+                                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,18,2">
+                                            <Ellipse Width="10" Height="10" VerticalAlignment="Center"
+                                                     Fill="{Binding SpeakerIndex, Converter={StaticResource SpeakerColor}}" />
+                                            <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding Text}" Classes="muted" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- Kim hangi yüz? Konuşma payındaki her konuşmacı için; az konuşan (duygu kartı almayan) kişi de seçilebilir. -->
+                        <StackPanel IsVisible="{Binding HasFaceMappings}" Spacing="6" Margin="0,10,0,0">
+                            <TextBlock Text="Kim hangi yüz?" Classes="sectionTitle" />
+                            <TextBlock Text="{Binding FaceMappingHint}" Classes="muted" FontSize="12" TextWrapping="Wrap"
+                                       IsVisible="{Binding FaceMappingHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <ItemsControl ItemsSource="{Binding FaceMappings}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="desktop:SpeakerFaceRowVm">
+                                        <Grid ColumnDefinitions="38,160,Auto,260" Margin="0,3" ColumnSpacing="10">
+                                            <Border Width="30" Height="30" CornerRadius="15"
+                                                    Background="{Binding SpeakerIndex, Converter={StaticResource SpeakerColor}}">
+                                                <TextBlock Text="{Binding Initial}" Foreground="White" FontWeight="Bold"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <TextBlock Grid.Column="1" Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2" Text="Bu kişinin yüzü:" FontSize="12" VerticalAlignment="Center" />
+                                            <ComboBox Grid.Column="3" ItemsSource="{Binding FaceOptions}"
+                                                      SelectedItem="{Binding SelectedFace, Mode=TwoWay}"
+                                                      HorizontalAlignment="Stretch"
+                                                      AutomationProperties.Name="Bu kişinin yüzü"
+                                                      ToolTip.Tip="Hangi yüzün bu konuşmacıya ait olduğunu seç. Seçince ad ve (varsa) kişiye özel duygu buna göre güncellenir." />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- Kişi kartları (10c): her konuşmacı için sözlere / ses tonuna göre / genel sonuç. -->
+                        <ItemsControl ItemsSource="{Binding SpeakerEmotions}" IsVisible="{Binding HasSpeakers}" Margin="0,10,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><UniformGrid Columns="2" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid ColumnDefinitions="110,120,*" Margin="0,4">
-                                        <TextBlock Grid.Column="0" Text="{Binding TimeRange}" Opacity="0.7" />
-                                        <TextBlock Grid.Column="1" Text="{Binding Label}" FontWeight="SemiBold" />
-                                        <TextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap" />
-                                    </Grid>
+                                <DataTemplate DataType="desktop:SpeakerEmotionVm">
+                                    <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="12"
+                                            Padding="14" Margin="0,0,10,10">
+                                        <StackPanel Spacing="8">
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Border Width="38" Height="38" CornerRadius="19"
+                                                        Background="{Binding SpeakerIndex, Converter={StaticResource SpeakerColor}}">
+                                                    <TextBlock Text="{Binding Initial}" Foreground="White" FontWeight="Bold" FontSize="16"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="14" />
+                                                    <TextBlock Text="{Binding OverallText}" Classes="muted" IsVisible="{Binding ShowEmotion}" />
+                                                    <TextBlock Text="{Binding HostBehaviorText}" Classes="muted" TextWrapping="Wrap" IsVisible="{Binding IsHost}" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding FaceNote}" Classes="muted" FontSize="11" TextWrapping="Wrap"
+                                                       IsVisible="{Binding HasFaceNote}" />
+                                            <!-- Ölçüm VARSA kaç saniyeye dayandığını, YOKSA yeterli ses olmadığını söyler;
+                                                 satır hiçbir durumda gizlenmez — aksi halde iki durum aynı görünürdü. -->
+                                            <TextBlock Text="{Binding AudioMeasurementNote}" Classes="muted" FontSize="11" IsVisible="{Binding ShowEmotion}" />
+                                            <TextBlock Text="{Binding UncertainChunkNote}" Classes="muted" FontSize="11"
+                                                       IsVisible="{Binding HasUncertainChunks}" />
+                                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6" IsVisible="{Binding ShowEmotion}">
+                                                <ContentControl Grid.Column="0" Content="{Binding TextAnalysis}"
+                                                                ContentTemplate="{StaticResource SourcePanel}"
+                                                                HorizontalContentAlignment="Stretch" />
+                                                <ContentControl Grid.Column="1" Content="{Binding AudioAnalysis}"
+                                                                ContentTemplate="{StaticResource SourcePanel}"
+                                                                HorizontalContentAlignment="Stretch" />
+                                                <ContentControl Grid.Column="2" Content="{Binding CombinedAnalysis}"
+                                                                ContentTemplate="{StaticResource SourcePanel}"
+                                                                HorizontalContentAlignment="Stretch" />
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <!-- Konuşmacı-başına duygu ortalaması (10c): her konuşmacı için metin/ses/nihai. -->
-                        <ItemsControl ItemsSource="{Binding SpeakerEmotions}" IsVisible="{Binding HasSpeakers}" Margin="0,12,0,0">
+                        <!-- Konuşma akışı (10b): sohbet balonları; belirsiz atama soluk + "?". -->
+                        <TextBlock Text="Konuşma akışı" Classes="sectionTitle" IsVisible="{Binding HasSpeakers}" Margin="0,6,0,0" />
+                        <ItemsControl ItemsSource="{Binding SpeakerLines}" IsVisible="{Binding HasSpeakers}">
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="desktop:SpeakerEmotionVm">
-                                    <StackPanel Spacing="4" Margin="0,0,0,12">
-                                        <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="14" />
-                                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
-                                            <ContentControl Grid.Column="0" Content="{Binding TextAnalysis}"
-                                                            ContentTemplate="{StaticResource SourcePanel}"
-                                                            HorizontalContentAlignment="Stretch" />
-                                            <ContentControl Grid.Column="1" Content="{Binding AudioAnalysis}"
-                                                            ContentTemplate="{StaticResource SourcePanel}"
-                                                            HorizontalContentAlignment="Stretch" />
-                                            <ContentControl Grid.Column="2" Content="{Binding CombinedAnalysis}"
-                                                            ContentTemplate="{StaticResource SourcePanel}"
-                                                            HorizontalContentAlignment="Stretch" />
-                                        </Grid>
-                                    </StackPanel>
+                                <DataTemplate DataType="desktop:SpeakerLineVm">
+                                    <Border Classes="bubble" Classes.right="{Binding IsRight}"
+                                            Background="{Binding SpeakerIndex, Converter={StaticResource SpeakerColor}, ConverterParameter=soft}"
+                                            Opacity="{Binding Uncertain, Converter={StaticResource UncertainOpacityConverter}}">
+                                        <StackPanel Spacing="2">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Text="{Binding Label}" FontWeight="Bold" FontSize="12"
+                                                           Foreground="{Binding SpeakerIndex, Converter={StaticResource SpeakerColor}}" />
+                                                <TextBlock Text="?" FontWeight="Bold" FontSize="12" IsVisible="{Binding Uncertain}"
+                                                           ToolTip.Tip="Bu satırın hangi konuşmacıya ait olduğu kesin değil."
+                                                           Foreground="{Binding SpeakerIndex, Converter={StaticResource SpeakerColor}}" />
+                                                <TextBlock Text="{Binding TimeRange}" Classes="muted" FontSize="11" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </StackPanel>
                 </Border>
 
-                <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6" Padding="16">
+                <Border Classes="card">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Tepe Anlar" FontWeight="SemiBold" FontSize="16" />
+                        <TextBlock Text="Duygunun en yoğun olduğu anlar" Classes="cardTitle" />
                         <ItemsControl ItemsSource="{Binding PeakMoments}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>

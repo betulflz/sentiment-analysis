@@ -69,4 +69,43 @@ public class ChunkRowVmTests
                 TextConfidence: 0, ProsodyConfidence: 0,
                 AudioReliability: audio, TextReliability: text),
             "merhaba");
+
+    // --- Yüz notu (11b) ---
+
+    [Fact]
+    public void ChunkRowVm_FaceNote_Format()
+    {
+        var faces = new[]
+        {
+            new FaceWindowSummary(0, 1, LookAwayRatio: 0.2, ValenceShift: 0, NegativeExpression: 0.104, SmileRatio: 0, Reliability: 1),
+            new FaceWindowSummary(1, 1, LookAwayRatio: 0, ValenceShift: 0, NegativeExpression: 0, SmileRatio: 0.5, Reliability: 1),
+        };
+        var row = new ChunkRowVm(MakeChunk(ValenceArousal.Neutral), faces);
+
+        Assert.Equal("Yüz 1: dönük %20, olumsuz ifade %10, gülümseme %0 · Yüz 2: dönük %0, olumsuz ifade %0, gülümseme %50",
+            row.FaceNote);
+    }
+
+    [Fact]
+    public void ChunkRowVm_NoFaces_EmptyNote()
+    {
+        Assert.Equal(string.Empty, new ChunkRowVm(MakeChunk(ValenceArousal.Neutral)).FaceNote);
+        Assert.Equal(string.Empty, new ChunkRowVm(MakeChunk(ValenceArousal.Neutral), Array.Empty<FaceWindowSummary>()).FaceNote);
+    }
+
+    [Fact]
+    public void DusukGuven_DuyguAdiYerineBelirsiz()
+    {
+        var c = MakeChunk(new ValenceArousal(-0.6, 0.3));
+        var row = new ChunkRowVm(c with { Fused = c.Fused with { PrimaryEmotion = Emotion.Uzgun, Confidence = Confidence.Dusuk } });
+        Assert.Equal("Belirsiz", row.Emotion);
+    }
+
+    [Fact]
+    public void OrtaGuven_DuyguAdiGosterilir()
+    {
+        var c = MakeChunk(new ValenceArousal(-0.6, 0.3));
+        var row = new ChunkRowVm(c with { Fused = c.Fused with { PrimaryEmotion = Emotion.Uzgun } });
+        Assert.Equal("Üzgün", row.Emotion);
+    }
 }

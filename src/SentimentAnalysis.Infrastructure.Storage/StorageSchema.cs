@@ -51,6 +51,54 @@ public static class StorageSchema
             speaker_index INTEGER NOT NULL,     -- -1 = Bilinmeyen
             PRIMARY KEY (session_id, seq)
         );
+        CREATE TABLE IF NOT EXISTS decision_sessions (
+            session_id TEXT PRIMARY KEY,
+            profile INTEGER NOT NULL,
+            followup_action INTEGER NOT NULL,
+            followup_reason TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS decision_weights (
+            session_id TEXT NOT NULL,
+            kind INTEGER NOT NULL,              -- 0 = profilin AHP ağırlığı, 1 = görüşme sonu kaydırıcı
+            criterion INTEGER NOT NULL,
+            weight REAL NOT NULL,
+            PRIMARY KEY (session_id, kind, criterion)
+        );
+        CREATE TABLE IF NOT EXISTS decision_windows (   -- pencere + o anda GÖSTERİLEN öneri
+            session_id TEXT NOT NULL,
+            seq INTEGER NOT NULL,
+            start_ms INTEGER NOT NULL,
+            end_ms INTEGER NOT NULL,
+            data_quality REAL NOT NULL,
+            action INTEGER NOT NULL,
+            closeness REAL NOT NULL,
+            confidence INTEGER NOT NULL,
+            face INTEGER,
+            top1 INTEGER,
+            top2 INTEGER,
+            reason TEXT NOT NULL,
+            PRIMARY KEY (session_id, seq)
+        );
+        CREATE TABLE IF NOT EXISTS window_indicators (
+            session_id TEXT NOT NULL,
+            window_seq INTEGER NOT NULL,
+            criterion INTEGER NOT NULL,
+            value REAL NOT NULL,
+            source_face INTEGER,                -- null = görüşme geneli
+            PRIMARY KEY (session_id, window_seq, criterion)
+        );
+        CREATE TABLE IF NOT EXISTS window_faces (       -- yüz başına türetilmiş özet; kare/görüntü YOK
+            session_id TEXT NOT NULL,
+            window_seq INTEGER NOT NULL,
+            face_index INTEGER NOT NULL,
+            visible_ratio REAL NOT NULL,
+            look_away_ratio REAL NOT NULL,
+            valence_shift REAL NOT NULL,
+            negative_expression REAL NOT NULL,
+            smile_ratio REAL NOT NULL,
+            reliability REAL NOT NULL,
+            PRIMARY KEY (session_id, window_seq, face_index)
+        );
         """;
 
     /// <summary>08d ile eklenen `chunks` sütunları. Mevcut veritabanlarına
@@ -68,4 +116,9 @@ public static class StorageSchema
     /// oldukları için <c>CREATE TABLE IF NOT EXISTS</c> eski veritabanlarında da onları
     /// kendiliğinden oluşturur — 08d'deki ALTER geçişine gerek yoktur.</summary>
     public static readonly string[] TablesAddedIn10b = ["transcript_segments", "speaker_segments"];
+
+    /// <summary>11e ile eklenen karar tabloları (spec 11 §6.7). 10b gibi yeni TABLO oldukları için
+    /// <c>CREATE TABLE IF NOT EXISTS</c> eski veritabanlarında da kendiliğinden oluşturur.</summary>
+    public static readonly string[] TablesAddedIn11e =
+        ["decision_sessions", "decision_weights", "decision_windows", "window_indicators", "window_faces"];
 }

@@ -102,6 +102,16 @@ public class EmotionPipelineTests
     private static AppConfig Cfg(int cap) =>
         AppConfig.Default with { Pipeline = AppConfig.Default.Pipeline with { ChannelCapacity = cap } };
 
+    private static AppConfig CfgWithDrainBudget(int cap, double seconds) =>
+        AppConfig.Default with
+        {
+            Pipeline = AppConfig.Default.Pipeline with
+            {
+                ChannelCapacity = cap,
+                DrainTimeBudgetSeconds = seconds,
+            },
+        };
+
     private static readonly CaptureOptions Opts = new(TimeSpan.FromSeconds(1), TimeSpan.Zero);
 
     [Fact]
@@ -125,6 +135,73 @@ public class EmotionPipelineTests
         Assert.Equal(started, agg.Seen.StartedAt);
         Assert.Equal(DetectedLanguage.Turkish, agg.Seen.Language);
         Assert.Equal("özet", summary.TurkishSummary);
+    }
+
+    [Fact]
+    public async Task RunAsync_Enrich_AppliedBeforeTimelineProgressAndStore()
+    {
+        var store = new RecordingStore(); var agg = new FakeAggregator();
+        var pipeline = new EmotionPipeline(new GatedProcessor(ResultFor), store, agg, Cfg(32));
+        var reported = new List<ChunkResult>();
+        var progress = new SyncProgress(reported);
+
+        await pipeline.RunAsync(new FakeSource(2, ChunkAt), Opts, Guid.NewGuid(), DateTimeOffset.UnixEpoch,
+            DetectedLanguage.Turkish, progress, CancellationToken.None,
+            enrich: r => r with { Transcript = r.Transcript + "+yüz" });
+
+        Assert.All(pipeline.Timeline, c => Assert.EndsWith("+yüz", c.Transcript));
+        Assert.All(reported, c => Assert.EndsWith("+yüz", c.Transcript));
+        Assert.All(store.Saved, s => Assert.EndsWith("+yüz", s.Item2.Transcript));
+        Assert.Equal(2, store.Saved.Count);
+    }
+
+    private sealed class RoleSpyProcessor(Func<AudioChunk, ChunkResult?> map) : IChunkProcessor
+    {
+        public readonly List<IRoleLabeler?> Seen = new();
+        public Task<ChunkResult?> ProcessAsync(AudioChunk chunk, CancellationToken ct) => ProcessAsync(chunk, null, ct);
+        public Task<ChunkResult?> ProcessAsync(AudioChunk chunk, IRoleLabeler? roles, CancellationToken ct)
+        { Seen.Add(roles); return Task.FromResult(map(chunk)); }
+    }
+
+    private sealed class CountingLabeler : IRoleLabeler
+    {
+        public int Resets;
+        public RoleTimeline Label(AudioChunk chunk) => RoleTimeline.NotEnrolled;
+        public void Reset() => Resets++;
+    }
+
+    [Fact]
+    public async Task RunAsync_RolEtiketleyici_KosuBasindaSifirlanir_HerParcayaIletilir()
+    {
+        var proc = new RoleSpyProcessor(ResultFor);
+        var pipeline = new EmotionPipeline(proc, new RecordingStore(), new FakeAggregator(), Cfg(32));
+        var roles = new CountingLabeler();
+
+        await pipeline.RunAsync(new FakeSource(3, ChunkAt), Opts, Guid.NewGuid(), DateTimeOffset.UnixEpoch,
+            DetectedLanguage.Turkish, progress: null, CancellationToken.None, roles: roles);
+
+        Assert.Equal(1, roles.Resets);
+        Assert.Equal(3, proc.Seen.Count);
+        Assert.All(proc.Seen, r => Assert.Same(roles, r));
+    }
+
+    [Fact]
+    public async Task RunAsync_EnrichThrows_KeepsUnenrichedChunk()
+    {
+        var store = new RecordingStore(); var agg = new FakeAggregator();
+        var pipeline = new EmotionPipeline(new GatedProcessor(ResultFor), store, agg, Cfg(32));
+
+        await pipeline.RunAsync(new FakeSource(2, ChunkAt), Opts, Guid.NewGuid(), DateTimeOffset.UnixEpoch,
+            DetectedLanguage.Turkish, null, CancellationToken.None,
+            enrich: _ => throw new InvalidOperationException("yüz hatası"));
+
+        Assert.Equal(new[] { "c0", "c1" }, pipeline.Timeline.Select(c => c.Transcript).ToArray());
+        Assert.Equal(2, store.Saved.Count);
+    }
+
+    private sealed class SyncProgress(List<ChunkResult> sink) : IProgress<ChunkResult>
+    {
+        public void Report(ChunkResult value) { lock (sink) sink.Add(value); }
     }
 
     [Fact]
@@ -383,5 +460,74 @@ public class EmotionPipelineTests
         Assert.NotNull(agg.Seen);
         Assert.Empty(agg.Seen!.Chunks);
         Assert.Equal("özet", summary.TurkishSummary);
+    }
+
+    // ---- Drenaj zaman bütçesi (platformlar arası) ----
+    // "Durdur" sonrası hattın ne kadar çalışabileceği artık koda gömülü DEĞİL, config'te.
+    // Neden: makine hızı platforma göre değişir (Windows dizüstü vs M1), ama kullanıcının
+    // "Durdur donmasın" garantisi değişmez. Sabit gömmek, tek bir platformda ölçülen sayının
+    // diğerine dayatılması demekti.
+
+    [Fact]
+    public void DrenajButcesi_Varsayilani_KullaniciyiDakikalarcaBekletmez()
+    {
+        // Warm-up (WarmUpAsync) model yükleme maliyetini bu yoldan çıkardığı için drenajın
+        // kalan tek maliyeti kararlı-durum çıkarım süresidir; 90 sn'lik bir tolerans artık
+        // gerekli değil ve "Durdur"u kullanıcı için donmuş gibi gösteriyor.
+        Assert.InRange(AppConfig.Default.Pipeline.DrainTimeBudgetSeconds, 5.0, 45.0);
+    }
+
+    /// <summary>Gerçek zamanlı kaynak: chunk'lar arasında bekler (mikrofon gibi).</summary>
+    private sealed class PacedSource(int count, TimeSpan gap) : IAudioCaptureSource
+    {
+        public async IAsyncEnumerable<AudioChunk> CaptureAsync(
+            CaptureOptions options, [EnumeratorCancellation] CancellationToken ct)
+        {
+            for (int i = 0; i < count; i++) { await Task.Delay(gap, ct); yield return ChunkAt(i); }
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_GorusmeDrenajButcesindenUzunSurse_HicbirChunkAtlanmaz()
+    {
+        // Hata (2026-11-09 canlı test): bütçe koşunun BAŞINDA başlıyordu → 30 sn'den uzun her canlı
+        // görüşmede o andan sonraki chunk'lar atılıyordu (86 sn'lik görüşmeden yalnız 18 sn yazıldı).
+        // Bütçe yalnızca "Durdur" SONRASI drenajı sınırlamalı.
+        var store = new RecordingStore(); var agg = new FakeAggregator();
+        var pipeline = new EmotionPipeline(new GatedProcessor(ResultFor), store, agg, CfgWithDrainBudget(32, seconds: 1.0));
+
+        await pipeline.RunAsync(new PacedSource(8, TimeSpan.FromMilliseconds(250)), Opts, Guid.NewGuid(),
+            DateTimeOffset.UnixEpoch, DetectedLanguage.Turkish, null, CancellationToken.None);
+
+        Assert.Equal(8, pipeline.Timeline.Count); // 8 × 250 ms = 2 sn > 1 sn bütçe
+        Assert.Equal(0, pipeline.DrainSkippedCount);
+    }
+
+    [Fact]
+    public async Task RunAsync_DrenajButcesiDolunca_KalanlarSayilirVeOzetDoner()
+    {
+        // Bütçe çok kısa + consumer yavaş → kalan backlog işlenemez. Beklenen davranış:
+        // hata DEĞİL, sayılarak atlanan chunk'lar ve yine de geçerli bir özet (dürüstlük ilkesi).
+        var store = new RecordingStore(); var agg = new FakeAggregator();
+        var firstGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var proc = new FirstGatedThenSlowProcessor(firstGate, ResultFor);
+        var pipeline = new EmotionPipeline(proc, store, agg, CfgWithDrainBudget(32, seconds: 0.4));
+        using var cts = new CancellationTokenSource();
+
+        var run = pipeline.RunAsync(
+            new FakeSource(40, ChunkAt), Opts, Guid.NewGuid(), DateTimeOffset.UnixEpoch,
+            DetectedLanguage.Turkish, null, cts.Token);
+
+        await Task.Delay(TimeSpan.FromMilliseconds(200)); // kanalı doldur
+        cts.Cancel();
+        firstGate.SetResult();
+
+        var winner = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(10)));
+        Assert.Same(run, winner);   // bütçe gerçekten uygulanıyor: 90 sn beklenmiyor
+        var summary = await run;    // fırlatmamalı
+
+        Assert.NotNull(summary);
+        Assert.True(pipeline.DrainSkippedCount > 0,
+            "bütçe dolduğunda işlenemeyen chunk'lar sessizce yutulmamalı, sayılmalı");
     }
 }

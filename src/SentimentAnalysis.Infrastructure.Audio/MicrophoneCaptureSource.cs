@@ -39,6 +39,20 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
     private AudioQueueInterop.InputCallback? _callback;
     private bool _disposed;
 
+    private readonly IDiagnosticLog _log;
+
+    /// <param name="log">Geliştirici teşhis kanalı; verilmezse sessizdir (üretim varsayılanı).
+    /// <b>Gerçek zamanlı ses geri çağrımından ASLA çağrılmaz</b> — orada metin biçimleme ve I/O
+    /// ses kopmasına yol açar. Callback yalnızca kilitsiz sayaç artırır; özet, akış durduktan
+    /// sonra (gerçek zamanlı yolun dışında) yazılır.</param>
+    public MicrophoneCaptureSource(IDiagnosticLog? log = null) => _log = log ?? NullDiagnosticLog.Instance;
+
+    private void Diagnose(Func<string> message)
+    {
+        if (!_log.IsEnabled) return;
+        try { _log.Write(message()); } catch { /* teşhis, yakalamayı bozamaz */ }
+    }
+
     private PortAudioSharp.Stream? _paStream;
     private PortAudioSharp.Stream.Callback? _paCallback;
 
@@ -89,17 +103,20 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
                             return PortAudioSharp.StreamCallbackResult.Complete;
                         }
 
+                        // GERÇEK ZAMANLI YOL: burada yalnızca kilitsiz sayaç ve kanala yazma
+                        // yapılır. Metin biçimleme/I/O (günlük) bu geri çağrımı geciktirir ve
+                        // ses kopmasına yol açar; özet, akış durduktan sonra yazılır.
                         foreach (var chunk in paBuffer.Append(samples))
                         {
                             System.Threading.Interlocked.Increment(ref chunksProduced);
-                            System.Console.WriteLine($"[MIC] Chunk üretildi ve kanala yazıldı. Start: {chunk.Start.TotalSeconds}s, End: {chunk.End.TotalSeconds}s, Samples: {chunk.Samples.Length}");
                             paChunks.Writer.TryWrite(chunk);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    System.Console.WriteLine($"[MIC_ERROR] Callback hatası: {ex.Message}");
+                    // Hata zaten kanal üzerinden tüketiciye taşınıyor; burada günlük yazmak
+                    // (gerçek zamanlı yol) bilgi eklemez, risk ekler.
                     paChunks.Writer.TryComplete(ex);
                     return PortAudioSharp.StreamCallbackResult.Abort;
                 }
@@ -136,11 +153,13 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
                     );
 
                     _paStream.Start();
-                    System.Console.WriteLine($"[MIC] PortAudio başlatıldı. Cihaz ID: {inputParameters.device}, Ad: {deviceInfo.name}");
+                    var startedDevice = inputParameters.device;
+                    var startedName = deviceInfo.name;
+                    Diagnose(() => $"[MIC] PortAudio başlatıldı. Cihaz ID: {startedDevice}, Ad: {startedName}");
                 }
-                catch (Exception ex)
+                catch
                 {
-                    System.Console.WriteLine($"[MIC_ERROR] Stream başlatılamadı: {ex.Message}");
+                    // Hata çağırana olduğu gibi yükseliyor; ayrıca günlüğe yazmak gerekmez.
                     StopPaStream();
                     PortAudioSharp.PortAudio.Terminate();
                     throw;
@@ -168,7 +187,7 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
 
                         if (paCancelled)
                         {
-                            System.Console.WriteLine("[MIC] Okuma döngüsü iptal edildi. Kalan chunk'lar drene ediliyor.");
+                            Diagnose(() => "[MIC] Okuma döngüsü iptal edildi. Kalan chunk'lar drene ediliyor.");
                             while (paChunks.Reader.TryRead(out var pending))
                                 yield return pending;
                             break;
@@ -188,13 +207,16 @@ public sealed class MicrophoneCaptureSource : IAudioCaptureSource, IDisposable
             {
                 StopPaStream();
                 try { PortAudioSharp.PortAudio.Terminate(); } catch { }
-                System.Console.WriteLine($"[MIC] PortAudio sonlandı. Alınan örnek: {totalSamplesReceived}, Üretilen chunk: {chunksProduced}");
+                // Gerçek zamanlı yol bitti: sayaç özetini yazmak artık güvenli.
+                long receivedSamples = System.Threading.Interlocked.Read(ref totalSamplesReceived);
+                int producedChunks = System.Threading.Volatile.Read(ref chunksProduced);
+                Diagnose(() => $"[MIC] PortAudio sonlandı. Alınan örnek: {receivedSamples}, Üretilen chunk: {producedChunks}");
             }
 
             var paTail = paBuffer.Flush();
             if (paTail is not null && paTail.Samples.Length >= 8000)
             {
-                System.Console.WriteLine($"[MIC] Tail chunk üretildi ve kanala yazılıyor. Start: {paTail.Start.TotalSeconds}s, End: {paTail.End.TotalSeconds}s, Samples: {paTail.Samples.Length}");
+                Diagnose(() => $"[MIC] Tail chunk üretildi. Start: {paTail.Start.TotalSeconds}s, End: {paTail.End.TotalSeconds}s, Samples: {paTail.Samples.Length}");
                 yield return paTail;
             }
 

@@ -14,6 +14,11 @@ public sealed record SpeakerAnalysisResult(
     /// boş listeyle çalışmaya devam eder (bkz. <c>ChunkResult.Segments</c>'in aynı deseni).</summary>
     public IReadOnlyList<ChunkResult> Chunks { get; init; } = Chunks ?? Array.Empty<ChunkResult>();
 
+    /// <summary>Konuşmacının KENDİ sesinden ölçülmüş prozodi duygusu (10d). Additive:
+    /// varsayılan boş liste, eski çağrılar etkilenmez.</summary>
+    public IReadOnlyList<SpeakerProsodySummary> SpeakerProsody { get; init; } =
+        Array.Empty<SpeakerProsodySummary>();
+
     public static SpeakerAnalysisResult Disabled { get; } =
         new(DiarizationOutcome.NoAudio, Array.Empty<TranscriptSegment>(), Array.Empty<SpeakerSegment>());
 }
@@ -25,7 +30,13 @@ public interface ISpeakerAnalysis
     /// <summary>Özellik açık mı? Kapalıyken UI hiçbir konuşmacı durumu göstermemelidir.</summary>
     bool Enabled { get; }
 
-    Task<SpeakerAnalysisResult> RunAsync(Guid sessionId, CancellationToken ct);
+    /// <param name="expectedSpeakers">Görüşme başında seçilen kişi sayısı; 0 = bilinmiyor.</param>
+    Task<SpeakerAnalysisResult> RunAsync(Guid sessionId, int expectedSpeakers, CancellationToken ct);
+
+    /// <summary>Dosya modu (karşı tarafa odak): analizden ÖNCE yapılmış ayrımın bölgeleri ve bellekteki ses ile çalışır —
+    /// diarizer çağrılmaz, oturum sesi depodan okunmaz; "Konuşmacı ayırımı" ayarından bağımsızdır.</summary>
+    Task<SpeakerAnalysisResult> RunPrecomputedAsync(Guid sessionId, IReadOnlyList<SpeakerSegment> segments, float[] mono16k,
+        CancellationToken ct) => Task.FromResult(SpeakerAnalysisResult.Disabled);
 }
 
 /// <inheritdoc cref="ISpeakerAnalysis"/>
@@ -34,27 +45,59 @@ public sealed class SpeakerAnalysisService : ISpeakerAnalysis
     private readonly DiarizationJob _job;
     private readonly ISpeakerDataReader _reader;
     private readonly IDiarizationState _state;
+    private readonly SpeakerProsodyAnalyzer _prosody;
 
-    public SpeakerAnalysisService(DiarizationJob job, ISpeakerDataReader reader, IDiarizationState state)
+    // NOT (düzeltme turu 1 / bulgu 3): IDiarizationStore burada KASITLI olarak alınmıyor.
+    // Ses artık _job.RunWithAudioAsync üzerinden TEK seferde okunuyor; ayrı bir store bağımlılığı
+    // ikinci bir GetSessionAudioAsync çağrısına (dolayısıyla ikinci bir şifre-çözme + tahsis) davetiye
+    // çıkarırdı. Segment kaydı zaten DiarizationJob içinde yapılıyor; bu sınıfın store'a doğrudan
+    // ihtiyacı yok.
+    public SpeakerAnalysisService(
+        DiarizationJob job, ISpeakerDataReader reader, IDiarizationState state,
+        SpeakerProsodyAnalyzer prosody)
     {
         _job = job; _reader = reader; _state = state;
+        _prosody = prosody;
     }
 
     // Çalışma anında okunur: kullanıcı Ayarlar'dan açtığında uygulama yeniden başlatılmadan
     // etkili olmalı.
     public bool Enabled => _state.Enabled;
 
-    public async Task<SpeakerAnalysisResult> RunAsync(Guid sessionId, CancellationToken ct)
+    public async Task<SpeakerAnalysisResult> RunAsync(Guid sessionId, int expectedSpeakers, CancellationToken ct)
     {
-        var outcome = await _job.RunAsync(sessionId, ct).ConfigureAwait(false);
+        // Ses BURADA değil, RunWithAudioAsync içinde okunur — tek okuma, iki tüketici (diarizer +
+        // prozodi analizörü). Bkz. DiarizationJob.RunWithAudioAsync dokümantasyonu (bulgu 3).
+        var (outcome, audio) = await _job.RunWithAudioAsync(sessionId, expectedSpeakers, ct).ConfigureAwait(false);
 
         // Başarısızlıkta segment okumaya gerek yok: rapor konuşmacısız gösterilecek.
         if (outcome != DiarizationOutcome.Completed)
             return new SpeakerAnalysisResult(outcome, Array.Empty<TranscriptSegment>(), Array.Empty<SpeakerSegment>());
 
-        var transcript = await _reader.GetTranscriptSegmentsAsync(sessionId, ct).ConfigureAwait(false);
+        // Ham yazı kayıtta değişmez; örtüşmeden gelen tekrar satırlar yalnızca raporda gösterilirken
+        // ayıklanır. Hayalet konuşmacılar DiarizationJob'da kayıttan önce ayıklandı.
+        var transcript = TranscriptDeduper.Dedupe(
+            await _reader.GetTranscriptSegmentsAsync(sessionId, ct).ConfigureAwait(false));
         var speakers = await _reader.GetSpeakerSegmentsAsync(sessionId, ct).ConfigureAwait(false);
         var chunks = await _reader.GetChunkResultsAsync(sessionId, ct).ConfigureAwait(false);
-        return new SpeakerAnalysisResult(outcome, transcript, speakers, chunks);
+
+        // Konuşmacı duygusu, kişinin KENDİ sesinden ölçülür (10d). outcome==Completed olduğu
+        // için audio DEĞİŞMEZ OLARAK doludur (bkz. RunWithAudioAsync sözleşmesi) — ikinci bir
+        // null/boş kontrolüne gerek yoktur.
+        var prosody = await _prosody.AnalyzeAsync(audio, speakers, ct).ConfigureAwait(false);
+
+        return new SpeakerAnalysisResult(outcome, transcript, speakers, chunks) { SpeakerProsody = prosody };
+    }
+
+    public async Task<SpeakerAnalysisResult> RunPrecomputedAsync(Guid sessionId, IReadOnlyList<SpeakerSegment> segments,
+        float[] mono16k, CancellationToken ct)
+    {
+        await _job.SaveSegmentsAsync(sessionId, segments, ct).ConfigureAwait(false);
+        var transcript = TranscriptDeduper.Dedupe(
+            await _reader.GetTranscriptSegmentsAsync(sessionId, ct).ConfigureAwait(false));
+        var speakers = await _reader.GetSpeakerSegmentsAsync(sessionId, ct).ConfigureAwait(false);
+        var chunks = await _reader.GetChunkResultsAsync(sessionId, ct).ConfigureAwait(false);
+        var prosody = await _prosody.AnalyzeAsync(mono16k, speakers, ct).ConfigureAwait(false);
+        return new SpeakerAnalysisResult(DiarizationOutcome.Completed, transcript, speakers, chunks) { SpeakerProsody = prosody };
     }
 }

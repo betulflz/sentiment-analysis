@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace SentimentAnalysis.Core;
 
 /// <summary>Füzyon sonucu (chunk düzeyi). Her iki modelin ham VA'sı ve güveni saydamlık için
-/// taşınır — UI bunları "Metin Analizi" ve "Ses Analizi" sütunlarında ayrı ayrı gösterir.</summary>
+/// taşınır — UI bunları "Sözlere göre" ve "Ses tonuna göre" sütunlarında ayrı ayrı gösterir.</summary>
 public sealed record FusedResult(
     ValenceArousal Combined,
     Emotion PrimaryEmotion,
@@ -22,14 +22,28 @@ public sealed record FusedResult(
     // emin", bunlar "girdi ne kadar analiz edilebilir". "Neden Nötr çıktı?" sorusunun cevabı
     // çoğu zaman burada olduğu için sonuçla birlikte dışarı taşınır. Additive: varsayılan 1,0.
     double AudioReliability = 1.0,
-    double TextReliability = 1.0)
+    double TextReliability = 1.0,
+    // Üç kaynaklı füzyon (11d, spec 11 §3.2): yüz eklendiyse Combined/PrimaryEmotion üç kaynaklıdır;
+    // SpeechVa yüzden ÖNCEKİ (metin+ses) sonuçtur. Karar göstergeleri yüzü kendileri kattığından
+    // SpeechValence'ı kullanır (çift sayım olmasın). Additive: yüz yoksa null / 0.
+    ValenceArousal? SpeechVa = null,
+    double? FaceValence = null,
+    double FaceWeight = 0.0)
 {
+    /// <summary>Yalnızca metin + ses valence'ı (yüz eklenmeden önce).</summary>
+    public double SpeechValence => (SpeechVa ?? Combined).Valence;
+
     /// <summary>Bu chunk "işaretli/şüpheli" mi? Söz-ton uyumsuzluğu eşiği aşıldıysa
     /// (<see cref="Incongruent"/>) VEYA adı konmuş bir örüntü varsa (<see cref="Pattern"/> ≠ Yok,
     /// ör. eşik-altı ironi) true. Aşağı akış (UI/depolama) "şüpheli chunk" filtrelemesini TEK
     /// noktadan bununla yapmalı — yalnızca <see cref="Incongruent"/>'a bakmak eşik-altı ironiyi
     /// kaçırır (master §5.1: ironi "bayraklı" bir sinyaldir).</summary>
     public bool Flagged => Incongruent || Pattern != IncongruencePattern.Yok;
+
+    /// <summary>İt.3 "belirsiz": model emin değil (<see cref="Confidence.Dusuk"/>) → yanlış bir duygu adı
+    /// göstermek yerine "belirsiz" denir; parça duygu paylarına girmez. VA sürekli ölçü olarak kalır.
+    /// Kural TEK yerde: UI ve özet bununla karar verir.</summary>
+    public bool Uncertain => Confidence == Confidence.Dusuk;
 }
 
 /// <summary>Bir chunk'ın tam sonucu (zaman çizelgesi öğesi).
@@ -45,6 +59,14 @@ public sealed record ChunkResult(
     IReadOnlyList<TranscriptSegment>? Segments = null)
 {
     public IReadOnlyList<TranscriptSegment> Segments { get; init; } = Segments ?? Array.Empty<TranscriptSegment>();
+
+    /// <summary>Canlı "Yöneten / Karşı taraf" çizelgesi (12); null = rol ayrımı yok (tanıtılmadı, dosya modu,
+    /// model eksik). Saklanmaz — yalnız canlı karar ve ekran içindir. Additive.</summary>
+    public RoleTimeline? Roles { get; init; }
+
+    /// <summary>Yalnız KARŞI TARAFIN sesi ve sözlerinden duygu (12). Parçada yalnız karşı taraf konuştuysa
+    /// <see cref="Fused"/>'ın kendisi; karşı taraf yeterince konuşmadıysa null. Rol ayrımı yoksa null. Additive.</summary>
+    public FusedResult? Counterpart { get; init; }
 }
 
 /// <summary>Bir toplantı/oturum: chunk listesi + üst-veriler. Toplantı-düzeyi

@@ -108,6 +108,23 @@ public class SchemaMigrationTests : IDisposable
     }
 
     [Fact]
+    public async Task EskiVeritabani_KararTablolariOlusur_KayitCalisir()
+    {
+        var id = Guid.NewGuid();
+        SeedLegacyDatabase(id);
+
+        var store = NewStore();
+        var record = new DecisionSessionRecord(
+            new DecisionSession(MeetingProfile.Satis, new double[6], new double[6], Array.Empty<DecisionWindow>()),
+            FollowUpAction.TeklifGonder, "Görüşme boyunca belirgin bir sorun görülmedi.");
+        await store.SaveDecisionSessionAsync(id, record, CancellationToken.None);
+
+        var got = await store.GetDecisionSessionAsync(id, CancellationToken.None);
+        Assert.Equal(FollowUpAction.TeklifGonder, got!.FollowUp);
+        Assert.Empty(got.Session.Windows);
+    }
+
+    [Fact]
     public void Ctor_OnLegacyDatabase_AddsMissingColumns()
     {
         SeedLegacyDatabase(Guid.NewGuid());

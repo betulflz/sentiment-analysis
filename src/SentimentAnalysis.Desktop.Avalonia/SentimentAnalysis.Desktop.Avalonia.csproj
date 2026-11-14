@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="SentimentAnalysis.Desktop.Avalonia.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
@@ -32,5 +36,6 @@
     <ProjectReference Include="..\SentimentAnalysis.Infrastructure.Audio\SentimentAnalysis.Infrastructure.Audio.csproj" />
     <ProjectReference Include="..\SentimentAnalysis.Infrastructure.Storage\SentimentAnalysis.Infrastructure.Storage.csproj" />
     <ProjectReference Include="..\SentimentAnalysis.Infrastructure.Diarization\SentimentAnalysis.Infrastructure.Diarization.csproj" />
+    <ProjectReference Include="..\SentimentAnalysis.Infrastructure.Vision\SentimentAnalysis.Infrastructure.Vision.csproj" />
   </ItemGroup>
 </Project>
