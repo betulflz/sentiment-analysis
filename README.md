@@ -211,20 +211,24 @@ Hazırlık UI iş parçacığının dışında çalışır ve hazırlık sıras�
 | 05 Ses yakalama + Silero VAD | ✅ |
 | 06 Pipeline orkestrasyonu | ✅ |
 | 07 Depolama + gizlilik | ✅ |
-| 08 Avalonia UI (+ dosya-analiz demo) | ✅ |
-| 08d Yüzdelik dağılım, üçlü görünüm, canlı mikrofon | 🔜 planlanıyor |
-| 09 Değerlendirme (eval) | 🔜 |
+| 08 Avalonia UI (+ dosya-analiz demo, canlı mikrofon) | ✅ |
+| 10 Konuşmacı ayrımı (pencereli TitaNet, kişi sayısı seçimi) | ✅ |
+| 11 Canlı Görüşme KDS — görüntü kanalı, AHP/TOPSIS, canlı ekran, görüşme sonrası rapor | ✅ |
+| 12 Karşı tarafa odak — "Sesimi tanıt", Siz/Karşı taraf ayrımı | ✅ |
+| Kalite İt.1 — ölçüm araçları (`tools/quality`, Benchmark CLI) | ✅ araçlar; insan denetimli pilot kümesi bekliyor |
+| Kalite İt.2 — konuşmacı/metin/zaman | ✅ veri gerektirmeyen işler; örtüşen konuşma açık |
+| Kalite İt.3 — güvenilir duygu ("Belirsiz", sigmoid, ses güveni) | ✅ veri gerektirmeyen işler; kalibrasyon etiket bekliyor |
+| Kalite İt.4 — kanıtlı açık olaylar (cevapsız soru, sonraki adım, uzun tek kişi) | ✅ kod; kör insan değerlendirmesi bekliyor |
+| Kalite İt.5 — geçmiş raporu açma, ayarlar, metin/konuşmacı düzeltme, 30 dk test | ✅ |
 
-Sonraki turlara ertelenenler: canlı sistem-sesi yakalama (ScreenCaptureKit/WASAPI),
-Opus ses sıkıştırma, OS keychain entegrasyonu, zengin UI görselleştirme (8-duygu çarkı,
-trend grafiği).
+Ayrıntılı durum ve ölçümler: [`docs/DEVAM-RAPORU.md`](docs/DEVAM-RAPORU.md).
 
 ### Kalibre edilmemiş olan
 
-Füzyon ağırlıkları, VAD eşiği ve metin duygu → valence-arousal tablosu şu an **makul
-başlangıç değerleridir, ölçülmüş değildir.** Etiketli Türkçe veri üzerinde kalibrasyon
-alt-proje 09'un konusudur. Değerlendirme tek bir "doğruluk" sayısına indirgenmeyecek;
-katı doğruluk ve kararlı örneklerdeki doğruluk + kapsam oranı ayrı ayrı raporlanacaktır.
+Füzyon ağırlıkları, VAD eşiği, metin duygu → valence-arousal tablosu, ses modeli güveni (0,6),
+öneri etki puanları ve açık olay eşikleri **makul başlangıç değerleridir, ölçülmüş değildir.**
+Kalibrasyon insan etiketli Türkçe kayıt gerektirir. Değerlendirme tek bir "doğruluk" sayısına
+indirgenmeyecek; katı doğruluk ve kararlı örneklerdeki doğruluk + kapsam oranı ayrı ayrı raporlanacaktır.
 
 Bu proje kesinlik gösterisi yerine dürüstlüğü tercih eder: sistem emin olmadığında
 "emin değilim" der.

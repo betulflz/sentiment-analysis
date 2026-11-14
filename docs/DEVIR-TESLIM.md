@@ -37,8 +37,10 @@ Henüz **kanıtlanmış doğruluk kazancı yok**. Ölçüm hazır, ama gerçek T
 
 ### İterasyon 2 — doğru konuşmacı, metin, zaman
 - [~] (2026-11-14: pencereli ayrım varsayılan, %71→%85; bkz. DEVAM-RAPORU.md) sherpa vs pyannote Community-1 vs (uygunsa) Nemotron/NeMo-Speech.cpp; en iyi iki hat ayrıntılı değerlendirme. Hedef: DER'de ≥%20 göreli azalma.
-- [ ] `GhostSpeakerFilter` kuralını yeniden değerlendir (kısa katılımcıyı yalnız süreden dolayı silme).
-- [ ] WhisperX tarzı kelime hizalama; uzun/çok kişili parçayı tek kişiye atamayı kaldır.
+- [x] `GhostSpeakerFilter` kuralını yeniden değerlendir. (2026-11-14: kişi sayısı verildiyse ve küme sayısı bunu aşmıyorsa pay kuralı uygulanmaz — `b97c8c0`.)
+- [x] Kelime hizalama denendi, **eklenmedi** (2026-11-14): uzun parça zaten orantılı bölünüyor (`8dc8a20`); kelime zamanı 2 referanslı kayıtta %98→%99 / %100→%100, DTW whisper.cpp'yi çökertti. Bkz. `docs/research/2026-11-14-kelime-zamani-deneyi.md`.
+- [x] Whisper sessizlik halüsinasyonu ("Altyazı M.K.") süzgeci (`0b9cabb`, `bd0747e`).
+- [x] Duraklama sonrası atlanan cevap: beam search 5 (`72805b8`; Şemsi WER %25,7 → %6,4).
 - [ ] Whisper turbo vs daha küçük model (FLEURS ön ölçümünde küçük modeller belirgin kötüydü: WER base %39, small %27, turbo %8,7).
 
 ### İterasyon 3 — duygu
@@ -50,14 +52,15 @@ Henüz **kanıtlanmış doğruluk kazancı yok**. Ölçüm hazır, ama gerçek T
 - [x] Lisans notu (2026-11-14): bkz. aşağıdaki "Lisans" notu. **Ürün kararı kullanıcıda.**
 
 ### İterasyon 4 — kanıta dayalı öneri
-- [ ] 3–5 açık olay (cevapsız soru, belirsiz sonraki adım, tek kişinin uzun konuşması) + kaynak cümleli öneri; TOPSIS ile karşılaştır.
-- [ ] Kör insan değerlendirmesi; yanlış uyarı/saat ve kaçırılan olay birlikte raporlanır.
+- [x] 3 açık olay + kaynak cümleli öneri (`248a70c`); aktarılan soru yanlış alarmı düzeltildi (`365162f`).
+- [ ] Kör insan değerlendirmesi — form üreteci denendi (`quality-local/kor-degerlendirme/`), ama eldeki 3 sakin kayıtta TOPSIS 13/13 "Devam et", kurallar 0 olay: ayırt edici değil. Sorunlu anlar içeren kayıt gerekiyor.
 
 ### İterasyon 5 — günlük kullanım
-- [ ] Geçmiş ekranından eski raporu açma akışı (şu an listeleme var, açma bağlı değil).
-- [ ] Ayarların gerçekten uygulanması, saklama tercihi, kişi/metin düzeltme.
-- [ ] 30 dk görüşme + tekrarlı başlat/durdur testi (canlıda RTF < 1, tercihen < 0,7).
-- [ ] Görüntü kanalı: yüz–konuşmacı eşlemesi doğrulanmadan yüz, ses duygusuna karıştırılmaz.
+- [x] Geçmiş ekranından eski raporu açma (`2886bd1`).
+- [x] Ayarların uygulanması, saklama tercihi (`e2734f9`), kişi/metin düzeltme (`deaccb4`).
+- [x] 30 dk test (2026-11-14, ses hattı, dosya modu): 31 dk → 964 sn, RTF 0,52, kapsam %100, ilk/son parça aynı hız, RSS 2,3 GB, tepe 3,6 GB. Bkz. `docs/research/2026-11-14-uzun-gorusme-testi.md`.
+- [ ] Canlı mikrofonla 30 dk + tekrarlı başlat/durdur (elle, cihazda).
+- [x] Görüntü kanalı: rol bilgisi varken yüz yalnız karşı tarafın duygusuna katılır (`b97c8c0`); kişi kartında yüz yalnız elle eşlemeyle.
 
 ## Notlar / tuzaklar
 

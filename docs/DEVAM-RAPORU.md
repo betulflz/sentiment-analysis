@@ -3,6 +3,30 @@
 Bu belge, "Canlı Görüşme KDS" projesinde kalite iterasyonlarının **nerede kaldığını** ve **nereden devam edileceğini** anlatır. Yeni oturum ya da başka bir yapay zeka, önce bu dosyayı, sonra `docs/DEVIR-TESLIM.md` dosyasını okumalı.
 
 
+## SON DURUM — 14 Kasım 2026 akşam (bu bölüm aşağıdakilerin hepsinden önce gelir)
+
+Beş iterasyonun **veri gerektirmeyen bütün işleri bitti**. Kalan her şey insan etiketi ya da cihazda elle deneme ister.
+
+| Commit | İş |
+|---|---|
+| `deaccb4` | İt.5: rapor ekranında metin ve konuşmacı düzeltme; ayrı tabloda kalıcı, açık olaylar düzeltilmiş metne göre yenilenir. |
+| `0b9cabb`, `bd0747e` | İt.2: Whisper sessizlik halüsinasyonu ("Altyazı M.K.") süzgeci; yalnız segmentin tamamı kalıpsa, kalite sinyalinde kalır. |
+| `b97c8c0` | İt.2: kişi sayısı verildiyse kısa konuşan gerçek kişi "hayalet" sayılmaz. İt.5: yüz yalnız karşı tarafın duygusuna katılır. |
+| `365162f` | İt.4: aktarılan soru ("… mi … diye") yanlış "cevapsız soru" üretmez; Benchmark `--profile`. |
+
+Ölçümler (geliştirme kayıtları, bağımsız test değil):
+- Kelime zamanıyla konuşmacı ataması denendi, **eklenmedi** (%98→%99; DTW çöktü) — `docs/research/2026-11-14-kelime-zamani-deneyi.md`.
+- 30 dk ses hattı: RTF 0,52, kapsam %100, yavaşlama yok, tepe bellek 3,6 GB — `docs/research/2026-11-14-uzun-gorusme-testi.md`.
+- Öneri karşılaştırması: 3 sakin kayıtta TOPSIS 13/13 "Devam et", kurallar 0 olay → ayırt edici kayıt gerekiyor (aynı belge).
+
+Testler: `dotnet test` 12 projede 1.135 başarılı / 18 atlanan / 0 başarısız; `tools/quality` Python testleri yeşil.
+Push: yapılmadı (origin `67d1c6c`'de; aradaki tüm commit'ler onay bekliyor).
+
+**İnsan gerektiren kalan işler:** (1) Şemsi/Muğla/pilot etiketlerinin insan denetimi + duygu etiketleri → İt.1 WER/DER
+kesin ölçümü ve İt.3 kalibrasyonu; (2) sorunlu anlar içeren 2–3 kayıt + kör değerlendirme (İt.4); (3) cihazda canlı
+mikrofonla 30 dk ve tekrarlı başlat/durdur, "Sesimi tanıt" akışı, rapor ekranındaki düzeltme alanı (İt.5).
+
+
 ## Son çalışma — 14 Kasım 2026: duraklama sonrası eksik metin
 
 Kullanıcı yeni bir iki kişilik kayıt, referans metin ve yaklaşık konuşmacı zamanları verdi.
