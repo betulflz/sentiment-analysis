@@ -53,7 +53,7 @@ Henüz **kanıtlanmış doğruluk kazancı yok**. Ölçüm hazır, ama gerçek T
 
 ### İterasyon 4 — kanıta dayalı öneri
 - [x] 3 açık olay + kaynak cümleli öneri (`248a70c`); aktarılan soru yanlış alarmı düzeltildi (`365162f`).
-- [ ] Kör insan değerlendirmesi — form üreteci denendi (`quality-local/kor-degerlendirme/`), ama eldeki 3 sakin kayıtta TOPSIS 13/13 "Devam et", kurallar 0 olay: ayırt edici değil. Sorunlu anlar içeren kayıt gerekiyor.
+- [ ] Kör insan değerlendirmesi — form üreteci denendi (`quality-local/kor-degerlendirme/`), ama eldeki 3 sakin kayıtta TOPSIS 13/13 "Devam et", kurallar 0 olay: ayırt edici değil. Sorunlu anlar içeren kayıt gerekiyor. Sentetik 5 senaryoda kurallar 4/4 doğru (bkz. `docs/research/2026-11-14-sentetik-olay-senaryolari.md`).
 
 ### İterasyon 5 — günlük kullanım
 - [x] Geçmiş ekranından eski raporu açma (`2886bd1`).
