@@ -16,7 +16,11 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private int _retentionDays;
     [ObservableProperty] private bool _keepAudio;
-    [ObservableProperty] private string _language;
+    /// <summary>Whisper'a yalnız bilinen dil kodu gider (serbest metin kalıcı STT bozulmasına yol açıyordu).</summary>
+    public static readonly LanguageOption[] Options =
+        [new("tr", "Türkçe"), new("en", "İngilizce"), new("auto", "Otomatik algıla")];
+    public System.Collections.Generic.IReadOnlyList<LanguageOption> LanguageOptions => Options;
+    [ObservableProperty] private LanguageOption _selectedLanguage;
 
     /// <summary>Konuşmacı ayrımı açık mı (10b). AppConfig immutable singleton olduğundan
     /// gerçek etki <see cref="IDiarizationState"/> üzerinden ANINDA uygulanır — kullanıcı
@@ -34,7 +38,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _diarizationEnabled = diarization?.Enabled ?? initial.Diarization.Enabled;
         _retentionDays = initial.Storage.AudioRetentionDays;
         _keepAudio = initial.Storage.KeepAudio;
-        _language = initial.Stt.Language ?? "tr";
+        _selectedLanguage = System.Array.Find(Options, o => o.Code == (initial.Stt.Language ?? "auto")) ?? Options[0];
     }
 
     [RelayCommand]
@@ -43,7 +47,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         var updated = _initial with
         {
             Storage = _initial.Storage with { AudioRetentionDays = RetentionDays, KeepAudio = KeepAudio },
-            Stt = _initial.Stt with { Language = Language },
+            Stt = _initial.Stt with { Language = SelectedLanguage.Code == "auto" ? null : SelectedLanguage.Code },
             Diarization = _initial.Diarization with { Enabled = DiarizationEnabled },
         };
         // Çalışma-anı durumunu da güncelle: config kopyası tek başına hiçbir şeyi değiştirmez.
@@ -58,4 +62,9 @@ public sealed partial class SettingsViewModel : ObservableObject
             SavedNotice = "Ayarlar kaydedilemedi: ayar dosyasına yazılamadı.";
         }
     }
+}
+
+public sealed record LanguageOption(string Code, string Label)
+{
+    public override string ToString() => Label;
 }

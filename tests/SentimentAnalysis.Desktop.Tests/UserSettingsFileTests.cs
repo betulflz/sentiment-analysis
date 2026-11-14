@@ -60,4 +60,25 @@ public class UserSettingsFileTests
         UserSettingsFile.Save(path, AppConfig.Default with { Storage = AppConfig.Default.Storage with { AudioRetentionDays = days } });
         Assert.Equal(AppConfig.Default.Storage.AudioRetentionDays, UserSettingsFile.Apply(path, AppConfig.Default).Storage.AudioRetentionDays);
     }
+
+    // İnceleme: dil serbest metindi — "Türkçe" yazılırsa Whisper'a geçersiz kod gidip her açılışta yeniden uygulanıyordu.
+    [Theory]
+    [InlineData("türkçe")]
+    [InlineData("xx")]
+    [InlineData("")]
+    public void GecersizDil_YokSayilir(string language)
+    {
+        var path = TempPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "{\"Language\":\"" + language + "\"}");
+        Assert.Equal("tr", UserSettingsFile.Apply(path, AppConfig.Default).Stt.Language);
+    }
+
+    [Fact]
+    public void OtomatikDil_KaydedilirVeKorunur()
+    {
+        var path = TempPath();
+        UserSettingsFile.Save(path, AppConfig.Default with { Stt = AppConfig.Default.Stt with { Language = null } });
+        Assert.Null(UserSettingsFile.Apply(path, AppConfig.Default).Stt.Language);
+    }
 }

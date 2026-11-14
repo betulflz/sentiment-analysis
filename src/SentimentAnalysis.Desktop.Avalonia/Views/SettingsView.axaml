@@ -16,8 +16,8 @@
         <CheckBox Content="Sesi sakla" IsChecked="{Binding KeepAudio}" />
 
         <StackPanel Spacing="4">
-            <TextBlock Text="Dil (tr / en)" />
-            <TextBox Text="{Binding Language}" Watermark="tr" />
+            <TextBlock Text="Görüşme dili" />
+            <ComboBox ItemsSource="{Binding LanguageOptions}" SelectedItem="{Binding SelectedLanguage}" MinWidth="200" />
         </StackPanel>
 
         <StackPanel Spacing="4">

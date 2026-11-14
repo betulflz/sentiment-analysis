@@ -19,7 +19,7 @@ public static class UserSettingsFile
     public static void Save(string path, AppConfig config)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var dto = new Dto(config.Storage.AudioRetentionDays, config.Storage.KeepAudio, config.Stt.Language, config.Diarization.Enabled);
+        var dto = new Dto(config.Storage.AudioRetentionDays, config.Storage.KeepAudio, config.Stt.Language ?? "auto", config.Diarization.Enabled);
         var tmp = path + ".tmp";
         File.WriteAllText(tmp, JsonSerializer.Serialize(dto));
         File.Move(tmp, path, overwrite: true); // yarım yazılmış dosya kalmasın
@@ -42,7 +42,8 @@ public static class UserSettingsFile
         if (dto is null) return config;
 
         int days = dto.AudioRetentionDays is int d && d > 0 && d <= MaxRetentionDays ? d : config.Storage.AudioRetentionDays;
-        string? language = dto.Language is { Length: > 0 and <= 8 } l ? l : config.Stt.Language;
+        // Yalnız bilinen değerler: "auto" = otomatik algılama (null); geçersiz değer varsayılanı bozmaz.
+        string? language = dto.Language switch { "tr" or "en" => dto.Language, "auto" => null, _ => config.Stt.Language };
         return config with
         {
             Storage = config.Storage with { AudioRetentionDays = days, KeepAudio = dto.KeepAudio ?? config.Storage.KeepAudio },
