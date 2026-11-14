@@ -42,6 +42,70 @@ public static class SpeakerAligner
         return result;
     }
 
+    /// <summary>İt.2: <see cref="Align"/> gibi, ama iki (ya da daha çok) kişinin sırayla konuştuğu uzun parçayı
+    /// tek kişiye yazmak yerine BÖLER. Kelime zamanı olmadığından bölme YAKLAŞIKTIR: kelimeler konuşma sıralarına
+    /// süreleriyle orantılı dağıtılır (eşit konuşma hızı varsayımı; sınırdaki bir-iki kelime yanlış tarafa düşebilir).
+    /// <paramref name="minTurnSeconds"/>'dan kısa sıralar (ör. "hı hı") bölmez. Metin kaybı yoktur: kelimeler sırasıyla
+    /// korunur, her parça en az bir kelime alır.</summary>
+    public static IReadOnlyList<AlignedSegment> AlignSplitting(
+        IReadOnlyList<TranscriptSegment> transcript,
+        IReadOnlyList<SpeakerSegment> speakers,
+        double minOverlapRatio,
+        double minTurnSeconds = 1.0)
+    {
+        var result = new List<AlignedSegment>(transcript.Count);
+        foreach (var seg in transcript)
+        {
+            var turns = Turns(seg, speakers, minTurnSeconds);
+            var words = seg.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (turns.Count < 2 || words.Length < turns.Count)
+            {
+                var (speaker, uncertain) = BestSpeaker(seg.Start, seg.End, speakers, minOverlapRatio);
+                result.Add(new AlignedSegment(seg, speaker, uncertain));
+                continue;
+            }
+
+            double total = turns.Sum(t => t.End - t.Start);
+            int given = 0;
+            double cumulative = 0;
+            for (int i = 0; i < turns.Count; i++)
+            {
+                cumulative += turns[i].End - turns[i].Start;
+                int upto = i == turns.Count - 1 ? words.Length
+                    : (int)Math.Round(words.Length * cumulative / total, MidpointRounding.AwayFromZero);
+                // Her parça ≥1 kelime; kalan parçalara da en az birer kelime bırakılır.
+                upto = Math.Clamp(upto, given + 1, words.Length - (turns.Count - 1 - i));
+                var from = TimeSpan.FromSeconds(i == 0 ? seg.Start.TotalSeconds : turns[i].Start);
+                var to = TimeSpan.FromSeconds(i == turns.Count - 1 ? seg.End.TotalSeconds : turns[i + 1].Start);
+                var part = new TranscriptSegment(string.Join(' ', words[given..upto]), from, to);
+                var (speaker, uncertain) = BestSpeaker(from, to, speakers, minOverlapRatio);
+                result.Add(new AlignedSegment(part, speaker, uncertain));
+                given = upto;
+            }
+        }
+        return result;
+    }
+
+    /// <summary>Parça içindeki konuşma sıraları: bilinen kişilerin bölgeleri kesilip zamana göre dizilir, kısa sıralar
+    /// atılır, ardışık aynı kişi birleşir.</summary>
+    private static List<(SpeakerId Speaker, double Start, double End)> Turns(
+        TranscriptSegment seg, IReadOnlyList<SpeakerSegment> speakers, double minTurnSeconds)
+    {
+        double a = seg.Start.TotalSeconds, b = seg.End.TotalSeconds;
+        var pieces = speakers.Where(s => s.Speaker.Index >= 0)
+            .Select(s => (s.Speaker, Start: Math.Max(a, s.Start.TotalSeconds), End: Math.Min(b, s.End.TotalSeconds)))
+            .Where(p => p.End - p.Start >= minTurnSeconds)
+            .OrderBy(p => p.Start).ToList();
+        var turns = new List<(SpeakerId Speaker, double Start, double End)>();
+        foreach (var p in pieces)
+        {
+            if (turns.Count > 0 && turns[^1].Speaker == p.Speaker)
+                turns[^1] = (p.Speaker, turns[^1].Start, Math.Max(turns[^1].End, p.End));
+            else turns.Add(p);
+        }
+        return turns;
+    }
+
     /// <summary>Aynı örtüşme mantığıyla chunk'ları (duygu sonucu taşıyan zaman aralıkları)
     /// konuşmacılara atar — rapor bunu konuşmacı-başına duygu özetine indirger (10c).</summary>
     public static IReadOnlyList<AlignedChunk> AlignChunks(

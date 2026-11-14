@@ -441,4 +441,14 @@ public class ReportViewModelTests
         Assert.False(vm.HasOpenEvents);
         Assert.Contains("kayıtlı", vm.DiarizationStatus);
     }
+
+    // --- İt.2: iki kişiye yayılan uzun parça tek kişiye yazılmaz ---
+    [Fact]
+    public void ApplySpeakers_IkiKisiyeYayilanParca_IkiBalonaBolunur()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.ApplySpeakers([T("bir iki üç dört beş altı yedi sekiz", 0, 8)], [S(0, 0, 4), S(1, 4, 8)], minOverlapRatio: 0.5);
+        Assert.Equal(new[] { "Konuşmacı A", "Konuşmacı B" }, vm.SpeakerLines.Select(l => l.Label));
+        Assert.Equal(new[] { "bir iki üç dört", "beş altı yedi sekiz" }, vm.SpeakerLines.Select(l => l.Text));
+    }
 }

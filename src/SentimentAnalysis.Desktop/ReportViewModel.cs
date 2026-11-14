@@ -407,7 +407,8 @@ public sealed partial class ReportViewModel : ObservableObject
     private void BuildSpeakerLines()
     {
         if (_lastSpeakerInput is not var (transcript, speakers, minOverlapRatio)) return;
-        var aligned = SpeakerAligner.Align(transcript, speakers, minOverlapRatio);
+        // İt.2: iki kişiye yayılan uzun parça bölünür (yaklaşık, kelime oranıyla) — tek kişiye yazılmaz.
+        var aligned = SpeakerAligner.AlignSplitting(transcript, speakers, minOverlapRatio);
         var lines = SpeakerLineBuilder.Build(aligned);
         SpeakerLines = lines.Select(l => new SpeakerLineVm(l, GivenName(l.Speaker))).ToList();
         HasSpeakers = SpeakerLines.Count > 0;

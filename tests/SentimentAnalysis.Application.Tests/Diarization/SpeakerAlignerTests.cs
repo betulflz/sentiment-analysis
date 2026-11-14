@@ -241,4 +241,65 @@ public class SpeakerAlignerTests
         Assert.Equal(new SpeakerId(1), result[0].Speaker);
         Assert.True(result[0].Uncertain);
     }
+
+    // --- İt.2: iki kişiye yayılan uzun parça bölünür (kelime oranıyla, yaklaşık) ---
+    private static TranscriptSegment W(double s, double e, string text) => new(text, TimeSpan.FromSeconds(s), TimeSpan.FromSeconds(e));
+
+    [Fact]
+    public void Split_IkiKisiyeYayilanParca_SurelerineGoreBolunur()
+    {
+        var r = SpeakerAligner.AlignSplitting(
+            [W(0, 10, "bir iki üç dört beş altı yedi sekiz dokuz on")],
+            [S(0, 0, 6), S(1, 6, 10)], 0.5);
+        Assert.Equal(2, r.Count);
+        Assert.Equal(new SpeakerId(0), r[0].Speaker);
+        Assert.Equal("bir iki üç dört beş altı", r[0].Segment.Text);
+        Assert.Equal(TimeSpan.Zero, r[0].Segment.Start);
+        Assert.Equal(TimeSpan.FromSeconds(6), r[0].Segment.End);
+        Assert.Equal(new SpeakerId(1), r[1].Speaker);
+        Assert.Equal("yedi sekiz dokuz on", r[1].Segment.Text);
+        Assert.Equal(TimeSpan.FromSeconds(6), r[1].Segment.Start);
+        Assert.Equal(TimeSpan.FromSeconds(10), r[1].Segment.End);
+        Assert.All(r, a => Assert.False(a.Uncertain));
+    }
+
+    [Fact]
+    public void Split_KisaAraSoz_BolmeYapilmaz()
+    {
+        // 0,6 sn'lik araya giriş (ör. "hı hı") parçayı bölmez: tek kişiye, eski kuralla.
+        var r = SpeakerAligner.AlignSplitting([W(0, 10, "bir iki üç dört beş")], [S(0, 0, 5), S(1, 5, 5.6), S(0, 5.6, 10)], 0.5);
+        var a = Assert.Single(r);
+        Assert.Equal(new SpeakerId(0), a.Speaker);
+        Assert.Equal("bir iki üç dört beş", a.Segment.Text);
+    }
+
+    [Fact]
+    public void Split_TekKelime_Bolunmez()
+    {
+        var r = SpeakerAligner.AlignSplitting([W(0, 4, "evet")], [S(0, 0, 2), S(1, 2, 4)], 0.5);
+        Assert.Single(r);
+    }
+
+    [Fact]
+    public void Split_UcSira_ABA()
+    {
+        var r = SpeakerAligner.AlignSplitting([W(0, 9, "a1 a2 a3 b1 b2 b3 c1 c2 c3")], [S(0, 0, 3), S(1, 3, 6), S(0, 6, 9)], 0.5);
+        Assert.Equal(new[] { "a1 a2 a3", "b1 b2 b3", "c1 c2 c3" }, r.Select(x => x.Segment.Text));
+        Assert.Equal(new[] { 0, 1, 0 }, r.Select(x => x.Speaker.Index));
+    }
+
+    [Fact]
+    public void Split_HerParcaEnAzBirKelime_MetinKaybiYok()
+    {
+        // Kelime sayısı az, süre oranı çok dengesiz: hiçbir taraf boş kalmaz, tüm kelimeler korunur.
+        var r = SpeakerAligner.AlignSplitting([W(0, 20, "uzun kısa")], [S(0, 0, 18), S(1, 18, 20)], 0.5);
+        Assert.Equal(new[] { "uzun", "kısa" }, r.Select(x => x.Segment.Text));
+    }
+
+    [Fact]
+    public void Split_BilinmeyenBolgeYoksayilir_TekKisiyeKalir()
+    {
+        var r = SpeakerAligner.AlignSplitting([W(0, 10, "bir iki üç dört")], [S(0, 0, 6), S(-1, 6, 10)], 0.5);
+        Assert.Single(r);
+    }
 }
