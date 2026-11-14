@@ -13,6 +13,9 @@ public static class TranscriptAssembler
 
     public static Transcript Assemble(IReadOnlyList<SttSegment> segments, DetectedLanguage? forced)
     {
+        // İt.2: sessizlikte uydurulan altyazı/video kapanışı segmentleri hiç yokmuş gibi davranılır —
+        // olasılık ortalamasına da girmez; parça yalnız bunlardan oluşuyorsa "konuşma yok" olur.
+        segments = segments.Where(s => !WhisperHallucinationFilter.IsHallucination(s.Text)).ToList();
         if (segments.Count == 0)
             return new Transcript(string.Empty, forced ?? DetectedLanguage.Other, EmptyAvgLogProb);
 

@@ -108,4 +108,42 @@ public class TranscriptAssemblerTests
     {
         Assert.Equal(expected, LanguageMap.FromIso(code));
     }
+
+    // İt.2: Whisper sessizlikte Türkçe altyazı/YouTube kapanışları uydurur (whisper-beam-01: 30 sn sessizlik → "Altyazı M.K.").
+    [Theory]
+    [InlineData("Altyazı M.K.")]
+    [InlineData("altyazı: M.K")]
+    [InlineData("Alt yazı M.K.")]
+    [InlineData("İzlediğiniz için teşekkürler.")]
+    [InlineData("İzlediğiniz için teşekkür ederim!")]
+    [InlineData("Abone olmayı unutmayın.")]
+    [InlineData("Bir sonraki videoda görüşmek üzere.")]
+    [InlineData("Videoyu beğenmeyi ve abone olmayı unutmayın!")]
+    public void Assemble_DropsKnownSilenceHallucination_AsNoSpeech(string hallucination)
+    {
+        var t = TranscriptAssembler.Assemble(new[] { Seg(hallucination, 0, 29.98, 0.6) }, forced: null);
+        Assert.Equal(string.Empty, t.Text);
+        Assert.Empty(t.Segments!);
+        Assert.Equal(TranscriptAssembler.EmptyAvgLogProb, t.AvgLogProb);
+    }
+
+    [Fact]
+    public void Assemble_DropsHallucinatedSegment_KeepsRealSpeech()
+    {
+        var t = TranscriptAssembler.Assemble(
+            new[] { Seg("Peki ne zaman başlayabilirsiniz?", 0, 3, 0.9), Seg("Altyazı M.K.", 3, 10, 0.2) }, forced: null);
+        Assert.Equal("Peki ne zaman başlayabilirsiniz?", t.Text);
+        Assert.Single(t.Segments!);
+        Assert.Equal(Math.Log(0.9), t.AvgLogProb, precision: 10);
+    }
+
+    [Theory]
+    [InlineData("Dinlediğiniz ve izlediğiniz için teşekkürler, şimdi fiyat konusuna geçelim.")]
+    [InlineData("Altyazı hazırlama işini biz yapıyoruz.")]
+    [InlineData("Abone sayımız geçen ay arttı.")]
+    public void Assemble_KeepsRealSentences_ContainingSimilarWords(string real)
+    {
+        var t = TranscriptAssembler.Assemble(new[] { Seg(real, 0, 4, 0.8) }, forced: null);
+        Assert.Equal(real, t.Text);
+    }
 }
