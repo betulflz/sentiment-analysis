@@ -54,6 +54,14 @@ public sealed partial class MainViewModel : ObservableObject
         _decisions = decisions;
         _currentView = live;
 
+        // İt.5: Geçmiş'ten açılan kayıtlı oturum raporda gösterilir; geç biten kayıt uyarısı ona yazılmaz.
+        History.Opened += (session, decisionSession) =>
+        {
+            ++_reportGeneration;
+            Report.OpenStored(session, decisionSession);
+            CurrentView = Report;
+        };
+
         Live.Completed += s =>
         {
             Report.LoadSummary(s);

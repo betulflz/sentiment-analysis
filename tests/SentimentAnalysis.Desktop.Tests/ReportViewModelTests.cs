@@ -420,4 +420,25 @@ public class ReportViewModelTests
         Assert.False(vm.HasOpenEvents);
         Assert.Empty(vm.OpenEvents);
     }
+
+    // --- İt.5: geçmişten eski raporu açma ---
+    [Fact]
+    public void OpenStored_KararKaydiYoksa_KararKartlariGizli_KonusmacilarTemizlenir()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.ApplySpeakers([T("Uygun mu?", 0, 4)], [S(0, 0, 4)], minOverlapRatio: 0.5);
+        vm.LoadDecisions(new DecisionSession(MeetingProfile.Satis, new double[6], new double[6],
+            new[] { DW(0, 0.5, LiveAction.DevamEt) }));
+        Assert.True(vm.HasDecisionData);
+
+        vm.OpenStored(Session(), decisions: null);
+
+        Assert.True(vm.HasReport);
+        Assert.Equal("Mutlu", vm.DominantEmotion);
+        Assert.False(vm.HasDecisionData);
+        Assert.Empty(vm.Recommendations);
+        Assert.False(vm.HasSpeakers);
+        Assert.False(vm.HasOpenEvents);
+        Assert.Contains("kayıtlı", vm.DiarizationStatus);
+    }
 }

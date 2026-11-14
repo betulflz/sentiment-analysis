@@ -3,12 +3,15 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="500"
+             xmlns:desktop="clr-namespace:SentimentAnalysis.Desktop;assembly=SentimentAnalysis.Desktop"
              x:Class="SentimentAnalysis.Desktop.Avalonia.Views.HistoryView">
 
     <DockPanel>
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,16">
             <TextBlock Text="Geçmiş Oturumlar" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,16,0" />
             <Button Content="Yenile" Command="{Binding RefreshCommand}" />
+            <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Opacity="0.8"
+                       IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         </StackPanel>
 
         <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="6">
@@ -17,10 +20,13 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Border BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="0,0,0,1" Padding="8">
-                                <Grid ColumnDefinitions="260,*,120">
-                                    <TextBlock Grid.Column="0" Text="{Binding StartedAt, StringFormat='{}{0:g}'}" />
-                                    <TextBlock Grid.Column="1" Text="{Binding Id}" Opacity="0.6" />
-                                    <TextBlock Grid.Column="2" Text="{Binding ChunkCount, StringFormat='{}{0} bölüm'}" />
+                                <Grid ColumnDefinitions="260,*,120,110">
+                                    <TextBlock Grid.Column="0" Text="{Binding StartedAt, StringFormat='{}{0:g}'}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Id}" Opacity="0.6" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="2" Text="{Binding ChunkCount, StringFormat='{}{0} bölüm'}" VerticalAlignment="Center" />
+                                    <Button Grid.Column="3" Content="Raporu aç" HorizontalAlignment="Right"
+                                            Command="{Binding $parent[ItemsControl].((desktop:HistoryViewModel)DataContext).OpenCommand}"
+                                            CommandParameter="{Binding}" />
                                 </Grid>
                             </Border>
                         </DataTemplate>

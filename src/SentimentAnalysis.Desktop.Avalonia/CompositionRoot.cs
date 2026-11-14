@@ -140,7 +140,9 @@ public static class CompositionRoot
             sp.GetRequiredService<ISpeakerSamplePlayer>(),
             sp.GetRequiredService<IFileRoleSelection>()));
         services.AddSingleton<ReportViewModel>();
-        services.AddSingleton<HistoryViewModel>();
+        // İt.5: karar kaydı açıkça verilir — Geçmiş'ten açılan raporda öneriler/takip kararı görünsün.
+        services.AddSingleton(sp => new HistoryViewModel(
+            sp.GetRequiredService<ISessionStore>(), sp.GetRequiredService<IDecisionStore>()));
         services.AddSingleton<SettingsViewModel>(sp =>
         {
             var config = sp.GetRequiredService<AppConfig>();

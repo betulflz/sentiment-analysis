@@ -643,6 +643,34 @@ public sealed partial class ReportViewModel : ObservableObject
         HasReport = true;
     }
 
+    /// <summary>İt.5: Geçmiş'ten kayıtlı oturumu açar. Özet parçalardan yeniden hesaplanır; karar kaydı yoksa karar
+    /// kartları gizlenir. Konuşmacılar ve rol bilgisi saklanmadığı için gösterilmez (önceki koşunun verisi sarkmaz).</summary>
+    public void OpenStored(MeetingSession session, DecisionSession? decisions)
+    {
+        Load(session);
+        SetRoleContext(session.Chunks);
+        SetHost(null);
+        ClearSpeakers();
+        DiarizationStatus = "Bu kayıtlı oturumda konuşmacılar gösterilmez (ayrım yeniden yapılmaz).";
+        if (decisions is not null) LoadDecisions(decisions);
+        else ClearDecisions();
+    }
+
+    private void ClearDecisions()
+    {
+        _faceWindows = System.Array.Empty<FaceWindow>();
+        HasDecisionData = false;
+        DecisionSaveStatus = string.Empty;
+        IndicatorTimeline = System.Array.Empty<IndicatorRowVm>();
+        Recommendations = System.Array.Empty<RecommendationRowVm>();
+        CriticalMoments = System.Array.Empty<CriticalMomentVm>();
+        TimelineStart = TimelineEnd = TimelineRange = string.Empty;
+        OnPropertyChanged(nameof(IndicatorTimeline));
+        OnPropertyChanged(nameof(Recommendations));
+        OnPropertyChanged(nameof(CriticalMoments));
+        OnPropertyChanged(nameof(HasCriticalMoments));
+    }
+
     /// <summary>Zaten üretilmiş bir <see cref="MeetingSummary"/>'yi (ör. dosya-analizi koşusundan) yeniden-agregasyon
     /// yapmadan lokalize gösterir.</summary>
     public void LoadSummary(MeetingSummary s)
