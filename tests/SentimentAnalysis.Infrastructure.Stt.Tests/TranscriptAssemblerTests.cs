@@ -134,13 +134,17 @@ public class TranscriptAssemblerTests
             new[] { Seg("Peki ne zaman başlayabilirsiniz?", 0, 3, 0.9), Seg("Altyazı M.K.", 3, 10, 0.2) }, forced: null);
         Assert.Equal("Peki ne zaman başlayabilirsiniz?", t.Text);
         Assert.Single(t.Segments!);
-        Assert.Equal(Math.Log(0.9), t.AvgLogProb, precision: 10);
+        // Atılan segment metne girmez ama kalite sinyalinde kalır (ihtiyatlı: uydurma içeren parça yüksek güven almaz).
+        Assert.Equal(Math.Log((3 * 0.9 + 7 * 0.2) / 10.0), t.AvgLogProb, precision: 10);
     }
 
     [Theory]
     [InlineData("Dinlediğiniz ve izlediğiniz için teşekkürler, şimdi fiyat konusuna geçelim.")]
     [InlineData("Altyazı hazırlama işini biz yapıyoruz.")]
     [InlineData("Abone sayımız geçen ay arttı.")]
+    [InlineData("Altyazı var mı?")]
+    [InlineData("Alt yazı ile mi yok mu şu an")]
+    [InlineData("Abone olmayı unutmayın mı dedi?")]
     public void Assemble_KeepsRealSentences_ContainingSimilarWords(string real)
     {
         var t = TranscriptAssembler.Assemble(new[] { Seg(real, 0, 4, 0.8) }, forced: null);

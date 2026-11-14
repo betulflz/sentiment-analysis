@@ -14,7 +14,7 @@ public static partial class WhisperHallucinationFilter
     // Normalleştirilmiş metinde (küçük harf, noktalama → boşluk) tam eşleşme.
     [GeneratedRegex(
         @"^(?:" +
-        @"alt ?yazı(?: [\p{L}\d]{1,3})*" +                                  // Altyazı M.K. / altyazı: MK
+        @"alt ?yazı(?: \p{L}){0,3}" +            // Altyazı M.K. — yalnız tek harfli baş harfler ("Altyazı var mı" korunur)
         @"|izlediğiniz için teşekkür(?:ler| ederim| ederiz)" +
         @"|(?:(?:kanalıma |kanalımıza )?(?:videoyu )?beğenmeyi ve )?(?:kanalıma |kanalımıza )?abone olmayı unutmayın" +
         @"|bir sonraki videoda görüşmek üzere" +
