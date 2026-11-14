@@ -150,7 +150,9 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     private readonly ISpeakerSamplePlayer? _samplePlayer;
     private readonly IFileRoleSelection? _fileRoles;
 
-    [ObservableProperty] private bool _isPreparingSpeakers;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(WaitingForSpeech))] private bool _isPreparingSpeakers;
+
+    partial void OnIsPreparingSpeakersChanged(bool value) => UpdateCaptureStatus();
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasHostChoice))] private HostChoiceViewModel? _hostChoice;
     [ObservableProperty] private string _preparationStatus = string.Empty;
     public bool HasHostChoice => HostChoice is not null;
@@ -255,7 +257,7 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
 
     /// <summary>Koşu sürüyor ama bu koşuda henüz hiç analiz satırı gelmedi (ör. sessiz video: VAD tüm
     /// parçaları eler). Boş ekranın "bozuk" sanılmaması için açıklama gösterilir (11b minor).</summary>
-    public bool WaitingForSpeech => IsCapturing && !IsPreparingModels && !IsFinishing && !_receivedThisRun;
+    public bool WaitingForSpeech => IsCapturing && !IsPreparingModels && !IsPreparingSpeakers && !IsFinishing && !_receivedThisRun;
     [ObservableProperty] private string _selectedFile = "(dosya seçilmedi)";
     [ObservableProperty] private string _currentConfidence = "—";
     [ObservableProperty] private SourceAnalysisVm _textAnalysis = SourceAnalysisVm.Empty("Sözlere göre");
@@ -303,16 +305,16 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
     /// <summary>Modeller hazırlanıyor mu (warm-up)?</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(WaitingForSpeech)), NotifyCanExecuteChangedFor(nameof(EnrollCommand))] private bool _isPreparingModels;
 
-    partial void OnIsPreparingModelsChanged(bool value)
-    {
-        if (value)
-            CaptureStatusText = "Modeller hazırlanıyor...";
-        else
-            CaptureStatusText = IsFinishing ? "Analiz tamamlanıyor…" : "Dinleniyor";
-    }
+    partial void OnIsPreparingModelsChanged(bool value) => UpdateCaptureStatus();
 
-    partial void OnIsFinishingChanged(bool value) =>
-        CaptureStatusText = value ? "Analiz tamamlanıyor…" : "Dinleniyor";
+    partial void OnIsFinishingChanged(bool value) => UpdateCaptureStatus();
+
+    /// <summary>Rozet metni TEK yerden: hazırlık sırasında "Dinleniyor"/"Analiz tamamlanıyor" denmez (henüz analiz yok).</summary>
+    private void UpdateCaptureStatus() => CaptureStatusText =
+        IsPreparingSpeakers ? (IsFinishing ? "Durduruluyor…" : "Konuşmacılar ayrılıyor…")
+        : IsPreparingModels ? "Modeller hazırlanıyor..."
+        : IsFinishing ? "Analiz tamamlanıyor…"
+        : "Dinleniyor";
 
     partial void OnSkippedChunkCountChanged(int value) =>
         SkippedChunksNotice = value > 0
@@ -438,7 +440,9 @@ public sealed partial class LiveViewModel : ObservableObject, IProgress<ChunkRes
         ResetFacePanels();
         Decision.IsLocked = true;
         FaceContributionText = string.Empty; // önceki koşunun "Yüz dahil" satırı yeni oturumda sarkmasın
-        DiarizationHint = _diarization?.Enabled == true
+        DiarizationHint = IsFileMode && _speakerPreparation is not null && _fileRoles is not null
+            ? "Dosya modunda konuşmacılar analizden önce ayrılır (Ayarlar'daki konuşmacı ayrımı anahtarından bağımsız)."
+            : _diarization?.Enabled == true
             ? "Konuşmacı ayrımı bu oturum için AÇIK — ses geçici olarak saklanacak, konuşmacılar Durdur sonrası Rapor'da görünür."
             : "Konuşmacı ayrımı KAPALI (Ayarlar'dan açıp Kaydet'e basarak bir sonraki oturumda etkinleştirebilirsiniz).";
         LastSpeakerCount = SelectedSpeakerCount?.Value ?? 2;

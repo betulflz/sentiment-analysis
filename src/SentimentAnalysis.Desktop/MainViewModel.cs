@@ -129,7 +129,8 @@ public sealed partial class MainViewModel : ObservableObject
             }
             finally
             {
-                _fileRoles.Clear();
+                // Bu arada yeni dosya için seçim yapıldıysa onu silme.
+                _fileRoles.ClearIf(prepared);
             }
             return;
         }

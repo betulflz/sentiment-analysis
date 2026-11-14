@@ -15,6 +15,9 @@ public interface IFileRoleSelection
     void Set(SpeakerPreparationResult prepared, SpeakerId host);
     void SetMixed();
     void Clear();
+
+    /// <summary>Yalnız hâlâ <paramref name="prepared"/> seçiliyse temizler — bu arada yapılmış yeni seçim korunur.</summary>
+    void ClearIf(SpeakerPreparationResult prepared);
 }
 
 public sealed class FileRoleSelection : IFileRoleSelection
@@ -35,4 +38,9 @@ public sealed class FileRoleSelection : IFileRoleSelection
     public void SetMixed() { lock (_gate) _state = default; }
 
     public void Clear() { lock (_gate) _state = default; }
+
+    public void ClearIf(SpeakerPreparationResult prepared)
+    {
+        lock (_gate) if (ReferenceEquals(_state.Prepared, prepared)) _state = default;
+    }
 }

@@ -39,11 +39,12 @@ public sealed class DiarizationJob
         _config = config;
     }
 
-    /// <param name="expectedSpeakers">Kullanıcının söylediği kişi sayısı; 0 = bilinmiyor.</param>
     /// <summary>Ön-hesaplı (zaten hayalet süzmeden geçmiş) bölgeleri saklar — dosya modu, karşı tarafa odak.</summary>
     public Task SaveSegmentsAsync(Guid sessionId, IReadOnlyList<SpeakerSegment> segments, CancellationToken ct) =>
         _store.SaveSpeakerSegmentsAsync(sessionId, segments, ct);
 
+    /// <summary>Saklanmış sesi diarize eder ve bölgeleri saklar (sesi dışarı vermeyen <see cref="RunWithAudioAsync"/>).</summary>
+    /// <param name="expectedSpeakers">Kullanıcının söylediği kişi sayısı; 0 = bilinmiyor.</param>
     public async Task<DiarizationOutcome> RunAsync(Guid sessionId, int expectedSpeakers, CancellationToken ct) =>
         (await RunWithAudioAsync(sessionId, expectedSpeakers, ct).ConfigureAwait(false)).Outcome;
 

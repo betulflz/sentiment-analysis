@@ -200,4 +200,23 @@ public class FileHostChoiceTests
         await Until(() => runner.Runs == 1 && !vm.IsCapturing);
         Assert.Null(roles.Prepared);
     }
+
+    [Fact]
+    public async Task Hazirlik_Sirasinda_DurumDogru_YaniltciYaziYok()
+    {
+        var gate = new TaskCompletionSource<SpeakerPreparationResult>();
+        var (vm, runner, _, _, _) = Make(_ => gate.Task);
+        vm.StartCommand.Execute(null);
+        await Until(() => vm.IsPreparingSpeakers);
+
+        Assert.Equal("Konuşmacılar ayrılıyor…", vm.CaptureStatusText);   // "Dinleniyor" değil
+        Assert.False(vm.WaitingForSpeech);                                // "Konuşma bekleniyor…" değil
+        Assert.DoesNotContain("KAPALI", vm.DiarizationHint);              // dosya modunda ayrım ayardan bağımsız
+        Assert.Contains("Dosya modunda", vm.DiarizationHint);
+
+        gate.SetResult(SpeakerPreparationResult.Failed(new float[16000], false));
+        await Until(() => runner.Runs == 1);
+        await Until(() => !vm.IsCapturing);
+        Assert.Equal("Dinleniyor", vm.CaptureStatusText);
+    }
 }
