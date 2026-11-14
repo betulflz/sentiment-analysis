@@ -46,7 +46,8 @@ Henüz **kanıtlanmış doğruluk kazancı yok**. Ölçüm hazır, ama gerçek T
 - [x] Prozodi güvenini (`ProsodyOutputMapper`) nötr uzaklığından ayır. (2026-11-14: sabit `ProsodyModelConfidence`=0,6; şiddetten/kazançtan bağımsız.)
 - [ ] Kalibre güven politikası (etiketli Türkçe kayıtlarla; `ProsodyModelConfidence` ve eşikler).
 - [ ] emotion2vec+ base ile karşılaştırma; ses/metin/birlikte deneyleri; "etiket üretme" seçeneği.
-- [ ] Lisans notu: audEERING ses modeli CC-BY-NC-SA-4.0 — ürün kullanımı için değerlendir.
+- [x] "Belirsiz" seçeneği (2026-11-14): güven Düşük → duygu adı yerine "Belirsiz"; kapsam kaybı raporda (`17e90e4`).
+- [x] Lisans notu (2026-11-14): bkz. aşağıdaki "Lisans" notu. **Ürün kararı kullanıcıda.**
 
 ### İterasyon 4 — kanıta dayalı öneri
 - [ ] 3–5 açık olay (cevapsız soru, belirsiz sonraki adım, tek kişinin uzun konuşması) + kaynak cümleli öneri; TOPSIS ile karşılaştır.
@@ -59,6 +60,8 @@ Henüz **kanıtlanmış doğruluk kazancı yok**. Ölçüm hazır, ama gerçek T
 - [ ] Görüntü kanalı: yüz–konuşmacı eşlemesi doğrulanmadan yüz, ses duygusuna karıştırılmaz.
 
 ## Notlar / tuzaklar
+
+- **Lisans (ses duygu modeli):** audEERING `wav2vec2-large-robust-12-ft-emotion-msp-dim` CC-BY-NC-SA-4.0 lisanslıdır: **ticari kullanım yok**, türetilen model aynı lisansla paylaşılmalı, atıf zorunlu. Ders/araştırma projesi olarak kullanım uygundur; ürünleşecekse (İt.5) ses kanalı ticari izinli bir modelle değiştirilmeli (ör. emotion2vec+ — lisansı ayrıca doğrulanmalı) ya da audEERING'den ticari lisans alınmalı. Karar kullanıcınındır.
 
 - `quality-local/` (model, ses, ham koşular; ~1,4 GB) **git dışındadır** ve bu bilgisayarda kaldı. FLEURS pilotunu yeniden üretmek için `docs/research/2026-11-13-fleurs-turkce-on-olcum.md` sonundaki kimlikler yeterli.
 - Codex oturum kayıtları yalnız Ilkay'ın bilgisayarında (`~/.codex/sessions/2026/11/13/`); bu belgeler onların özetidir, ek bağlam gerekmez.

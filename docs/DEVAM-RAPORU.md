@@ -31,7 +31,7 @@ Ayrıntılar `docs/research/2026-11-13-bes-iterasyon-strateji-taslagi.md` dosyas
 |---|---|
 | 1 — Ölçüm | Araçlar hazır (`tools/quality`, `tools/SentimentAnalysis.Benchmark`). **Kullanıcının kendi kayıtları ve etiketleri bekleniyor.** |
 | 2 — Konuşmacı/metin | Pencereli konuşmacı ayrımı bitti ve push edildi. Örtüşen konuşma ve kelime hizalama kaldı. |
-| 3 — Duygu | **Devam ediyor.** 2 düzeltme commit edildi, push edilmedi. |
+| 3 — Duygu | **Devam ediyor.** Veri gerektirmeyen işler bitti (sigmoid, ses güveni, güvenlik bulguları, "belirsiz", lisans notu). Kalan her şey etiketli kayıt bekliyor. |
 | 4 — Öneri | Başlamadı. |
 | 5 — Ürün | Başlamadı. |
 
@@ -42,6 +42,9 @@ Ayrıntılar `docs/research/2026-11-13-bes-iterasyon-strateji-taslagi.md` dosyas
 | `25dd0af` | Pencereli konuşmacı ayrımı varsayılan oldu. Etiketli 5 kayıtta doğru konuşmacı süresi %71'den %85'e çıktı ve işlem çok hızlandı. | Evet |
 | `155312a` | Metin duygu modeli artık sigmoid ile okunuyor (softmax yerine); güven, en olası duygunun olasılığı. | **Hayır** (onay bekliyor) |
 | `20644b6` | Ses (prozodi) güveni şiddetten ayrıldı: sabit `ProsodyModelConfidence = 0,6`. | **Hayır** (onay bekliyor) |
+| `7dd4af3` | Güvenlik 1a+1b: NaN/∞ logit reddi, sonlu olmayan güven → Düşük; τ=0,5 altı metin güveni 0. | **Hayır** |
+| `bf1c824` | Güvenlik 1c+1d: pencere/adım doğrulaması (adım 0 sonsuz döngüsü), kümelemede iptal + `counts[]`. | **Hayır** |
+| `17e90e4` | "Belirsiz": güven Düşük → duygu adı yerine Belirsiz; belirsiz pay raporda, duygu paylarına girmez. | **Hayır** |
 
 ### İterasyon 2: yapılan iş
 
@@ -72,13 +75,13 @@ Ayrıntılar `docs/research/2026-11-13-bes-iterasyon-strateji-taslagi.md` dosyas
 
 ## Sıradaki işler (öncelik sırasıyla)
 
-1. **Otomatik güvenlik incelemesinin bulguları.** Hepsi orta önemde; her biri için önce test, sonra düzeltme yapılacak:
+1. ~~**Otomatik güvenlik incelemesinin bulguları.**~~ **Bitti** (`7dd4af3`, `bf1c824`). 1b kararı: τ altı → güven 0; τ üstü olasılık aynen (yeniden ölçekleme seçilmedi, "güven = olasılık" korunsun diye). Hepsi orta önemde; her biri için önce test, sonra düzeltme yapılacak:
    - a) `TextVaLookup.Map`: sonlu olmayan (NaN/∞) logit gelirse `ArgumentException` fırlatılmalı. `EmotionFusion.ResolveConfidence` da sonlu olmayan güvende `Dusuk` döndürmeli.
    - b) `TextVaLookup`: hiçbir duygu τ = 0,5'i geçmiyorsa sonuç ne olmalı? Füzyonun düşük güven eşiği 0,35; bu yüzden en yüksek olasılığı 0,35–0,5 arasında kalan "eşik altı" bir sonuç "Orta" güven alabiliyor. Öneri: τ altını düşük güvene eşleyin. Seçenekler: güven = 0, ya da `(top − 0,5) / 0,5` ile yeniden ölçekleme. Uçtan uca test: tüm logitler negatifken füzyon sonucu `Confidence.Dusuk` olmalı.
    - c) `WindowedDiarizer`: `WindowSeconds` ≤ 0, `HopSeconds` ≤ 0 ya da `HopSeconds > WindowSeconds` ise kurucu `ArgumentOutOfRangeException` fırlatmalı. Şu an hop = 0 sonsuz döngüye girer.
    - d) `SpeakerClustering`: `CancellationToken` her denemede ve her k-means turunda kontrol edilmeli. Turlar içindeki `lab.Contains` / `lab.Count` LINQ taramaları, atama turunda doldurulan bir `counts[]` dizisiyle değiştirilmeli.
-2. **İt.3 — "belirsiz" seçeneği.** Model emin değilse yanlış duygu adı yerine "belirsiz" gösterilir. Kapsam kaybı (kaç parça etiketsiz kaldı) raporda görünmeli. Etiketli veri gerekmez.
-3. **İt.3 — lisans notu.** audEERING ses modeli CC-BY-NC-SA-4.0 lisanslı, ticari kullanıma uygun değil. `docs/DEVIR-TESLIM.md` dosyasına not düşülmeli; ürün kararını kullanıcı verir.
+2. ~~**İt.3 — "belirsiz" seçeneği.**~~ **Bitti** (`17e90e4`). Kural: `FusedResult.Uncertain` = `Confidence.Dusuk`. Ses güveni sabit 0,6 olduğu için pratikte "metin modeli hiçbir duyguda τ'yu geçmedi" ya da "girdi kalitesi düşük" demek. Gerçek kayıtta kapsam kaybının oranı **ölçülmedi**. Model emin değilse yanlış duygu adı yerine "belirsiz" gösterilir. Kapsam kaybı (kaç parça etiketsiz kaldı) raporda görünmeli. Etiketli veri gerekmez.
+3. ~~**İt.3 — lisans notu.**~~ **Bitti** (`DEVIR-TESLIM.md` → Notlar). Ürün kararı kullanıcıda. audEERING ses modeli CC-BY-NC-SA-4.0 lisanslı, ticari kullanıma uygun değil. `docs/DEVIR-TESLIM.md` dosyasına not düşülmeli; ürün kararını kullanıcı verir.
 4. **İt.3 — veri gerektiren işler:**
    - emotion2vec+ base ile karşılaştırma.
    - Yalnız ses / yalnız metin / ikisi birlikte deneyleri.
