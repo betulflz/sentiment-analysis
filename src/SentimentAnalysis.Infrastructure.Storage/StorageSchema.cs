@@ -43,6 +43,10 @@ public static class StorageSchema
             text TEXT NOT NULL,
             PRIMARY KEY (session_id, seq)
         );
+        CREATE TABLE IF NOT EXISTS transcript_reviews (
+            session_id TEXT PRIMARY KEY,
+            content TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS speaker_segments (
             session_id TEXT NOT NULL,
             seq INTEGER NOT NULL,

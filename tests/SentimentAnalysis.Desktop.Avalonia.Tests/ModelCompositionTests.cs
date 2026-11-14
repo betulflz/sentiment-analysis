@@ -11,6 +11,14 @@ namespace SentimentAnalysis.Desktop.Avalonia.Tests;
 /// <summary>Exercise the production DI graph without loading models or starting a window/microphone.</summary>
 public sealed class ModelCompositionTests : IDisposable
 {
+    [Fact]
+    public async Task Report_can_edit_transcript_using_shared_persistent_storage()
+    {
+        await using var app = (ServiceProvider)CompositionRoot.BuildServiceProvider(Config);
+        Assert.True(app.GetRequiredService<ReportViewModel>().TranscriptReview.IsAvailable);
+        Assert.Same(app.GetRequiredService<ISessionStore>(), app.GetRequiredService<ITranscriptReviewStore>());
+    }
+
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "sentiment-model-lifetime-" + Guid.NewGuid());
     private AppConfig Config => AppConfig.Default with
     {

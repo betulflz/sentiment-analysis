@@ -31,6 +31,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Karar kaydının (11e) arka plan görevi — testler bekler; üretimde kimse beklemez.</summary>
     public Task? DecisionSaveTask { get; private set; }
+    public Task? TranscriptLoadTask { get; private set; }
 
     [ObservableProperty] private object _currentView;
 
@@ -59,6 +60,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             ++_reportGeneration;
             Report.OpenStored(session, decisionSession);
+            TranscriptLoadTask = Report.TranscriptReview.LoadAsync(session.Id);
             CurrentView = Report;
         };
 
@@ -74,6 +76,8 @@ public sealed partial class MainViewModel : ObservableObject
             Report.SetRoleContext(Live.RunChunks.ToArray());
             Report.SetHost(null);
             var generation = ++_reportGeneration;
+            TranscriptLoadTask = Live.LastSessionId is Guid transcriptId
+                ? Report.TranscriptReview.LoadAsync(transcriptId) : Task.CompletedTask;
             if (_decisions is not null) DecisionSaveTask = SaveDecisionsAsync(_decisions, decision, generation);
             History.RefreshCommand.Execute(null);
             CurrentView = Report;
@@ -81,7 +85,7 @@ public sealed partial class MainViewModel : ObservableObject
             // Konuşmacı ayrımı raporu BEKLETMEZ: özet anında gösterilir, konuşmacılar
             // arka planda hesaplanıp sonradan düşer (spec 10 S2; 08e dersi: "Durdur"
             // sonrası kullanıcıyı bekletme).
-            SpeakerAnalysisTask = StartSpeakerAnalysisAsync();
+            SpeakerAnalysisTask = StartSpeakerAnalysisAsync(generation);
         };
     }
 
@@ -108,7 +112,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    private async Task StartSpeakerAnalysisAsync()
+    private async Task StartSpeakerAnalysisAsync(int generation)
     {
         if (Live.LastSessionId is not Guid sessionId) return;
 
@@ -116,16 +120,16 @@ public sealed partial class MainViewModel : ObservableObject
         // "Konuşmacı ayırımı" ayarından bağımsız. Bitince seçim (ve ses) bırakılır.
         if (_speakers is not null && _fileRoles?.Prepared is { } prepared && _fileRoles.Host is SpeakerId host)
         {
-            _dispatch(Report.SetDiarizationRunning);
+            _dispatch(() => { if (generation == _reportGeneration) Report.SetDiarizationRunning(); });
             try
             {
                 var r = await _speakers.RunPrecomputedAsync(sessionId, prepared.Segments, prepared.Audio, CancellationToken.None)
                     .ConfigureAwait(false);
-                _dispatch(() => ApplySpeakerResult(r, host));
+                _dispatch(() => ApplySpeakerResult(r, host, sessionId, generation));
             }
             catch (Exception)
             {
-                _dispatch(() => Report.SetDiarizationOutcome(DiarizationOutcome.Failed));
+                _dispatch(() => { if (generation == _reportGeneration) Report.SetDiarizationOutcome(DiarizationOutcome.Failed); });
             }
             finally
             {
@@ -137,7 +141,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         if (_speakers is null || !_speakers.Enabled) return;
 
-        _dispatch(Report.SetDiarizationRunning);
+        _dispatch(() => { if (generation == _reportGeneration) Report.SetDiarizationRunning(); });
 
         SpeakerAnalysisResult result;
         try
@@ -147,26 +151,36 @@ public sealed partial class MainViewModel : ObservableObject
         catch (Exception)
         {
             // Arka plan işi uygulamayı çökertmemeli; kullanıcıya dürüstçe "başarısız" denir.
-            _dispatch(() => Report.SetDiarizationOutcome(DiarizationOutcome.Failed));
+            _dispatch(() => { if (generation == _reportGeneration) Report.SetDiarizationOutcome(DiarizationOutcome.Failed); });
             return;
         }
 
-        _dispatch(() => ApplySpeakerResult(result, host: null));
+        _dispatch(() => ApplySpeakerResult(result, null, sessionId, generation));
     }
 
-    private void ApplySpeakerResult(SpeakerAnalysisResult result, SpeakerId? host)
+    private void ApplySpeakerResult(SpeakerAnalysisResult result, SpeakerId? host, Guid sessionId, int generation)
     {
+        if (generation != _reportGeneration) return;
         if (result.Outcome == DiarizationOutcome.Completed)
         {
             Report.SetHost(host);
             var minOverlap = _config?.Diarization.MinOverlapRatio ?? 0.5;
             Report.ApplySpeakers(result.Transcript, result.Speakers, minOverlap);
             Report.ApplySpeakerEmotions(result.Chunks, result.Speakers, minOverlap, result.SpeakerProsody);
+            TranscriptLoadTask = RefreshTranscriptAfterSpeakersAsync(sessionId, generation);
         }
 
         // Sonuç DAİMA bildirilir — ApplySpeakers'tan SONRA çağrılır, çünkü durum metni
         // satır üretilip üretilmediğine bakar ("ayırt edilemedi" ile "hazır" ayrımı).
         Report.SetDiarizationOutcome(result.Outcome);
+    }
+
+    private async Task RefreshTranscriptAfterSpeakersAsync(Guid sessionId, int generation)
+    {
+        var loading = TranscriptLoadTask;
+        if (loading is not null) await loading.ConfigureAwait(true);
+        if (generation == _reportGeneration)
+            await Report.TranscriptReview.RefreshSpeakersAsync(sessionId).ConfigureAwait(true);
     }
 
     [RelayCommand] private void ShowLive() => CurrentView = Live;

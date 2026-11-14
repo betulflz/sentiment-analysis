@@ -9,7 +9,7 @@ namespace SentimentAnalysis.Infrastructure.Storage;
 /// (<see cref="EncryptedAudioStore"/>). Retention dolunca ses silinir, metrik korunur. Bağlantı-başına-işlem
 /// (SQLite dosya kilidi ile serileşir). Metadata sınırı: StartedAt = ilk kayıt (enjekte saat), Language = Other
 /// (ChunkResult taşımaz; toplantı metadata'sı 06 pipeline'da).</summary>
-public sealed class SqliteSessionStore : ISessionStore, ISessionAudioSink, IDiarizationStore, ISpeakerDataReader, IDecisionStore
+public sealed partial class SqliteSessionStore : ISessionStore, ISessionAudioSink, IDiarizationStore, ISpeakerDataReader, IDecisionStore, ITranscriptReviewStore
 {
     /// <summary>Oturumun saklanmış (şifreli) sesini 16 kHz mono float PCM olarak okur.
     /// Ses yoksa <c>null</c> — hata değil, "bu oturumda ses saklanmamış" demektir (10b).

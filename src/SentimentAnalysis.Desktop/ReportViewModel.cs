@@ -327,10 +327,15 @@ public sealed partial class ReportViewModel : ObservableObject
     private (IReadOnlyList<TranscriptSegment> Transcript, IReadOnlyList<SpeakerSegment> Speakers, double MinOverlap)? _lastSpeakerInput;
     private (IReadOnlyList<ChunkResult> Chunks, IReadOnlyList<SpeakerSegment> Speakers, double MinOverlap, IReadOnlyList<SpeakerProsodySummary> Prosody)? _lastEmotionInput;
 
-    public ReportViewModel(IMeetingAggregator aggregator, AppConfig? config = null)
+    public TranscriptReviewViewModel TranscriptReview { get; }
+
+    public ReportViewModel(IMeetingAggregator aggregator, AppConfig? config = null,
+        ITranscriptReviewStore? reviewStore = null, ISpeakerDataReader? speakerData = null)
     {
         _aggregator = aggregator;
         var cfg = config ?? AppConfig.Default;
+        TranscriptReview = new TranscriptReviewViewModel(reviewStore, speakerData, cfg.Diarization.MinOverlapRatio);
+        TranscriptReview.ReviewApplied += ApplyReviewedTranscript;
         _decision = cfg.Decision;
         _fusion = cfg.Fusion;
         FollowUp = new FollowUpPanelViewModel(cfg.Decision);
@@ -346,6 +351,7 @@ public sealed partial class ReportViewModel : ObservableObject
     /// <summary>Arka plan geçişinin sonucunu kullanıcıya dürüstçe yansıtır.</summary>
     public void SetDiarizationOutcome(DiarizationOutcome outcome)
     {
+        if (_reviewedTranscript is not null) return;
         DiarizationStatus = outcome switch
         {
             DiarizationOutcome.Completed when SpeakerLines.Count > 0 => "Konuşmacılar hazır.",
@@ -374,6 +380,7 @@ public sealed partial class ReportViewModel : ObservableObject
 
     private void ClearSpeakers()
     {
+        if (_reviewedTranscript is not null) return;
         SetOpenEvents(System.Array.Empty<OpenEventVm>());
         SpeakerLines = System.Array.Empty<SpeakerLineVm>();
         HasSpeakers = false;
@@ -406,6 +413,7 @@ public sealed partial class ReportViewModel : ObservableObject
 
     private void BuildSpeakerLines()
     {
+        if (_reviewedTranscript is not null) { ApplyReviewedTranscript(_reviewedTranscript); return; }
         if (_lastSpeakerInput is not var (transcript, speakers, minOverlapRatio)) return;
         // İt.2: iki kişiye yayılan uzun parça bölünür (yaklaşık, kelime oranıyla) — tek kişiye yazılmaz.
         var aligned = SpeakerAligner.AlignSplitting(transcript, speakers, minOverlapRatio);
@@ -537,6 +545,7 @@ public sealed partial class ReportViewModel : ObservableObject
 
     private void BuildSpeakerEmotions()
     {
+        if (_reviewedTranscript is not null) return;
         if (_lastEmotionInput is not var (chunks, speakers, minOverlapRatio, speakerProsody)) return;
         var bySpeaker = speakerProsody.ToDictionary(p => p.Speaker);
         var summaries = SpeakerEmotionAggregator.Aggregate(chunks, speakers, minOverlapRatio);
@@ -629,6 +638,7 @@ public sealed partial class ReportViewModel : ObservableObject
 
     public void Load(MeetingSession session)
     {
+        ClearTranscriptReview();
         var s = _aggregator.Aggregate(session);
         AnalysisQualityNotice = AnalysisQualityText.Format(s.Diagnostics);
         LoadUncertainty(s);
@@ -652,7 +662,7 @@ public sealed partial class ReportViewModel : ObservableObject
         SetRoleContext(session.Chunks);
         SetHost(null);
         ClearSpeakers();
-        DiarizationStatus = "Bu kayıtlı oturumda konuşmacılar gösterilmez (ayrım yeniden yapılmaz).";
+        DiarizationStatus = "Bu kayıtlı oturumda konuşmacı ayrımı yeniden yapılmaz; saklanan metin düzeltme alanından açılabilir.";
         if (decisions is not null) LoadDecisions(decisions);
         else ClearDecisions();
     }
@@ -676,6 +686,7 @@ public sealed partial class ReportViewModel : ObservableObject
     /// yapmadan lokalize gösterir.</summary>
     public void LoadSummary(MeetingSummary s)
     {
+        ClearTranscriptReview();
         AnalysisQualityNotice = AnalysisQualityText.Format(s.Diagnostics);
         LoadUncertainty(s);
         TurkishSummary = s.TurkishSummary;

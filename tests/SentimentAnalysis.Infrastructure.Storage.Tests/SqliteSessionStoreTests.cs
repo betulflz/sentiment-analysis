@@ -12,6 +12,42 @@ namespace SentimentAnalysis.Infrastructure.Storage.Tests;
 
 public class SqliteSessionStoreTests
 {
+    [Fact]
+    public async Task TranscriptReview_ReopenPreservesCorrections_WithoutChangingModelOutput()
+    {
+        var (store, audio, dir) = NewStore();
+        var id = Guid.NewGuid();
+        await store.SaveChunkAsync(id, Result(0, "yanlış metin"), CancellationToken.None);
+        Assert.Null(await store.GetTranscriptReviewAsync(id, CancellationToken.None));
+        ReviewedTranscriptLine[] lines = [new(TimeSpan.Zero, TimeSpan.FromSeconds(1), "doğru metin", "Aylin")];
+
+        await store.SaveTranscriptReviewAsync(id, lines, CancellationToken.None);
+
+        var config = AppConfig.Default with { Storage = AppConfig.Default.Storage with { StorageDirectory = dir } };
+        var reopened = new SqliteSessionStore(config, audio);
+        Assert.Equal(lines, await reopened.GetTranscriptReviewAsync(id, CancellationToken.None));
+        Assert.Equal("yanlış metin", (await reopened.GetSessionAsync(id, CancellationToken.None))!.Chunks[0].Transcript);
+        Assert.Null(await reopened.GetTranscriptReviewAsync(Guid.NewGuid(), CancellationToken.None));
+
+        var replacement = new[] { lines[0] with { Speaker = "Kerem", Text = "yeni düzeltme" } };
+        await reopened.SaveTranscriptReviewAsync(id, replacement, CancellationToken.None);
+        Assert.Equal(replacement, await store.GetTranscriptReviewAsync(id, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task TranscriptReview_RejectsMissingSessionAndInvalidTimes_PreservesPreviousSave()
+    {
+        var (store, _, _) = NewStore();
+        var id = Guid.NewGuid();
+        ReviewedTranscriptLine[] lines = [new(TimeSpan.Zero, TimeSpan.FromSeconds(1), "metin", "A")];
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => store.SaveTranscriptReviewAsync(id, lines, CancellationToken.None));
+        await store.SaveChunkAsync(id, Result(0, "ham"), CancellationToken.None);
+        await store.SaveTranscriptReviewAsync(id, lines, CancellationToken.None);
+        await Assert.ThrowsAsync<ArgumentException>(() => store.SaveTranscriptReviewAsync(id,
+            [lines[0] with { End = TimeSpan.FromSeconds(-1) }], CancellationToken.None));
+        Assert.Equal(lines, await store.GetTranscriptReviewAsync(id, CancellationToken.None));
+    }
+
     private static (SqliteSessionStore store, EncryptedAudioStore audio, string dir) NewStore(Func<DateTimeOffset>? clock = null)
     {
         var dir = Path.Combine(Path.GetTempPath(), "sa-db-" + Guid.NewGuid().ToString("N"));
