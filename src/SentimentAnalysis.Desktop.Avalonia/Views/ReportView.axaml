@@ -489,23 +489,6 @@
                         </ItemsControl>
                     </StackPanel>
                 </Border>
-
-                <Border Classes="card">
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="Duygunun en yoğun olduğu anlar" Classes="cardTitle" />
-                        <ItemsControl ItemsSource="{Binding PeakMoments}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid ColumnDefinitions="80,110,*" Margin="0,4">
-                                        <TextBlock Grid.Column="0" Text="{Binding Time, StringFormat='{}{0:hh\\:mm\\:ss}'}" />
-                                        <TextBlock Grid.Column="1" Text="{Binding Emotion}" FontWeight="SemiBold" />
-                                        <TextBlock Grid.Column="2" Text="{Binding Transcript}" TextWrapping="Wrap" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </Border>
             </StackPanel>
         </ScrollViewer>
     </Grid>
