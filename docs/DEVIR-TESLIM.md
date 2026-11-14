@@ -1,5 +1,7 @@
 # Devir notu ve yapılacaklar listesi — 13 Kasım 2026
 
+> Güncel durum ve sıradaki işler: `docs/DEVAM-RAPORU.md` (14 Kasım 2026).
+
 Bu belge, Codex ile yürütülen kalite çalışmasının (açık kaynak araştırması → 5 iterasyonluk strateji → İterasyon 1) durumunu ve devralan kişinin yapacaklarını özetler. Branch: `11-karar-destek`.
 
 ## Önce bunları oku (sırayla)
@@ -34,7 +36,7 @@ Henüz **kanıtlanmış doğruluk kazancı yok**. Ölçüm hazır, ama gerçek T
 - [ ] Model kapatma değişikliğinin gerçek RSS/swap etkisini ölç.
 
 ### İterasyon 2 — doğru konuşmacı, metin, zaman
-- [ ] sherpa vs pyannote Community-1 vs (uygunsa) Nemotron/NeMo-Speech.cpp; en iyi iki hat ayrıntılı değerlendirme. Hedef: DER'de ≥%20 göreli azalma.
+- [~] (2026-11-14: pencereli ayrım varsayılan, %71→%85; bkz. DEVAM-RAPORU.md) sherpa vs pyannote Community-1 vs (uygunsa) Nemotron/NeMo-Speech.cpp; en iyi iki hat ayrıntılı değerlendirme. Hedef: DER'de ≥%20 göreli azalma.
 - [ ] `GhostSpeakerFilter` kuralını yeniden değerlendir (kısa katılımcıyı yalnız süreden dolayı silme).
 - [ ] WhisperX tarzı kelime hizalama; uzun/çok kişili parçayı tek kişiye atamayı kaldır.
 - [ ] Whisper turbo vs daha küçük model (FLEURS ön ölçümünde küçük modeller belirgin kötüydü: WER base %39, small %27, turbo %8,7).
