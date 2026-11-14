@@ -22,7 +22,16 @@ public partial class App : global::Avalonia.Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        Services = CompositionRoot.BuildServiceProvider();
+        // İt.5: kullanıcı ayarları (Ayarlar ekranında kaydedilen) açılışta uygulanır; dosya yoksa/bozuksa varsayılan.
+        Services = CompositionRoot.BuildServiceProvider(
+            UserSettingsFile.Apply(UserSettingsFile.DefaultPath(), SentimentAnalysis.Application.Configuration.AppConfig.Default));
+        // Ses saklama politikası: süresi dolan (ya da "sesi sakla" kapalıysa tüm) ses açılışta arka planda silinir.
+        var store = Services.GetRequiredService<SentimentAnalysis.Application.Abstractions.ISessionStore>();
+        _ = System.Threading.Tasks.Task.Run(async () =>
+        {
+            try { await store.PurgeExpiredAudioAsync(System.Threading.CancellationToken.None); }
+            catch (System.Exception ex) { System.Diagnostics.Debug.WriteLine($"Ses temizliği başarısız: {ex.Message}"); }
+        });
         var mainViewModel = Services.GetRequiredService<MainViewModel>();
 
         // TrayIcon menü/tooltip bağlamaları Application.DataContext üzerinden çözülür (compiled binding yok — bkz. tasarım notu).

@@ -23,6 +23,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// kutuyu işaretleyip Kaydet'e bastığında uygulamayı yeniden başlatması gerekmez.</summary>
     [ObservableProperty] private bool _diarizationEnabled;
 
+    /// <summary>Kaydet sonrası kısa bildirim (ne zaman uygulanacağı ya da yazma hatası); boşsa gösterilmez.</summary>
+    [ObservableProperty] private string _savedNotice = string.Empty;
+
     public SettingsViewModel(AppConfig initial, Action<AppConfig> onSave, IDiarizationState? diarization = null)
     {
         _initial = initial;
@@ -45,6 +48,14 @@ public sealed partial class SettingsViewModel : ObservableObject
         };
         // Çalışma-anı durumunu da güncelle: config kopyası tek başına hiçbir şeyi değiştirmez.
         if (_diarization is not null) _diarization.Enabled = DiarizationEnabled;
-        _onSave(updated);
+        try
+        {
+            _onSave(updated);
+            SavedNotice = "Kaydedildi. Konuşmacı ayrımı hemen; dil ve ses saklama ayarları uygulama yeniden açılınca geçerli olur.";
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            SavedNotice = "Ayarlar kaydedilemedi: ayar dosyasına yazılamadı.";
+        }
     }
 }

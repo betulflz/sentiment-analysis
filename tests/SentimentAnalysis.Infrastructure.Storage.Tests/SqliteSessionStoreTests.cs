@@ -237,4 +237,19 @@ public class SqliteSessionStoreTests
         await store.PurgeExpiredAudioAsync(CancellationToken.None);
         Assert.True(File.Exists(audioPath), "taze ses korunmalı");
     }
+
+    [Fact]
+    public async Task PurgeExpiredAudio_SesSaklaKapaliysa_TazeSesDeSilinir()
+    {
+        var now = DateTimeOffset.UnixEpoch;
+        var dir = Path.Combine(Path.GetTempPath(), "sa-db-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var cfg = AppConfig.Default with { Storage = AppConfig.Default.Storage with { StorageDirectory = dir, KeepAudio = false } };
+        var store = new SqliteSessionStore(cfg, new EncryptedAudioStore(cfg, new FileKeyProvider(cfg)), () => now);
+        var audioPath = await store.SaveAudioAsync(Guid.NewGuid(), new byte[] { 9 }, CancellationToken.None);
+
+        await store.PurgeExpiredAudioAsync(CancellationToken.None);
+
+        Assert.False(File.Exists(audioPath), "\"sesi sakla\" kapalı → ses açılış temizliğinde silinir");
+    }
 }

@@ -146,9 +146,9 @@ public static class CompositionRoot
         services.AddSingleton<SettingsViewModel>(sp =>
         {
             var config = sp.GetRequiredService<AppConfig>();
-            // Kalıcı ayar kaydı 08b'de; bu tur onSave no-op (yalnızca in-memory config nesnesini günceller).
+            // İt.5: ayarlar diske yazılır; açılışta App UserSettingsFile.Apply ile config'e uygular.
             return new SettingsViewModel(config,
-                updated => System.Diagnostics.Debug.WriteLine($"Ayarlar kaydedildi (bu tur no-op): {updated}"),
+                updated => UserSettingsFile.Save(UserSettingsFile.DefaultPath(), updated),
                 sp.GetRequiredService<IDiarizationState>());
         });
         // MainViewModel'e UI-thread dağıtıcısı EXPLICIT geçilir: Desktop projesi Avalonia'sız

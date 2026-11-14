@@ -46,6 +46,7 @@ public sealed class SqliteSessionStore : ISessionStore, ISessionAudioSink, IDiar
 
     private readonly string _connectionString;
     private readonly int _retentionDays;
+    private readonly bool _keepAudio;
     private readonly EncryptedAudioStore _audio;
     private readonly Func<DateTimeOffset> _clock;
 
@@ -53,6 +54,7 @@ public sealed class SqliteSessionStore : ISessionStore, ISessionAudioSink, IDiar
     {
         _audio = audio;
         _retentionDays = config.Storage.AudioRetentionDays;
+        _keepAudio = config.Storage.KeepAudio;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
 
         var dir = config.Storage.StorageDirectory ?? FileKeyProvider.DefaultStorageDirectory();
@@ -314,7 +316,8 @@ public sealed class SqliteSessionStore : ISessionStore, ISessionAudioSink, IDiar
 
     public async Task PurgeExpiredAudioAsync(CancellationToken ct)
     {
-        long cutoff = _clock().AddDays(-_retentionDays).ToUnixTimeMilliseconds();
+        // "Sesi sakla" kapalı → süre beklenmez, tüm ses silinir (uygulama açılışında çağrılır; o anda koşu yoktur).
+        long cutoff = _keepAudio ? _clock().AddDays(-_retentionDays).ToUnixTimeMilliseconds() : long.MaxValue;
 
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync(ct).ConfigureAwait(false);
