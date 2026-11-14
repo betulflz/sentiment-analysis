@@ -230,6 +230,18 @@ public class EmotionFusionTests
         Assert.Equal(1.0 / 3.0, r.TextReliability, precision: 6);
     }
 
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public void SonluOlmayanModelGuveni_Dusuk(double bad)
+    {
+        var text = new TextEmotion(new ValenceArousal(0.5, 0.5), ModelConfidence: bad);
+        var prosody = new ProsodyEmotion(new ValenceArousal(0.5, 0.5), ModelConfidence: 0.8);
+        Assert.Equal(Confidence.Dusuk, Fusion.Fuse(text, prosody, Clean()).Confidence);
+        Assert.Equal(Confidence.Dusuk, Fusion.Fuse(
+            new TextEmotion(text.Va, 0.8), new ProsodyEmotion(prosody.Va, bad), Clean()).Confidence);
+    }
+
     private static AppConfig WithNeutralRadius(double? radius) =>
         AppConfig.Default with { Fusion = AppConfig.Default.Fusion with { NeutralRadius = radius } };
 }

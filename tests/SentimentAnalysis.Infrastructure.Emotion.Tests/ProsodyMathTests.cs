@@ -42,19 +42,21 @@ public class ProsodyMathTests
     }
 
     [Fact]
-    public void Map_NeutralOutput_LowConfidence()
+    public void Map_Guven_SiddettenBagimsiz_NotrSesDusukGuvenSayilmaz()
     {
-        // arousal 0.5, valence 0.5 → domain (0, 0.5) = nötr merkez → güven ~0
-        var p = ProsodyOutputMapper.Map(new float[] { 0.5f, 0.5f, 0.5f });
-        Assert.True(p.ModelConfidence < 0.05, $"nötr → düşük güven, {p.ModelConfidence}");
+        // Regresyon modeli kendi belirsizliğini vermez; nötr merkeze uzaklık ŞİDDETTİR, güvenilirlik
+        // değil (İt.3). Nötr ve uç çıktı aynı model güvenini taşır; ses kalitesi ayrı (rAudio).
+        var neutral = ProsodyOutputMapper.Map(new float[] { 0.5f, 0.5f, 0.5f });
+        var extreme = ProsodyOutputMapper.Map(new float[] { 0.95f, 0.5f, 1.0f });
+        Assert.Equal(extreme.ModelConfidence, neutral.ModelConfidence, precision: 9);
+        Assert.True(neutral.ModelConfidence >= 0.5, $"nötr ses düşük güven sayılmamalı, {neutral.ModelConfidence}");
     }
 
     [Fact]
-    public void Map_ExtremeOutput_HighConfidence()
+    public void Map_Guven_AyardanGelir()
     {
-        // arousal 0.95, valence 1.0 → merkezden uzak → yüksek güven
-        var p = ProsodyOutputMapper.Map(new float[] { 0.95f, 0.5f, 1.0f });
-        Assert.True(p.ModelConfidence > 0.8, $"uç → yüksek güven, {p.ModelConfidence}");
+        var p = ProsodyOutputMapper.Map(new float[] { 0.7f, 0.5f, 0.6f }, modelConfidence: 0.42);
+        Assert.Equal(0.42, p.ModelConfidence, precision: 9);
     }
 
     [Fact]
@@ -122,13 +124,12 @@ public class ProsodyMathTests
     }
 
     [Fact]
-    public void Map_Kazanc_GuveniDeArtirir()
+    public void Map_Kazanc_GuveniDegistirmez()
     {
-        // Güven merkeze uzaklıktan türediği için genişletilmiş VA daha yüksek güven vermeli.
+        // Eskiden kazanç artınca aynı ham çıktı "daha güvenilir" sayılıyordu — yanlış.
         var flat = ProsodyOutputMapper.Map(new float[] { 0.6f, 0.5f, 0.6f });
         var expanded = ProsodyOutputMapper.Map(
             new float[] { 0.6f, 0.5f, 0.6f }, valenceGain: 2.0, arousalGain: 2.0);
-        Assert.True(expanded.ModelConfidence > flat.ModelConfidence,
-            $"genişletilmiş güven ({expanded.ModelConfidence}) > düz ({flat.ModelConfidence}) olmalı");
+        Assert.Equal(flat.ModelConfidence, expanded.ModelConfidence, precision: 9);
     }
 }

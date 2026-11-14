@@ -67,6 +67,39 @@ public class SpeakerEmotionAggregatorTests
     }
 
     [Fact]
+    public void Aggregate_BelirsizAtamaliChunklariSayar_OrtalamayaYineDeKatar()
+    {
+        // Final inceleme / bulgu 3: SpeakerAligner artık eşik-altı chunk'ları elemek yerine en iyi
+        // adaya atayıp Uncertain işaretliyor. Bu bayrak okunmazsa, eskiden düşen chunk'lar
+        // ortalamaya hiçbir iz bırakmadan giriyor — kullanıcı bunu göremiyordu.
+        var chunks = new[]
+        {
+            C(0, 2, textV: 1.0, audioV: 1.0, combinedV: 1.0),    // 0–2: tamamen konuşmacı 0 → kesin
+            C(2, 12, textV: 0.0, audioV: 0.0, combinedV: 0.0),   // 2–12: yalnızca 1 sn örtüşme → belirsiz
+        };
+        var speakers = new[] { S(0, 0, 3) };
+
+        var r = SpeakerEmotionAggregator.Aggregate(chunks, speakers, minOverlapRatio: 0.5);
+
+        var spk0 = Assert.Single(r);
+        Assert.Equal(new SpeakerId(0), spk0.Speaker);
+        Assert.Equal(2, spk0.ChunkCount);              // ChunkCount semantiği değişmez: tüm chunk'lar
+        Assert.Equal(1, spk0.UncertainChunkCount);     // bunlardan biri belirsiz atamaya dayanıyor
+        Assert.Equal(0.5, spk0.Combined.Valence, precision: 10);   // ortalama hâlâ İKİ chunk'ı kapsıyor
+    }
+
+    [Fact]
+    public void Aggregate_TumAtamalarKesinse_BelirsizSayisiSifirdir()
+    {
+        var chunks = new[] { C(0, 2, 0.5, 0.5, 0.5), C(2, 4, 0.5, 0.5, 0.5) };
+        var speakers = new[] { S(0, 0, 4) };
+
+        var r = SpeakerEmotionAggregator.Aggregate(chunks, speakers, minOverlapRatio: 0.5);
+
+        Assert.Equal(0, r[0].UncertainChunkCount);
+    }
+
+    [Fact]
     public void Aggregate_BosChunkListesi_BosDoner()
     {
         var r = SpeakerEmotionAggregator.Aggregate(

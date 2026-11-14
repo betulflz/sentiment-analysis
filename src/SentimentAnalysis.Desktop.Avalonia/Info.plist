@@ -22,5 +22,7 @@
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Konuşmanızın duygu analizini yapabilmek için mikrofona erişmesi gerekiyor. Ses kaydınız yalnızca bu bilgisayarda işlenir, hiçbir sunucuya gönderilmez.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Görüşülen kişinin yüz ifadesini analiz edebilmek için kameraya erişmesi gerekiyor. Görüntü yalnızca bu bilgisayarda işlenir, kaydedilmez.</string>
 </dict>
 </plist>

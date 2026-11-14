@@ -1,3 +1,4 @@
+using System.Linq;
 using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Desktop;
 using Xunit;
@@ -70,5 +71,33 @@ public class SettingsViewModelTests
         var vm = new SettingsViewModel(AppConfig.Default, _ => { }, state);
 
         Assert.True(vm.DiarizationEnabled);   // AppConfig.Default kapalı olsa bile
+    }
+
+    [Fact]
+    public void Save_KullaniciyaNeZamanUygulanacaginiSoyler()
+    {
+        var vm = new SettingsViewModel(AppConfig.Default, _ => { });
+        Assert.Equal(string.Empty, vm.SavedNotice);
+        vm.SaveCommand.Execute(null);
+        Assert.Contains("yeniden açılınca", vm.SavedNotice);
+    }
+
+    [Fact]
+    public void Save_YazmaHatasi_KullaniciyaSoylenir()
+    {
+        var vm = new SettingsViewModel(AppConfig.Default, _ => throw new System.IO.IOException("disk"));
+        vm.SaveCommand.Execute(null);
+        Assert.Contains("kaydedilemedi", vm.SavedNotice);
+    }
+
+    [Fact]
+    public void Dil_YalnizListedenSecilir_OtomatikNullOlarakKaydedilir()
+    {
+        AppConfig? saved = null;
+        var vm = new SettingsViewModel(AppConfig.Default, c => saved = c);
+        Assert.Equal(new[] { "tr", "en", "auto" }, vm.LanguageOptions.Select(o => o.Code));
+        vm.SelectedLanguage = vm.LanguageOptions.Single(o => o.Code == "auto");
+        vm.SaveCommand.Execute(null);
+        Assert.Null(saved!.Stt.Language);
     }
 }

@@ -1,0 +1,126 @@
+using SentimentAnalysis.Core;
+
+namespace SentimentAnalysis.Application.Decision;
+
+/// <summary>Karar motorunun Türkçe adları ve gerekçe metni. Core dil-nötr kalır (TurkishSummaryWriter
+/// deseni). Gerekçe GÖZLEMİ söyler, kişiyi etiketlemez (spec §4 anti-hedef).</summary>
+public static class DecisionText
+{
+    public static string Name(Criterion c) => c switch
+    {
+        Criterion.Gerilim => "gerilim",
+        Criterion.IlgiKaybi => "ilgi kaybı",
+        Criterion.OlumsuzDuygu => "olumsuz duygu",
+        Criterion.Uyumsuzluk => "söz ile his çelişkisi",
+        Criterion.DusukEnerji => "düşük enerji",
+        Criterion.Kotulesme => "kötüleşen gidişat",
+        _ => c.ToString(),
+    };
+
+    /// <summary>Kriterin konuyu bilmeyen kullanıcıya tek satırlık açıklaması (göstergenin hesabına sadık).</summary>
+    public static string Description(Criterion c) => c switch
+    {
+        Criterion.Gerilim => "Ses gergin ve hızlı, yüz ifadesi olumsuz",
+        Criterion.IlgiKaybi => "Karşıdaki kişi başını sık sık başka yöne çeviriyor",
+        Criterion.OlumsuzDuygu => "Konuşmada ya da yüzde üzgün, kızgın, kaygılı bir hava var",
+        Criterion.Uyumsuzluk => "Söylenenle ses tonu ya da yüz birbirini tutmuyor (ör. \"iyiyim\" deyip üzgün görünmek)",
+        Criterion.DusukEnerji => "Ses durgun, konuşma yavaş ve az kelimeli",
+        Criterion.Kotulesme => "Görüşme ilerledikçe hava olumsuza dönüyor",
+        _ => string.Empty,
+    };
+
+    public static string Name(LiveAction a) => a switch
+    {
+        LiveAction.DevamEt => "Devam et",
+        LiveAction.KonuyuDegistir => "Konuyu değiştir",
+        LiveAction.SoruSor => "Açık uçlu / netleştirici soru sor",
+        LiveAction.EmpatiKur => "Empati kur, sakinleştir",
+        LiveAction.AraVer => "Kısa ara ver",
+        LiveAction.KapanisaGec => "Kapanışa geç",
+        LiveAction.SakinOl => "Sakin ol, tonunu düşür",
+        LiveAction.AciklayiciOl => "Açıklayıcı ol, ayrıntıyı ver",
+        LiveAction.OzetleDinle => "Önce dinlediğini göster, özetle",
+        LiveAction.TebessumEt => "Tebessüm et, yumuşak başla",
+        LiveAction.OrnekleAnlat => "Örnekle anlat",
+        LiveAction.KisaTut => "Hızını değiştir, kısa tut",
+        LiveAction.TereddudunuSor => "Açıkça sor: \"Bu konuda tereddüdünüz var mı?\"",
+        LiveAction.YenidenAnlat => "Emin olmadığın noktayı yeniden anlat",
+        LiveAction.EnerjiYukselt => "Enerjini yükselt, temponu artır",
+        LiveAction.OrtakNoktaHatirlat => "Konuyu başa çek, ortak noktayı hatırlat",
+        LiveAction.FaydayaDon => "Fiyata değil faydaya dön",
+        LiveAction.KolaySoruSor => "Adayı rahatlat, daha kolay bir soru sor",
+        LiveAction.SozVer => "Katılımı sağla, sessiz kişiye söz ver",
+        LiveAction.BirAdimIlerlet => "Bu havayı kullan, bir adım ileri götür",
+        LiveAction.OlumluyuPekistir => "Olumlu noktayı pekiştir",
+        LiveAction.GuvenceVer => "Güvence ver: \"Endişelenecek bir şey yok, birlikte bakalım\"",
+        LiveAction.SusVeDinle => "Sus, alan aç, sadece dinle",
+        LiveAction.GozTemasiKur => "Göz temasını kur, dikkatini geri topla",
+        LiveAction.DuyguyuAdlandir => "Hissi nazikçe adlandır: \"Biraz tedirgin görünüyorsunuz\"",
+        LiveAction.YavaslaKonus => "Yavaşla, nefes al, daha sakin konuş",
+        LiveAction.MizahlaGevset => "Hafif bir espriyle ortamı gevşet",
+        LiveAction.ItiraziKabulEt => "Haklı yanını kabul et, itirazı sahiplen",
+        _ => a.ToString(),
+    };
+
+    public static string Name(FollowUpAction a) => a switch
+    {
+        FollowUpAction.TeklifGonder => "Teklif veya fiyat önerisi gönderin",
+        FollowUpAction.IkinciGorusme => "Karar vericiyle ikinci görüşme ayarlayın",
+        FollowUpAction.ItirazBilgisi => "İtirazları yanıtlayan bilgi ve örnekler gönderin",
+        FollowUpAction.Beklet => "Acele etmeyin, bir hafta sonra kısa bir hatırlatma yapın",
+        FollowUpAction.DegerlendirmeyeGec => "Bir sonraki aşamaya davet etmeyi değerlendirin",
+        FollowUpAction.EkGorusme => "Ek teknik değerlendirme veya örnek ödev isteyin",
+        FollowUpAction.GorusmeyiTekrarla => "Görüşmeyi daha rahat bir ortamda tekrarlayın",
+        FollowUpAction.KararEpostasi => "Kararları ve sorumluları yazan özet e-postası gönderin",
+        FollowUpAction.BireBirGorusme => "Sorun yaşanan kişiyle birebir görüşün",
+        FollowUpAction.TakipToplantisi => "Takip toplantısı planlayın",
+        FollowUpAction.ReferansKontrolu => "Referans kontrolüne geçmeyi düşünün",
+        FollowUpAction.DemoOner => "Deneme sürümü ya da demo önerin",
+        FollowUpAction.IkinciGorusAl => "İK'dan ya da başka bir uzmandan ikinci görüş alın",
+        FollowUpAction.NetlestirmeGorusmesi => "Netleşmeyen konular için kısa bir ikinci görüşme yapın",
+        FollowUpAction.TeknikDemo => "Teknik ekiple ayrıntılı demo planlayın",
+        FollowUpAction.CalismaGrubu => "Açık konular için küçük bir çalışma grubu kurun",
+        FollowUpAction.YaziliGorus => "Az konuşanlardan yazılı görüş isteyin",
+        FollowUpAction.AdaylarlaKarsilastir => "Diğer adaylarla karşılaştırıp kararı sonra verin",
+        FollowUpAction.BilgiListesi => "Bilgilendirme listesine alın",
+        FollowUpAction.KarariErtele => "Kararı erteleyin, eksik bilgiyi toplayın",
+        FollowUpAction.IliskiyiOnar => "Önce kısa bir telefonla ilişkiyi güçlendirin",
+        _ => a.ToString(),
+    };
+
+    public static string Name(FollowUpCategory c) => c switch
+    {
+        FollowUpCategory.Ilerletin => "İlerletin",
+        FollowUpCategory.Netlestirin => "Netleştirin",
+        FollowUpCategory.Bekleyin => "Bekleyin",
+        FollowUpCategory.IliskiyiGozetin => "İlişkiyi gözetin",
+        _ => c.ToString(),
+    };
+
+    public static string Name(MeetingProfile p) => p switch
+    {
+        MeetingProfile.Satis => "Satış / müşteri",
+        MeetingProfile.Mulakat => "Mülakat",
+        MeetingProfile.Toplanti => "Toplantı",
+        _ => p.ToString(),
+    };
+
+    /// <summary>12: konuşma payı kuralının gerekçesi.</summary>
+    public static string TalkReason(double hostShare) =>
+        $"Son bir dakikada konuşmanın %{Math.Round(100 * hostShare, MidpointRounding.AwayFromZero)}'i sizde.";
+
+        public static string Subject(int? face) => face is int i ? $"Yüz {i + 1}" : "Görüşme geneli";
+
+    /// <summary>"{Kişi}: {kriter} %{değer}, {kriter} %{değer}." — ikinci kriter 0,2'nin altındaysa yazılmaz.</summary>
+    public static string Reason(Indicators ind, IReadOnlyList<Criterion> top)
+    {
+        if (top.Count == 0) return "Belirgin bir sorun yok.";
+        var first = top[0];
+        var parts = new List<string> { Part(ind, first) };
+        if (top.Count > 1 && ind.Values[(int)top[1]] >= 0.2) parts.Add(Part(ind, top[1]));
+        return $"{Subject(ind.SourceFace[(int)first])}: {string.Join(", ", parts)}.";
+    }
+
+    private static string Part(Indicators ind, Criterion c) =>
+        $"{Name(c)} %{Math.Round(100 * ind.Values[(int)c], MidpointRounding.AwayFromZero)}";
+}

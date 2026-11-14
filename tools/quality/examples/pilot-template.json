@@ -1,0 +1,249 @@
+{
+  "description": "Doldurulacak 12 kayıt planı; ses/referans içermez. Süre, anonim kişi kimlikleri ve insan etiketleri gerçek veriye göre düzenlenmeli. pending kayıtlar prepare tarafından reddedilir.",
+  "recordings": [
+    {
+      "id": "pilot-01",
+      "audio": "audio/pilot-01.wav",
+      "durationSeconds": 0,
+      "expectedSpeakers": 0,
+      "split": "development",
+      "participantIds": [
+        "person01",
+        "person02"
+      ],
+      "sourceKind": "real",
+      "conditions": [
+        "clean",
+        "turn-taking"
+      ],
+      "referenceStatus": "pending",
+      "reference": {
+        "transcript": "",
+        "speakers": []
+      }
+    },
+    {
+      "id": "pilot-02",
+      "audio": "audio/pilot-02.wav",
+      "durationSeconds": 0,
+      "expectedSpeakers": 0,
+      "split": "development",
+      "participantIds": [
+        "person03",
+        "person04"
+      ],
+      "sourceKind": "real",
+      "conditions": [
+        "similar-voices"
+      ],
+      "referenceStatus": "pending",
+      "reference": {
+        "transcript": "",
+        "speakers": []
+      }
+    },
+    {
+      "id": "pilot-03",
+      "audio": "audio/pilot-03.wav",
+      "durationSeconds": 0,
+      "expectedSpeakers": 0,
+      "split": "development",
+      "participantIds": [
+        "person01",
+        "person02"
+      ],
+      "sourceKind": "real",
+      "conditions": [
+        "fast-turns"
+      ],
+      "referenceStatus": "pending",
+      "reference": {
+        "transcript": "",
+        "speakers": []
+      }
+    },
+    {
+      "id": "pilot-04",
+      "audio": "audio/pilot-04.wav",
+      "durationSeconds": 0,
+      "expectedSpeakers": 0,
+      "split": "development",
+      "participantIds": [
+        "person05",
+        "person06"
+      ],
+      "sourceKind": "real",
+      "conditions": [
+        "noise"
+      ],
+      "referenceStatus": "pending",
+      "reference": {
+        "transcript": "",
+        "speakers": []
+      }
+    },
+    {
+      "id": "pilot-05",
+      "audio": "audio/pilot-05.wav",
+      "durationSeconds": 0,
+      "expectedSpeakers": 0,
+      "split": "development",
+      "participantIds": [
+        "person03",
+        "person04"
+      ],
+      "sourceKind": "real",
+      "conditions": [
+        "overlap"
+      ],
+      "referenceStatus": "pending",
+      "reference": {
+        "transcript": "",
+        "speakers": []
+      }
+    },
+    {
+      "id": "pilot-06",
+      "audio": "audio/pilot-06.wav",
+      "durationSeconds": 0,
+      "expectedSpeakers": 0,
+      "split": "development",
+      "participantIds": [
+        "person05",
+        "person06"
+      ],
+      "sourceKind": "real",
+      "conditions": [
+        "short-participant"
+      ],
+      "referenceStatus": "pending",
+      "reference": {
+        "transcript": "",
+        "speakers": []
+      }
+    },
+    {
+      "id": "pilot-07",
+      "audio": "audio/pilot-07.wav",
+      "durationSeconds": 0,
+      "expectedSpeakers": 0,
+      "split": "development",
+      "participantIds": [
+        "person07",
+        "person08"
+      ],
+      "sourceKind": "real",
+      "conditions": [
+        "silence",
+        "pauses"
+      ],
+      "referenceStatus": "pending",
+      "reference": {
+        "transcript": "",
+        "speakers": []
+      }
+    },
+    {
+      "id": "pilot-08",
+      "audio": "audio/pilot-08.wav",
+      "durationSeconds": 0,
+      "expectedSpeakers": 0,
+      "split": "development",
+      "participantIds": [
+        "person07",
+        "person08"
+      ],
+      "sourceKind": "real",
+      "conditions": [
+        "quiet-speech"
+      ],
+      "referenceStatus": "pending",
+      "reference": {
+        "transcript": "",
+        "speakers": []
+      }
+    },
+    {
+      "id": "pilot-09",
+      "audio": "audio/pilot-09.wav",
+      "durationSeconds": 0,
+      "expectedSpeakers": 0,
+      "split": "test",
+      "participantIds": [
+        "person09",
+        "person10"
+      ],
+      "sourceKind": "real",
+      "conditions": [
+        "clean",
+        "turn-taking"
+      ],
+      "referenceStatus": "pending",
+      "reference": {
+        "transcript": "",
+        "speakers": []
+      }
+    },
+    {
+      "id": "pilot-10",
+      "audio": "audio/pilot-10.wav",
+      "durationSeconds": 0,
+      "expectedSpeakers": 0,
+      "split": "test",
+      "participantIds": [
+        "person11",
+        "person12"
+      ],
+      "sourceKind": "real",
+      "conditions": [
+        "similar-voices"
+      ],
+      "referenceStatus": "pending",
+      "reference": {
+        "transcript": "",
+        "speakers": []
+      }
+    },
+    {
+      "id": "pilot-11",
+      "audio": "audio/pilot-11.wav",
+      "durationSeconds": 0,
+      "expectedSpeakers": 0,
+      "split": "test",
+      "participantIds": [
+        "person09",
+        "person10"
+      ],
+      "sourceKind": "real",
+      "conditions": [
+        "noise"
+      ],
+      "referenceStatus": "pending",
+      "reference": {
+        "transcript": "",
+        "speakers": []
+      }
+    },
+    {
+      "id": "pilot-12",
+      "audio": "audio/pilot-12.wav",
+      "durationSeconds": 0,
+      "expectedSpeakers": 0,
+      "split": "test",
+      "participantIds": [
+        "person11",
+        "person12"
+      ],
+      "sourceKind": "real",
+      "conditions": [
+        "overlap",
+        "short-participant"
+      ],
+      "referenceStatus": "pending",
+      "reference": {
+        "transcript": "",
+        "speakers": []
+      }
+    }
+  ]
+}

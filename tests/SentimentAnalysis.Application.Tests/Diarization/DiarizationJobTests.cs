@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SentimentAnalysis.Application.Abstractions;
@@ -31,16 +32,18 @@ public class DiarizationJobTests
     private sealed class FakeDiarizer(IReadOnlyList<SpeakerSegment> result) : IDiarizer
     {
         public bool WasCalled;
-        public Task<IReadOnlyList<SpeakerSegment>> DiarizeAsync(float[] a, CancellationToken ct)
+        public int SeenExpected = -1;
+        public Task<IReadOnlyList<SpeakerSegment>> DiarizeAsync(float[] a, int expectedSpeakers, CancellationToken ct)
         {
             WasCalled = true;
+            SeenExpected = expectedSpeakers;
             return Task.FromResult(result);
         }
     }
 
     private sealed class ThrowingDiarizer(Exception ex) : IDiarizer
     {
-        public Task<IReadOnlyList<SpeakerSegment>> DiarizeAsync(float[] a, CancellationToken ct)
+        public Task<IReadOnlyList<SpeakerSegment>> DiarizeAsync(float[] a, int expectedSpeakers, CancellationToken ct)
             => throw ex;
     }
 
@@ -54,10 +57,31 @@ public class DiarizationJobTests
         var diarizer = new FakeDiarizer([S(0, 0, 5), S(1, 5, 10)]);
 
         var outcome = await new DiarizationJob(diarizer, store, AppConfig.Default)
-            .RunAsync(Guid.NewGuid(), CancellationToken.None);
+            .RunAsync(Guid.NewGuid(), 0, CancellationToken.None);
 
         Assert.Equal(DiarizationOutcome.Completed, outcome);
         Assert.Equal(2, store.Saved.Count);
+    }
+
+    [Fact]
+    public async Task RunAsync_BeklenenKisiSayisiAyiriciyaIletilir()
+    {
+        var diarizer = new FakeDiarizer([S(0, 0, 5), S(1, 5, 10)]);
+        await new DiarizationJob(diarizer, new FakeStore(new float[16000 * 10]), AppConfig.Default)
+            .RunAsync(Guid.NewGuid(), 2, CancellationToken.None);
+        Assert.Equal(2, diarizer.SeenExpected);
+    }
+
+    [Fact]
+    public async Task RunAsync_HayaletKonusmaciKayittanOnceAyiklanir()
+    {
+        // 0 = 33,8 sn, 1 = 0,3 sn kırıntı, 2 = 36,3 sn → saklanan: 0, Bilinmeyen, 1 (tek numara uzayı).
+        var store = new FakeStore(new float[16000 * 71]);
+        var diarizer = new FakeDiarizer([S(0, 0, 33.8), S(1, 34, 34.3), S(2, 35, 71.3)]);
+
+        await new DiarizationJob(diarizer, store, AppConfig.Default).RunAsync(Guid.NewGuid(), 2, CancellationToken.None);
+
+        Assert.Equal(new[] { 0, -1, 1 }, store.Saved.Select(s => s.Speaker.Index));
     }
 
     [Fact]
@@ -67,7 +91,7 @@ public class DiarizationJobTests
         var diarizer = new FakeDiarizer([]);
 
         var outcome = await new DiarizationJob(diarizer, store, AppConfig.Default)
-            .RunAsync(Guid.NewGuid(), CancellationToken.None);
+            .RunAsync(Guid.NewGuid(), 0, CancellationToken.None);
 
         Assert.Equal(DiarizationOutcome.NoAudio, outcome);
         Assert.False(diarizer.WasCalled);       // pahalı işi boşuna başlatma
@@ -81,7 +105,7 @@ public class DiarizationJobTests
         var diarizer = new FakeDiarizer([]);
 
         var outcome = await new DiarizationJob(diarizer, store, AppConfig.Default)
-            .RunAsync(Guid.NewGuid(), CancellationToken.None);
+            .RunAsync(Guid.NewGuid(), 0, CancellationToken.None);
 
         Assert.Equal(DiarizationOutcome.NoAudio, outcome);
         Assert.False(diarizer.WasCalled);
@@ -95,7 +119,7 @@ public class DiarizationJobTests
         var diarizer = new ThrowingDiarizer(new InvalidOperationException("native patladı"));
 
         var outcome = await new DiarizationJob(diarizer, store, AppConfig.Default)
-            .RunAsync(Guid.NewGuid(), CancellationToken.None);
+            .RunAsync(Guid.NewGuid(), 0, CancellationToken.None);
 
         Assert.Equal(DiarizationOutcome.Failed, outcome);
         Assert.Equal(0, store.SaveCalls);       // yarım/boş sonuç YAZILMAZ
@@ -108,7 +132,7 @@ public class DiarizationJobTests
         var diarizer = new ThrowingDiarizer(new System.IO.FileNotFoundException("model yok"));
 
         var outcome = await new DiarizationJob(diarizer, store, AppConfig.Default)
-            .RunAsync(Guid.NewGuid(), CancellationToken.None);
+            .RunAsync(Guid.NewGuid(), 0, CancellationToken.None);
 
         Assert.Equal(DiarizationOutcome.Failed, outcome);
     }
@@ -123,7 +147,7 @@ public class DiarizationJobTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new DiarizationJob(new FakeDiarizer([]), store, AppConfig.Default)
-                .RunAsync(Guid.NewGuid(), cts.Token));
+                .RunAsync(Guid.NewGuid(), 0, cts.Token));
 
         Assert.Equal(0, store.SaveCalls);
     }
@@ -136,9 +160,24 @@ public class DiarizationJobTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new DiarizationJob(diarizer, store, AppConfig.Default)
-                .RunAsync(Guid.NewGuid(), CancellationToken.None));
+                .RunAsync(Guid.NewGuid(), 0, CancellationToken.None));
 
         Assert.Equal(0, store.SaveCalls);
+    }
+
+    [Fact]
+    public async Task RunAsync_SaklamadanOnce_KonusmaSirasinaGoreNumaralandirir()
+    {
+        // Motor keyfi kimlikler döndürür; SAKLANAN veri kanonik olmalı — aksi halde raporu
+        // okuyan her yüzey ayrı ayrı düzeltmek zorunda kalır ve biri unutulur.
+        var store = new FakeStore(new float[16000]);
+        var diarizer = new FakeDiarizer([S(5, 0, 2), S(3, 2, 4)]);
+
+        var outcome = await new DiarizationJob(diarizer, store, AppConfig.Default)
+            .RunAsync(Guid.NewGuid(), 0, CancellationToken.None);
+
+        Assert.Equal(DiarizationOutcome.Completed, outcome);
+        Assert.Equal(new[] { 0, 1 }, store.Saved.Select(s => s.Speaker.Index));
     }
 
     [Fact]
@@ -149,7 +188,7 @@ public class DiarizationJobTests
         var diarizer = new FakeDiarizer([]);
 
         var outcome = await new DiarizationJob(diarizer, store, AppConfig.Default)
-            .RunAsync(Guid.NewGuid(), CancellationToken.None);
+            .RunAsync(Guid.NewGuid(), 0, CancellationToken.None);
 
         Assert.Equal(DiarizationOutcome.Completed, outcome);
         Assert.Equal(1, store.SaveCalls);       // "sonuç yok" da bir sonuçtur, yazılır

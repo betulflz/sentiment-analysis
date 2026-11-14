@@ -1,6 +1,6 @@
 namespace SentimentAnalysis.Desktop;
 
-/// <summary>Canlı analizin ses kaynağı.</summary>
+/// <summary>Canlı analizin kaynağı. Dosya modunda video uzantılı dosya seçilirse görüntü de analiz edilir.</summary>
 public enum CaptureMode
 {
     /// <summary>Diskten seçilen bir ses dosyası.</summary>
@@ -8,6 +8,9 @@ public enum CaptureMode
 
     /// <summary>Canlı mikrofon.</summary>
     Mikrofon,
+
+    /// <summary>Canlı mikrofon + kamera (karşı tarafın yüzü; spec 11).</summary>
+    Kamera,
 }
 
 /// <summary>Seçili kaynak modunu ViewModel ile kompozisyon kökü arasında paylaşır

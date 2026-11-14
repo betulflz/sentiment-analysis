@@ -13,6 +13,10 @@ public static class TranscriptAssembler
 
     public static Transcript Assemble(IReadOnlyList<SttSegment> segments, DetectedLanguage? forced)
     {
+        // İt.2: sessizlikte uydurulan altyazı/video kapanışı segmentleri metne girmez; parça yalnız
+        // bunlardan oluşuyorsa "konuşma yok" olur. Karışık parçada kalite ortalamasında KALIR (ihtiyatlı).
+        var original = segments;
+        segments = segments.Where(s => !WhisperHallucinationFilter.IsHallucination(s.Text)).ToList();
         if (segments.Count == 0)
             return new Transcript(string.Empty, forced ?? DetectedLanguage.Other, EmptyAvgLogProb);
 
@@ -25,7 +29,7 @@ public static class TranscriptAssembler
 
         var text = string.Join(" ", kept.Select(s => s.Text));
         var language = forced ?? DominantLanguage(segments);
-        var avgProb = WeightedAverageProbability(segments);
+        var avgProb = WeightedAverageProbability(original);
         var avgLogProb = Math.Log(Math.Clamp(avgProb, MinProbability, 1.0));
 
         return new Transcript(text, language, avgLogProb, kept);

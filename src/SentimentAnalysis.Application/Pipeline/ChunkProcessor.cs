@@ -1,4 +1,5 @@
 using SentimentAnalysis.Application.Abstractions;
+using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Core;
 
 namespace SentimentAnalysis.Application.Pipeline;
@@ -15,19 +16,25 @@ public sealed class ChunkProcessor : IChunkProcessor
 
     public ChunkProcessor(
         IVadGate vad, ISpeechToText stt, IProsodyEmotionModel prosody,
-        ITextEmotionModel text, IEmotionFusion fusion)
+        ITextEmotionModel text, IEmotionFusion fusion, AppConfig? config = null)
     {
         _vad = vad; _stt = stt; _prosody = prosody; _text = text; _fusion = fusion;
+        _roleCfg = (config ?? AppConfig.Default).Role;
     }
 
-    public async Task<ChunkResult?> ProcessAsync(AudioChunk chunk, CancellationToken ct)
+    private readonly RoleConfig _roleCfg;
+
+    public Task<ChunkResult?> ProcessAsync(AudioChunk chunk, CancellationToken ct) => ProcessAsync(chunk, null, ct);
+
+    public async Task<ChunkResult?> ProcessAsync(AudioChunk chunk, IRoleLabeler? roles, CancellationToken ct)
     {
         if (!_vad.HasSpeech(chunk)) return null;
 
-        // Prozodi ∥ STT (ikisi de aynı ham chunk'ı alır).
+        // Prozodi ∥ STT ∥ rol çizelgesi (hepsi aynı ham chunk'ı alır; rol ~0,3 sn, STT'nin gölgesinde kalır).
         var prosodyTask = _prosody.AnalyzeAsync(chunk, ct);
         var sttTask = _stt.TranscribeAsync(chunk, ct);
-        await Task.WhenAll(prosodyTask, sttTask).ConfigureAwait(false);
+        var rolesTask = roles is null ? Task.FromResult<RoleTimeline?>(null) : Task.Run<RoleTimeline?>(() => roles.Label(chunk), ct);
+        await Task.WhenAll(prosodyTask, sttTask, rolesTask).ConfigureAwait(false);
 
         var prosody = prosodyTask.Result;
         var transcript = sttTask.Result;
@@ -43,7 +50,49 @@ public sealed class ChunkProcessor : IChunkProcessor
         foreach (var s in transcript.Segments)
             absolute.Add(new TranscriptSegment(s.Text, chunk.Start + s.Start, chunk.Start + s.End));
 
-        return new ChunkResult(chunk.Start, chunk.End, fused, transcript.Text, absolute);
+        var result = new ChunkResult(chunk.Start, chunk.End, fused, transcript.Text, absolute);
+        if (rolesTask.Result is not { Enrolled: true } timeline) return result;
+        return result with
+        {
+            Roles = timeline,
+            Counterpart = await CounterpartAsync(chunk, transcript, absolute, timeline, fused, ct).ConfigureAwait(false),
+        };
+    }
+
+    /// <summary>Karşı tarafın duygusu: parça karışıksa karşı tarafın dilimleri birleştirilip prozodi yeniden çalışır,
+    /// metin duygusu yalnız karşı tarafa düşen transkript satırlarından hesaplanır. Yönetenin sesi karşı tarafın
+    /// gerilim/olumsuzluk göstergelerine böylece karışmaz.</summary>
+    private async Task<FusedResult?> CounterpartAsync(AudioChunk chunk, Transcript transcript,
+        IReadOnlyList<TranscriptSegment> absolute, RoleTimeline timeline, FusedResult fused, CancellationToken ct)
+    {
+        double other = timeline.Seconds(SpeakerRole.KarsiTaraf, chunk.Start, chunk.End);
+        double host = timeline.Seconds(SpeakerRole.Yoneten, chunk.Start, chunk.End);
+        if (other < _roleCfg.MinCounterpartSeconds) return null;              // karşı taraf (neredeyse) konuşmadı
+        if (host < _roleCfg.NegligibleHostSeconds) return fused;              // parça zaten karşı tarafın
+
+        var samples = new List<float>();
+        foreach (var span in timeline.Spans.Where(s => s.Role == SpeakerRole.KarsiTaraf))
+        {
+            int from = Math.Clamp((int)((span.Start - chunk.Start).TotalSeconds * chunk.SampleRate), 0, chunk.Samples.Length);
+            int to = Math.Clamp((int)((span.End - chunk.Start).TotalSeconds * chunk.SampleRate), from, chunk.Samples.Length);
+            samples.AddRange(chunk.Samples.AsSpan(from, to - from).ToArray());
+        }
+        var otherChunk = new AudioChunk(samples.ToArray(), chunk.SampleRate, chunk.Start,
+            chunk.Start + TimeSpan.FromSeconds(samples.Count / (double)chunk.SampleRate));
+
+        // Satır, en çok örtüştüğü role aittir.
+        var otherSegments = absolute.Where(seg => timeline.RoleOf(seg.Start, seg.End) == SpeakerRole.KarsiTaraf).ToList();
+        var otherTranscript = transcript with
+        {
+            Text = string.Join(" ", otherSegments.Select(x => x.Text.Trim())).Trim(),
+            Segments = otherSegments,
+        };
+
+        var prosodyTask = _prosody.AnalyzeAsync(otherChunk, ct);
+        var textTask = _text.AnalyzeAsync(otherTranscript, ct);
+        await Task.WhenAll(prosodyTask, textTask).ConfigureAwait(false);
+        var quality = QualitySignalsBuilder.Build(otherChunk, otherTranscript);
+        return _fusion.Fuse(textTask.Result, prosodyTask.Result, quality);
     }
 
     public async Task WarmUpAsync(CancellationToken ct)

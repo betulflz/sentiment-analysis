@@ -21,21 +21,50 @@ public static class TurkishSummaryWriter
         [Emotion.Notr] = "Nötr",
     };
 
+    // Konuyu bilmeyen kullanıcı için düz dil: "baskın", "oynaklık", "örtüşme" gibi terimler yok.
+    // Cümle (Write) ve rapor etiketleri (Tags) aynı ifadeleri buradan alır — ikisi ayrışmaz.
+    private static (string Text, SummaryTone Tone) Trend(MeetingSummary m) =>
+        m.ValenceTrend > 0.05 ? ("olumluya döndü", SummaryTone.Good)
+        : m.ValenceTrend < -0.05 ? ("olumsuza döndü", SummaryTone.Bad)
+        : ("pek değişmedi", SummaryTone.Neutral);
+
+    private static (string Text, SummaryTone Tone) Volatility(MeetingSummary m) =>
+        m.EmotionalVolatility > 0.35 ? ("sık sık değişti", SummaryTone.Warn)
+        : m.EmotionalVolatility > 0.15 ? ("ara ara değişti", SummaryTone.Neutral)
+        : ("genelde aynı kaldı", SummaryTone.Neutral);
+
+    private static (string Text, SummaryTone Tone) Congruence(MeetingSummary m) =>
+        m.AverageCongruence >= 0.7 ? ("çoğunlukla uyumluydu", SummaryTone.Good)
+        : m.AverageCongruence >= 0.4 ? ("kısmen uyumluydu", SummaryTone.Warn)
+        : ("sık sık çelişti", SummaryTone.Bad);
+
+    /// <summary>Rapor özet kartındaki renkli etiketler: hava gidişatı, duygu değişkenliği, söz–ton uyumu.</summary>
+    public static IReadOnlyList<(string Text, SummaryTone Tone)> Tags(MeetingSummary m)
+    {
+        var (trend, trendTone) = Trend(m);
+        var (vol, volTone) = Volatility(m);
+        var (cong, congTone) = Congruence(m);
+        return new[]
+        {
+            ($"Hava: {trend}", trendTone),
+            ($"Duygular: {vol}", volTone),
+            ($"Söz ve ses tonu: {cong}", congTone),
+        };
+    }
+
     public static string Write(MeetingSummary m)
     {
-        string dominant = Adlar[m.DominantEmotion];
-        string trend = m.ValenceTrend > 0.05 ? "ısındı"
-                     : m.ValenceTrend < -0.05 ? "soğudu"
-                     : "sabit kaldı";
-        string volatilite = m.EmotionalVolatility > 0.35 ? "yüksek"
-                          : m.EmotionalVolatility > 0.15 ? "orta"
-                          : "düşük";
-        string congruence = m.AverageCongruence >= 0.7 ? "yüksek"
-                          : m.AverageCongruence >= 0.4 ? "orta"
-                          : "düşük";
+        string trend = Trend(m).Text, volatilite = Volatility(m).Text, congruence = Congruence(m).Text;
+        // Hiçbir parçada model emin değilse duygu adı uydurulmaz (İt.3 "belirsiz").
+        string opening = m.SummarizedChunks > 0 && m.UncertainChunks == m.SummarizedChunks
+            ? "Görüşmenin havası belirsiz: model hiçbir bölümde duygudan emin olamadı. "
+            : $"Görüşmede en çok {Adlar[m.DominantEmotion].ToLower(new System.Globalization.CultureInfo("tr-TR"))} bir hava vardı. ";
 
-        return $"Toplantının baskın duygusu {dominant}. "
-             + $"Genel hava {trend}, duygusal oynaklık {volatilite}. "
-             + $"Söz-ton örtüşmesi {congruence}.";
+        return opening
+             + $"Görüşme ilerledikçe hava {trend}; duygular {volatilite}. "
+             + $"Söylenenlerle ses tonu {congruence}.";
     }
 }
+
+/// <summary>Özet etiketinin rengi: iyi (yeşil), dikkat (sarı), kötü (kırmızı), nötr (gri).</summary>
+public enum SummaryTone { Good, Warn, Bad, Neutral }

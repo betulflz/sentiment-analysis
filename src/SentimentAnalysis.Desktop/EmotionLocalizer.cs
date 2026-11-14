@@ -19,6 +19,9 @@ public static class EmotionLocalizer
         _ => e.ToString(),
     };
 
+    /// <summary>İt.3: model emin değilken duygu adı yerine gösterilen metin.</summary>
+    public const string Uncertain = "Belirsiz";
+
     public static string Confidence(Confidence c) => c switch
     {
         Core.Confidence.Yuksek => "Yüksek",
@@ -30,9 +33,9 @@ public static class EmotionLocalizer
     public static string Pattern(IncongruencePattern p) => p switch
     {
         IncongruencePattern.Yok => "Yok",
-        IncongruencePattern.Maskeleme => "Maskeleme",
-        IncongruencePattern.Saka => "Şaka",
-        IncongruencePattern.OlasiIroni => "Olası ironi",
+        IncongruencePattern.Maskeleme => "Sözler olumlu ama ses tonu olumsuz",
+        IncongruencePattern.Saka => "Sözler olumsuz ama ses tonu neşeli",
+        IncongruencePattern.OlasiIroni => "Sözler olumlu ama ses düz — iğneleme olabilir",
         _ => p.ToString(),
     };
 

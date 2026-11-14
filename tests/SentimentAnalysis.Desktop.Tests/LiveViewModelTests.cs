@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using SentimentAnalysis.Application.Configuration;
 using SentimentAnalysis.Core;
 using SentimentAnalysis.Desktop;
@@ -46,7 +47,27 @@ public class LiveViewModelTests
         Assert.Equal("Kızgın", vm.CurrentEmotion);
         Assert.Equal(-0.7, vm.CurrentValence, precision: 5);
         Assert.True(vm.Timeline[0].Flagged);
-        Assert.Contains("Maskeleme", vm.CongruenceBadge); // uyumsuzluk rozeti lokalize
+        Assert.Contains("Sözler olumlu ama ses tonu olumsuz", vm.CongruenceBadge); // uyumsuzluk rozeti günlük dilde
+    }
+
+    [Fact]
+    public void Report_FaceFusedChunk_ShowsFaceContribution()
+    {
+        var vm = new LiveViewModel(new FakeRunner());
+        var speech = Chunk(0, Emotion.Uzgun, -0.4);
+        vm.Report(speech);
+        Assert.Equal(string.Empty, vm.FaceContributionText);
+
+        vm.Report(speech with
+        {
+            Fused = speech.Fused with
+            {
+                Combined = new ValenceArousal(0.25, 0.6), PrimaryEmotion = Emotion.Mutlu,
+                SpeechVa = speech.Fused.Combined, FaceValence = 0.9, FaceWeight = 1.0,
+            },
+        });
+        Assert.Equal("Mutlu", vm.CurrentEmotion);
+        Assert.Equal("Yüz dahil: konuşma −0,40 · yüz +0,90 → nihai +0,25", vm.FaceContributionText);
     }
 
     [Fact]
@@ -119,7 +140,7 @@ public class LiveViewModelTests
         var runner = new GatedRunner();
         var vm = new LiveViewModel(runner);
         vm.Report(Chunk(0, Emotion.Kizgin, -0.7, flagged: true)); // önceki koşudan "Maskeleme" rozeti
-        Assert.Contains("Maskeleme", vm.CongruenceBadge);
+        Assert.Contains("Sözler olumlu", vm.CongruenceBadge);
 
         vm.StartCommand.Execute(null);
         await runner.Started.Task;
@@ -223,9 +244,9 @@ public class LiveViewModelTests
         Assert.False(vm.TextAnalysis.HasData);
         Assert.False(vm.AudioAnalysis.HasData);
         Assert.False(vm.FinalAnalysis.HasData);
-        Assert.Equal("Metin Analizi", vm.TextAnalysis.Title);
-        Assert.Equal("Ses Analizi", vm.AudioAnalysis.Title);
-        Assert.Equal("Nihai Karar", vm.FinalAnalysis.Title);
+        Assert.Equal("Sözlere göre", vm.TextAnalysis.Title);
+        Assert.Equal("Ses tonuna göre", vm.AudioAnalysis.Title);
+        Assert.Equal("Genel sonuç", vm.FinalAnalysis.Title);
     }
 
     [Fact]
@@ -351,5 +372,143 @@ public class LiveViewModelTests
 
         Assert.Contains(uzunMesaj, vm.CaptureError);
         Assert.False(vm.IsCapturing);
+    }
+
+    // --- Kamera modu ve yüz notları (11b) ---
+
+    [Fact]
+    public void UseCamera_SetsModeKamera_AndClearsMicrophone()
+    {
+        var mode = new CaptureModeState();
+        var vm = new LiveViewModel(new FakeRunner(), null, new SelectedAudio(), null, mode);
+
+        vm.UseMicrophone = true;
+        vm.UseCamera = true;
+        Assert.Equal(CaptureMode.Kamera, mode.Mode);
+        Assert.False(vm.UseMicrophone);
+        Assert.False(vm.IsFileMode);
+        Assert.True(vm.StartCommand.CanExecute(null)); // kamera modu dosya istemez
+
+        vm.UseMicrophone = true;
+        Assert.False(vm.UseCamera);
+        Assert.Equal(CaptureMode.Mikrofon, mode.Mode);
+
+        vm.UseMicrophone = false;
+        Assert.Equal(CaptureMode.Dosya, mode.Mode);
+        Assert.True(vm.IsFileMode);
+    }
+
+    private sealed class FaceRunner : IAnalysisRunner
+    {
+        public Task<MeetingSummary> RunAsync(IProgress<ChunkResult> progress, CancellationToken ct) =>
+            Task.FromResult(MeetingSummary.CreateEmpty(AnalysisOutcome.NoResult));
+        public IReadOnlyList<FaceWindowSummary> FacesFor(ChunkResult r) =>
+            new[] { new FaceWindowSummary(0, 1, 0.5, 0, 0, 0, 1) };
+    }
+
+    [Fact]
+    public void LiveViewModel_Report_UsesRunnerFacesFor()
+    {
+        var vm = new LiveViewModel(new FaceRunner());
+        vm.Report(Chunk(0, Emotion.Notr, 0));
+        Assert.StartsWith("Yüz 1: dönük %50", vm.Timeline[0].FaceNote);
+    }
+
+    private sealed class WarningRunner : IAnalysisRunner
+    {
+        public Task<MeetingSummary> RunAsync(IProgress<ChunkResult> progress, CancellationToken ct)
+        {
+            ((ICaptureWarnings)progress).Warn("Bu videoda ses yok.");
+            return Task.FromResult(MeetingSummary.CreateEmpty(AnalysisOutcome.NoResult));
+        }
+    }
+
+    [Fact]
+    public async Task Warn_DuringRun_KeptWhenRunHasNoResult()
+    {
+        var vm = new LiveViewModel(new WarningRunner());
+        vm.StartCommand.Execute(null);
+        await vm.WaitForIdleAsync();
+
+        Assert.StartsWith("Bu videoda ses yok.", vm.CaptureError);
+        Assert.Contains("Analiz sonucu üretilemedi", vm.CaptureError);
+    }
+
+    // --- Karar paneli (11d) ---
+
+    [Fact]
+    public void Report_FeedsDecisionPanel()
+    {
+        var vm = new LiveViewModel(new FaceRunner());
+        vm.Decision.Start();
+        vm.Report(Chunk(0, Emotion.Notr, 0));
+        Assert.Single(vm.Decision.History);
+        Assert.Single(vm.Decision.Faces);
+    }
+
+    [Fact]
+    public async Task Start_LocksProfileAndResetsPanel()
+    {
+        var runner = new StoppableRunner();
+        var vm = new LiveViewModel(runner);
+        vm.Report(Chunk(0, Emotion.Notr, 0));          // önceki oturumdan kalan pencere
+        vm.StartCommand.Execute(null);
+        await runner.Started.Task;
+        Assert.True(vm.Decision.IsLocked);
+        Assert.Empty(vm.Decision.History);
+        vm.StopCommand.Execute(null);
+        await vm.WaitForIdleAsync();
+        Assert.False(vm.Decision.IsLocked);
+    }
+
+    [Fact]
+    public async Task Start_OncekiYuzDahilSatiriniTemizler()
+    {
+        var vm = new LiveViewModel(new FakeRunner());
+        var speech = Chunk(0, Emotion.Uzgun, -0.4);
+        vm.Report(speech with { Fused = speech.Fused with { SpeechVa = speech.Fused.Combined, FaceValence = 0.9, FaceWeight = 1.0 } });
+        Assert.NotEqual(string.Empty, vm.FaceContributionText);
+
+        vm.StartCommand.Execute(null);
+        Assert.Equal(string.Empty, vm.FaceContributionText);
+        await vm.WaitForIdleAsync();
+    }
+
+    /// <summary>İptal edilene kadar hiç parça üretmez — sessiz video gibi.</summary>
+    private sealed class SilentRunner : IAnalysisRunner
+    {
+        public async Task<MeetingSummary> RunAsync(IProgress<ChunkResult> progress, CancellationToken ct)
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+            throw new InvalidOperationException("ulaşılmaz");
+        }
+    }
+
+    [Fact]
+    public async Task SessizKosu_KonusmaBekleniyorGosterilir_IlkSatirdaKalkar()
+    {
+        var vm = new LiveViewModel(new SilentRunner());
+        Assert.False(vm.WaitingForSpeech);
+
+        vm.StartCommand.Execute(null);
+        Assert.True(vm.WaitingForSpeech);
+
+        vm.Report(Chunk(0, Emotion.Notr, 0));
+        Assert.False(vm.WaitingForSpeech);
+
+        vm.StopCommand.Execute(null);
+        await vm.WaitForIdleAsync();
+        Assert.False(vm.WaitingForSpeech);
+    }
+
+    [Fact]
+    public async Task YeniKosu_OncekiSatirlarVarken_YineKonusmaBekler()
+    {
+        var vm = new LiveViewModel(new SilentRunner());
+        vm.Report(Chunk(0, Emotion.Notr, 0)); // önceki koşudan kalan satır
+        vm.StartCommand.Execute(null);
+        Assert.True(vm.WaitingForSpeech);
+        vm.StopCommand.Execute(null);
+        await vm.WaitForIdleAsync();
     }
 }

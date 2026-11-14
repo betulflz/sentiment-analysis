@@ -24,4 +24,15 @@ public class MeetingSummaryTests
         Assert.Equal(1.0, summary.TimeShareByEmotion[Emotion.Mutlu]);
         Assert.Equal(0.9, summary.AverageCongruence);
     }
+
+    [Theory]
+    [InlineData(Confidence.Dusuk, true)]
+    [InlineData(Confidence.Orta, false)]
+    [InlineData(Confidence.Yuksek, false)]
+    public void FusedResult_Belirsiz_YalnizDusukGuvende(Confidence c, bool expected)
+    {
+        var f = new FusedResult(ValenceArousal.Neutral, Emotion.Mutlu, Emotion.Notr, c, true, false,
+            IncongruencePattern.Yok, 1, ValenceArousal.Neutral, ValenceArousal.Neutral, 0.5, 0.5);
+        Assert.Equal(expected, f.Uncertain);
+    }
 }

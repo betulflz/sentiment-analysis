@@ -19,7 +19,15 @@ public sealed class MeetingAggregator : IMeetingAggregator
 
     public MeetingSummary Aggregate(MeetingSession session)
     {
-        var chunks = session.Chunks;
+        var all = session.Chunks;
+        // Karşı tarafa odak (2026-11-13): rol bilgili oturumda özet yalnız karşı tarafın sesinden/sözünden; karşı tarafın
+        // konuşmadığı parçalar özete girmez (nötr sayılmaz). Rolsüz parçalar (ör. ayrım sınırını aşan kuyruk, rol hatası)
+        // rapordaki "kısmen ayrıldı" notuna uygun olarak karışık sesten girer — notla AYNI koşulla (yalnız metinli parçalar;
+        // ReportViewModel.SetRoleContext), not'un söylemediği karışık ses özete girmesin. Analiz edilen süre tüm parçalardan.
+        var chunks = all.Any(c => c.Roles is { Enrolled: true })
+            ? all.Where(c => c.Roles is { Enrolled: true } ? c.Counterpart is not null : !string.IsNullOrWhiteSpace(c.Transcript))
+                 .Select(c => c.Roles is { Enrolled: true } ? c with { Fused = c.Counterpart! } : c).ToArray()
+            : all;
         if (chunks.Count == 0)
         {
             return new MeetingSummary(
@@ -30,10 +38,10 @@ public sealed class MeetingAggregator : IMeetingAggregator
                 PeakMoments: new List<ChunkResult>(),
                 AverageVa: ValenceArousal.Neutral,
                 AverageCongruence: 1.0,
-                TurkishSummary: string.Empty);
+                TurkishSummary: string.Empty) with { AnalyzedDuration = Union(all) };
         }
 
-        var timeShare = ComputeTimeShare(chunks, out var dominant);
+        var timeShare = ComputeTimeShare(chunks, out var dominant, out double uncertainShare);
         var valences = chunks.Select(c => c.Fused.Combined.Valence).ToArray();
         var times = chunks.Select(c => (c.TimeStart + (c.TimeEnd - c.TimeStart) / 2).TotalSeconds).ToArray();
         double trend = Slope(times, valences);
@@ -56,30 +64,41 @@ public sealed class MeetingAggregator : IMeetingAggregator
             AverageVa: averageVa,
             AverageCongruence: avgCongruence,
             TurkishSummary: string.Empty);
-        return summary with { TurkishSummary = TurkishSummaryWriter.Write(summary) };
+        summary = summary with
+        {
+            SummarizedChunks = chunks.Count,
+            UncertainChunks = chunks.Count(c => c.Fused.Uncertain),
+            UncertainShare = uncertainShare,
+        };
+        return summary with { TurkishSummary = TurkishSummaryWriter.Write(summary), AnalyzedDuration = Union(all) };
     }
 
     /// <summary>Kritiklik: yüksek arousal + düşük valence = en kritik an.</summary>
     private static double Criticality(ValenceArousal va) => va.Arousal - va.Valence;
 
+    /// <summary>Duygu süre payları. Belirsiz parçalar (<see cref="FusedResult.Uncertain"/>) hiçbir duyguya yazılmaz;
+    /// paylar yine TÜM süreye bölünür, böylece kapsam kaybı <paramref name="uncertainShare"/> olarak görünür kalır.
+    /// Hepsi belirsizse paylar boş, baskın duygu yer tutucu Nötr'dür (UI "belirsiz" gösterir).</summary>
     private static IReadOnlyDictionary<Emotion, double> ComputeTimeShare(
-        IReadOnlyList<ChunkResult> chunks, out Emotion dominant)
+        IReadOnlyList<ChunkResult> chunks, out Emotion dominant, out double uncertainShare)
     {
         var weights = new Dictionary<Emotion, double>();
-        double total = 0;
+        double total = 0, uncertain = 0;
         foreach (var c in chunks)
         {
             double w = Weight(c);
             total += w;
+            if (c.Fused.Uncertain) { uncertain += w; continue; }
             weights[c.Fused.PrimaryEmotion] = weights.GetValueOrDefault(c.Fused.PrimaryEmotion) + w;
         }
 
         var share = new Dictionary<Emotion, double>();
         foreach (var kv in weights)
             share[kv.Key] = kv.Value / total;
+        uncertainShare = uncertain / total;
 
         // Baskın: en yüksek pay; eşitlikte enum sırasına göre deterministik.
-        dominant = share
+        dominant = share.Count == 0 ? Emotion.Notr : share
             .OrderByDescending(kv => kv.Value)
             .ThenBy(kv => (int)kv.Key)
             .First().Key;
@@ -87,6 +106,25 @@ public sealed class MeetingAggregator : IMeetingAggregator
     }
 
     /// <summary>Chunk ağırlığı: pozitif süre; sıfır/negatifse 1.0 (dejenere veriyi eşit say).</summary>
+    private static TimeSpan Union(IReadOnlyList<ChunkResult> chunks)
+    {
+        var total = TimeSpan.Zero;
+        TimeSpan? start = null, end = null;
+        foreach (var c in chunks.OrderBy(c => c.TimeStart))
+        {
+            if (end is { } e && c.TimeStart <= e)
+            {
+                if (c.TimeEnd > e) end = c.TimeEnd;
+                continue;
+            }
+            if (start is { } s0) total += end!.Value - s0;
+            start = c.TimeStart;
+            end = c.TimeEnd;
+        }
+        if (start is { } s1) total += end!.Value - s1;
+        return total;
+    }
+
     private static double Weight(ChunkResult c)
     {
         double seconds = (c.TimeEnd - c.TimeStart).TotalSeconds;

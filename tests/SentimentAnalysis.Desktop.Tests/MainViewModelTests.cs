@@ -47,4 +47,24 @@ public class MainViewModelTests
         vm.ShowHistoryCommand.Execute(null);
         Assert.IsType<HistoryViewModel>(vm.CurrentView);
     }
+
+    private sealed class OneSessionStore(MeetingSession session) : ISessionStore
+    { public Task SaveChunkAsync(Guid i, ChunkResult r, CancellationToken c)=>Task.CompletedTask;
+      public Task<MeetingSession?> GetSessionAsync(Guid i, CancellationToken c)=>Task.FromResult<MeetingSession?>(i == session.Id ? session : null);
+      public Task<IReadOnlyList<MeetingSession>> ListSessionsAsync(CancellationToken c)=>Task.FromResult<IReadOnlyList<MeetingSession>>(new[] { session });
+      public Task PurgeExpiredAudioAsync(CancellationToken c)=>Task.CompletedTask; }
+
+    [Fact]
+    public async Task GecmistenAcilanOturum_RaporEkraninaGecer()
+    {
+        var session = new MeetingSession(Guid.NewGuid(), DateTimeOffset.UnixEpoch, DetectedLanguage.Turkish, Array.Empty<ChunkResult>());
+        var vm = new MainViewModel(new LiveViewModel(new FakeRunner()), new ReportViewModel(new FakeAgg()),
+            new HistoryViewModel(new OneSessionStore(session)), new SettingsViewModel(AppConfig.Default, _ => { }));
+        vm.ShowHistoryCommand.Execute(null);
+
+        await vm.History.OpenCommand.ExecuteAsync(new SessionRowVm { Id = session.Id });
+
+        Assert.IsType<ReportViewModel>(vm.CurrentView);
+        Assert.True(vm.Report.HasReport);
+    }
 }
