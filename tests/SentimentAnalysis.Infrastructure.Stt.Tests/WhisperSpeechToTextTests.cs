@@ -11,6 +11,25 @@ namespace SentimentAnalysis.Infrastructure.Stt.Tests;
 
 public class WhisperSpeechToTextTests
 {
+    [SkippableFact]
+    public async Task TranscribeAsync_RealModel_PreservesSpeechAfterPause()
+    {
+        var model = Environment.GetEnvironmentVariable("WHISPER_MODEL_PATH");
+        var audio = Environment.GetEnvironmentVariable("WHISPER_PAUSE_WAV");
+        var expected = Environment.GetEnvironmentVariable("WHISPER_PAUSE_EXPECTED");
+        Skip.If(!File.Exists(model) || !File.Exists(audio) || string.IsNullOrWhiteSpace(expected),
+            "Duraklama regresyonu için model, yerel WAV ve beklenen ifade gerekli.");
+
+        var samples = WavReader.ReadMono16(audio!);
+        var config = AppConfig.Default with { Stt = AppConfig.Default.Stt with { Threads = 2, Language = "tr" } };
+        using var stt = new WhisperSpeechToText(config, new FixedModelProvider(model!));
+        var result = await stt.TranscribeAsync(new AudioChunk(samples, 16000,
+            TimeSpan.Zero, TimeSpan.FromSeconds(samples.Length / 16000.0)), CancellationToken.None);
+
+        Assert.Contains(expected!, result.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(result.Segments, s => s.End.TotalSeconds > 20);
+    }
+
     /// <summary>Model çözülmemeli (guard önce çalışmalı) diye kanıtlayan test double.</summary>
     private sealed class UnusedModelProvider : ISttModelProvider
     {

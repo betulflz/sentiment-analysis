@@ -2,6 +2,53 @@
 
 Bu belge, "Canlı Görüşme KDS" projesinde kalite iterasyonlarının **nerede kaldığını** ve **nereden devam edileceğini** anlatır. Yeni oturum ya da başka bir yapay zeka, önce bu dosyayı, sonra `docs/DEVIR-TESLIM.md` dosyasını okumalı.
 
+
+## Son çalışma — 14 Kasım 2026: duraklama sonrası eksik metin
+
+Kullanıcı yeni bir iki kişilik kayıt, referans metin ve yaklaşık konuşmacı zamanları verdi.
+Bu nedenle önceki “kayıt bekleniyor” engeli kısmen kalktı. İnsan denetimli sessizlik sınırları
+ve duygu etiketleri hâlâ yok; kesin DER ve duygu kalibrasyonu bekliyor.
+
+- Son cevabın atlanması gerçek model testiyle önce kırmızı, sonra yeşil olarak doğrulandı.
+- Ortak `WhisperSpeechToText` bileşeni beş adaylı beam search kullanıyor.
+- Tam kayıtta 218 referans kelimeye göre WER %25,69 → %6,42; süre 24,00 → 28,46 sn.
+  Bu bir geliştirme kaydıdır; bağımsız test veya genel doğruluk ölçümü değildir.
+- Ayrıntılar ve tekrar çalıştırma: `docs/research/2026-11-14-whisper-duraklama-regresyonu.md`.
+- Özel ses/metin ve ham ölçümler `quality-local/` altında, git dışında. Push yapılmadı.
+
+## Devralma doğrulaması — 14 Kasım 2026 (Codex)
+
+**Aşağıdaki eski durum tablosu ve push bilgileri yerine bu bölüm esas alınmalı.**
+Kod ve yerel Git geçmişi incelendi; HEAD `8dc8a20`, dal `11-karar-destek`.
+Yerel `origin/11-karar-destek` referansı `67d1c6c`; uzak sunucudan fetch yapılmadı.
+Güvenlik düzeltmeleri, sigmoid/ses güveni ve “belirsiz” commit'leri bu referansta mevcut.
+
+Rapor yazıldıktan sonra tamamlanan ve yerel origin referansına göre **push bekleyen** işler:
+
+| Commit | İş |
+|---|---|
+| `248a70c` | İt.4: kaynak cümleli üç olay kuralı (cevapsız soru, belirsiz sonraki adım, uzun tek kişi). |
+| `2886bd1` | İt.5: geçmişten saklanan raporu açma. |
+| `e2734f9` | İt.5: ayarları kaydetme/açılışta uygulama, ses saklama tercihi. |
+| `e57cafd` | ClearIf, hazırlık yazıları, dosya modu ipucu, XML belgesi. |
+| `8dc8a20` | İt.2: uzun parçadaki kelimeleri konuşma sürelerine orantılı bölme. |
+
+Son madde **gerçek kelime zaman hizalaması değildir**; eşit konuşma hızı varsayar.
+Örtüşen konuşma ve gerçek kelime hizalaması tamamlanmış sayılmaz.
+İt.4'ün TOPSIS karşılaştırması ve kör insan değerlendirmesi; İt.5'in kişi/metin düzeltmesi,
+30 dakika ve tekrarlı başlat/durdur denemeleri hâlâ bekliyor.
+
+Doğrulama: `dotnet test` 12 test projesinde **1.092 başarılı, 17 atlanan, 0 başarısız**;
+`python3 -m unittest discover -s tools/quality` **37 başarılı**.
+Bu sonuçlar gerçek model doğruluğunu, arayüzün elle kullanımını veya performans kazancını kanıtlamaz.
+Önceki değişikliklerin kırmızı→yeşil aşamaları bu oturumda yeniden gözlenmedi.
+
+**Devam noktası:** kullanıcının “etiketli kayıt gereken işte dur” talimatı gereği kayıt bekleniyor.
+`quality-local/pilot.json` tek public kayıt içeriyor; `referenceStatus=pending` ve duygu etiketi yok.
+İnsan denetimli başlangıç/bitiş, konuşmacı, metin ve duygu etiketleri gerekli.
+WER/DER başlangıç ölçümü, macro-F1/UAR, güven–kapsam, füzyon kalibrasyonu ve model
+karşılaştırmaları bu devralmada yapılmadı. Yeni kod commit'i veya push yapılmadı.
+
 ## Proje ve kurallar
 
 - **Proje:** C#/.NET 9 + Avalonia masaüstü uygulaması. Görüşmeyi (canlı mikrofon ya da dosya) dinler, konuşmacıları ayırır, metne çevirir (Whisper), duygu analizi yapar (metin + ses), rapor ve öneri üretir.

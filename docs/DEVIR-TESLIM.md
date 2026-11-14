@@ -1,6 +1,6 @@
 # Devir notu ve yapılacaklar listesi — 13 Kasım 2026
 
-> Güncel durum ve sıradaki işler: `docs/DEVAM-RAPORU.md` (14 Kasım 2026).
+> Güncel durum ve sıradaki işler: `docs/DEVAM-RAPORU.md` içindeki “Devralma doğrulaması” (14 Kasım 2026). Aşağıdaki liste tarihsel durumu içerir; İt.4 olay kuralları ve İt.5 geçmiş/ayar işleri sonradan uygulanmıştır.
 
 Bu belge, Codex ile yürütülen kalite çalışmasının (açık kaynak araştırması → 5 iterasyonluk strateji → İterasyon 1) durumunu ve devralan kişinin yapacaklarını özetler. Branch: `11-karar-destek`.
 

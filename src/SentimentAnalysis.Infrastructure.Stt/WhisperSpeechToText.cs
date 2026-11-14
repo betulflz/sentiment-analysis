@@ -60,7 +60,10 @@ public sealed class WhisperSpeechToText : ISpeechToText, IDisposable
             {
                 var modelPath = _models.ResolveModelPath(_cfg.LiveModel);
                 _factory = WhisperFactory.FromPath(modelPath);
-                var builder = _factory.CreateBuilder().WithThreads(_cfg.Threads);
+                // Greedy çözümleme, duraklama sonrası cevabı tamamen atlayabiliyor.
+                // Beş adaylı arama: yerel duraklama regresyonuyla doğrulandı.
+                var builder = _factory.CreateBuilder().WithThreads(_cfg.Threads)
+                    .WithBeamSearchSamplingStrategy(s => s.WithBeamSize(5));
                 builder = _cfg.Language is null
                     ? builder.WithLanguageDetection()
                     : builder.WithLanguage(_cfg.Language);
