@@ -13,7 +13,20 @@ namespace SentimentAnalysis.Application.Diarization;
 public sealed class WindowedDiarizer(ISpeakerEmbedder embedder, IVadGate vad, AppConfig config) : IDiarizer
 {
     private const int Sr = 16000;
-    private readonly DiarizationConfig _cfg = config.Diarization;
+    private readonly DiarizationConfig _cfg = Validate(config.Diarization);
+
+    /// <summary>Pencere/adım geçersizse kurulumda patla: adım 0'a (ya da örnek sayısına yuvarlanınca 0'a) inerse
+    /// tarama döngüsü hiç ilerlemez (sonsuz döngü); adım &gt; pencere ise ses atlanır.</summary>
+    private static DiarizationConfig Validate(DiarizationConfig c)
+    {
+        if (!(c.WindowSeconds > 0) || (int)(c.WindowSeconds * Sr) < 1)
+            throw new ArgumentOutOfRangeException(nameof(c.WindowSeconds), c.WindowSeconds, "Pencere süresi pozitif olmalı.");
+        if (!(c.HopSeconds > 0) || (int)(c.HopSeconds * Sr) < 1)
+            throw new ArgumentOutOfRangeException(nameof(c.HopSeconds), c.HopSeconds, "Adım süresi pozitif olmalı.");
+        if (c.HopSeconds > c.WindowSeconds)
+            throw new ArgumentOutOfRangeException(nameof(c.HopSeconds), c.HopSeconds, "Adım pencereden uzun olamaz.");
+        return c;
+    }
 
     public Task<IReadOnlyList<SpeakerSegment>> DiarizeAsync(float[] mono16k, int expectedSpeakers, CancellationToken ct) =>
         Task.Run<IReadOnlyList<SpeakerSegment>>(() => Diarize(mono16k, expectedSpeakers, ct), ct);
@@ -38,8 +51,8 @@ public sealed class WindowedDiarizer(ISpeakerEmbedder embedder, IVadGate vad, Ap
         if (embeddings.Count == 0) return new List<SpeakerSegment>();
 
         var labels = expectedSpeakers > 0
-            ? SpeakerClustering.Cluster(embeddings, expectedSpeakers)
-            : SpeakerClustering.ClusterAuto(embeddings, _cfg.MaxAutoSpeakers, _cfg.SameSpeakerCosine);
+            ? SpeakerClustering.Cluster(embeddings, expectedSpeakers, ct)
+            : SpeakerClustering.ClusterAuto(embeddings, _cfg.MaxAutoSpeakers, _cfg.SameSpeakerCosine, ct);
         labels = Smooth(labels, _cfg.SmoothWindows);
 
         // Bitişik aynı kişili dilimler birleşir; sessizlik (atlanan dilim) bölgeleri ayırır.

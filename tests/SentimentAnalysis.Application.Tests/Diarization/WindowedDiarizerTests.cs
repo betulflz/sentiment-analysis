@@ -112,6 +112,39 @@ public class WindowedDiarizerTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Make(e).DiarizeAsync(Audio((0.1f, 30)), 2, cts.Token));
         Assert.True(e.Calls < 10);
     }
+
+    [Fact]
+    public async Task IptalKumelemeSirasindaDaGozlenir()
+    {
+        // Son imza çıkarılırken iptal: tarama döngüsü bitmiştir, iptali ancak kümeleme görebilir.
+        var audio = Audio((0.1f, 30));
+        var cfg = AppConfig.Default.Diarization;
+        int len = (int)(cfg.WindowSeconds * Sr), hop = (int)(cfg.HopSeconds * Sr);
+        int windows = (audio.Length - len) / hop + 1;
+        using var cts = new CancellationTokenSource();
+        var e = new Embedder();
+        e.OnCall = () => { if (e.Calls == windows) cts.Cancel(); return 0; };
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Make(e).DiarizeAsync(audio, 2, cts.Token));
+        Assert.Equal(windows, e.Calls);
+    }
+
+    [Theory]
+    [InlineData(0.0, 0.5)]      // pencere 0
+    [InlineData(-1.0, 0.5)]     // pencere negatif
+    [InlineData(1.5, 0.0)]      // adım 0 → eskiden sonsuz döngü
+    [InlineData(1.5, -0.5)]     // adım negatif
+    [InlineData(1.5, 2.0)]      // adım > pencere
+    [InlineData(double.NaN, 0.5)]
+    [InlineData(1.5, double.NaN)]
+    [InlineData(1.5, 0.00001)]  // örnek sayısına yuvarlanınca adım 0 → yine sonsuz döngü
+    public void Kurucu_GecersizPencereAdim_Firlatir(double window, double hop)
+    {
+        var cfg = AppConfig.Default with
+        {
+            Diarization = AppConfig.Default.Diarization with { WindowSeconds = window, HopSeconds = hop },
+        };
+        Assert.Throws<ArgumentOutOfRangeException>(() => new WindowedDiarizer(new Embedder(), new Vad(), cfg));
+    }
 }
 
 public class SpeakerClusteringTests
@@ -147,5 +180,15 @@ public class SpeakerClusteringTests
     {
         var e = Enumerable.Range(0, 20).Select(i => V(1, 0.05f * (i % 4), 0.05f * (i % 3))).ToList();
         Assert.Single(SpeakerClustering.ClusterAuto(e, maxK: 4, sameSpeakerCosine: 0.55).Distinct());
+    }
+
+    [Fact]
+    public void Cluster_IptalEdilmisToken_Firlatir()
+    {
+        var e = Enumerable.Range(0, 20).Select(i => V(1, 0.1f * (i % 3), i % 2)).ToList();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        Assert.Throws<OperationCanceledException>(() => SpeakerClustering.Cluster(e, 2, cts.Token));
+        Assert.Throws<OperationCanceledException>(() => SpeakerClustering.ClusterAuto(e, 4, 0.55, cts.Token));
     }
 }
