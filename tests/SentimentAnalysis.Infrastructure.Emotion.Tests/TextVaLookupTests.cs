@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using SentimentAnalysis.Application.Configuration;
+using SentimentAnalysis.Application.Fusion;
+using SentimentAnalysis.Core;
 using SentimentAnalysis.Infrastructure.Emotion;
 using Xunit;
 
@@ -94,5 +97,38 @@ public class TextVaLookupTests
         var labels = Labels.Take(10).Append("bilinmeyen").ToArray();
         var logits = labels.Select(_ => 1f).ToArray();
         Assert.Throws<ArgumentException>(() => TextVaLookup.Map(logits, labels));
+    }
+
+    [Theory]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    [InlineData(float.NegativeInfinity)]
+    public void Map_SonluOlmayanLogit_Firlatir(float bad)
+    {
+        var logits = OneHotLogits("joy");
+        logits[3] = bad;
+        Assert.Throws<ArgumentException>(() => TextVaLookup.Map(logits, Labels));
+    }
+
+    [Fact]
+    public void Map_EsikAlti_GuvenSifir()
+    {
+        // En yüksek olasılık ~0,43 (< τ=0,5): model hiçbir duyguya "var" demiyor → güven 0.
+        // Aksi halde 0,35–0,5 arası "eşik altı" sonuç füzyonda Orta güven alabiliyordu.
+        var logits = Labels.Select(_ => -0.3f).ToArray();
+        var e = TextVaLookup.Map(logits, Labels);
+        Assert.Equal(0.0, e.ModelConfidence);
+    }
+
+    [Fact]
+    public void UcTanUca_TumLogitlerNegatif_FuzyonDusukGuven()
+    {
+        var text = TextVaLookup.Map(Labels.Select(_ => -0.3f).ToArray(), Labels);
+        var prosody = new ProsodyEmotion(new ValenceArousal(0.0, 0.5),
+            ModelConfidence: AppConfig.Default.Emotion.ProsodyModelConfidence);
+        var quality = new QualitySignals(AudioSnr: 20, SpeechRatio: 1.0, Duration: TimeSpan.FromSeconds(10),
+            TranscriptWordCount: 20, TranscriptAvgLogProb: 0.0);
+        var r = new EmotionFusion(AppConfig.Default).Fuse(text, prosody, quality);
+        Assert.Equal(Confidence.Dusuk, r.Confidence);
     }
 }

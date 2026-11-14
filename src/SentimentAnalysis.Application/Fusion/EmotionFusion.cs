@@ -89,6 +89,11 @@ public sealed class EmotionFusion : IEmotionFusion
         TextEmotion text, ProsodyEmotion prosody, bool agreement, bool incongruent,
         double textValence, double audioValence, double reliability)
     {
+        // Sonlu olmayan güven (bozuk model çıktısı) hiçbir karşılaştırmadan geçmez; Orta/Yuksek'e
+        // sızmasın diye açıkça Dusuk.
+        if (!double.IsFinite(text.ModelConfidence) || !double.IsFinite(prosody.ModelConfidence))
+            return Confidence.Dusuk;
+
         bool bothLow = text.ModelConfidence < _cfg.LowConfidenceThreshold
                     && prosody.ModelConfidence < _cfg.LowConfidenceThreshold;
         bool oppositeValence = textValence * audioValence < 0.0;
