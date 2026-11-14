@@ -79,4 +79,45 @@ public class FaceFusionTests
         Assert.Equal(-0.3, s.SpeechValence, 1e-9);
         Assert.Null(s.FaceValence);
     }
+
+    // İt.5: yüz (kamera karşı tarafı çeker) yalnız karşı tarafın sonucuna katılır; rol yoksa eski davranış.
+    private static ChunkResult Chunk(FusedResult fused, FusedResult? counterpart, bool roles) =>
+        new ChunkResult(TimeSpan.Zero, TimeSpan.FromSeconds(10), fused, "metin")
+        {
+            Roles = roles ? new RoleTimeline(Array.Empty<RoleSpan>(), true, false) : null,
+            Counterpart = counterpart,
+        };
+
+    [Fact]
+    public void ApplyToChunk_RolYok_GenelSonucaKatilir()
+    {
+        var r = FaceFusion.ApplyToChunk(Chunk(Speech(0), null, roles: false), new[] { Face(0, 0.9) }, Cfg);
+        Assert.NotNull(r.Fused.FaceValence);
+    }
+
+    [Fact]
+    public void ApplyToChunk_KarsiTarafKonusmadi_YuzEklenmez()
+    {
+        var c = Chunk(Speech(0), null, roles: true);
+        var r = FaceFusion.ApplyToChunk(c, new[] { Face(0, 0.9) }, Cfg);
+        Assert.Null(r.Fused.FaceValence);
+        Assert.Null(r.Counterpart);
+    }
+
+    [Fact]
+    public void ApplyToChunk_KarisikParca_YalnizKarsiTarafa()
+    {
+        var r = FaceFusion.ApplyToChunk(Chunk(Speech(0), Speech(-0.2), roles: true), new[] { Face(0, 0.9) }, Cfg);
+        Assert.Null(r.Fused.FaceValence);
+        Assert.NotNull(r.Counterpart!.FaceValence);
+    }
+
+    [Fact]
+    public void ApplyToChunk_ParcaTamamenKarsiTarafin_IkisineDe()
+    {
+        var s = Speech(0);
+        var r = FaceFusion.ApplyToChunk(Chunk(s, s, roles: true), new[] { Face(0, 0.9) }, Cfg);
+        Assert.NotNull(r.Fused.FaceValence);
+        Assert.Equal(r.Fused, r.Counterpart);
+    }
 }

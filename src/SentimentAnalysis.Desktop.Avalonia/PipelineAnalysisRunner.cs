@@ -163,7 +163,7 @@ public sealed class PipelineAnalysisRunner : IAnalysisRunner, IDisposable
 
             // 11d: üç kaynaklı duygu — chunk, kaydedilmeden önce aynı aralığın yüz özetiyle birleştirilir.
             ChunkResult WithFace(ChunkResult r) => _activeVision is { } v
-                ? r with { Fused = FaceFusion.Apply(r.Fused, v.Timeline.Summarize(r.TimeStart, r.TimeEnd), _config.Fusion) }
+                ? FaceFusion.ApplyToChunk(r, v.Timeline.Summarize(r.TimeStart, r.TimeEnd), _config.Fusion)
                 : r;
 
             var summary = await _pipeline.RunAsync(pipelineSource, options, sessionId, startedAt, language, uiThreadProgress, ct,

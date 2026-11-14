@@ -119,4 +119,25 @@ public class TranscriptCleanupTests
     [Fact]
     public void Hayalet_TekKonusmaci_Korunur() =>
         Assert.Equal(0, Assert.Single(GhostSpeakerFilter.Apply(new[] { S(0, 0, 3) })).Speaker.Index);
+
+    // İt.2: kullanıcı kişi sayısını verdiyse ve ayrım bu sayıyı aşmadıysa kısa konuşan kişi silinmez
+    // (ör. mülakatta yalnız "Evet, olur" diyen ikinci kişi). Fazla küme varsa eski kural geçerli.
+    [Fact]
+    public void Hayalet_KisiSayisiVerildiyse_KisaKonusanGercekKisiKorunur()
+    {
+        var segs = GhostSpeakerFilter.Apply(new[] { S(0, 0, 60), S(1, 60, 62) }, expectedSpeakers: 2);
+        Assert.Equal(new[] { 0, 1 }, segs.Select(s => s.Speaker.Index));
+    }
+
+    [Fact]
+    public void Hayalet_KisiSayisiniAsanKumeVarsa_KirintiYineSilinir()
+    {
+        var segs = GhostSpeakerFilter.Apply(new[] { S(0, 0, 33.8), S(1, 34, 34.3), S(2, 35, 71.3) }, expectedSpeakers: 2);
+        Assert.Equal(new[] { 0, -1, 1 }, segs.Select(s => s.Speaker.Index));
+    }
+
+    [Fact]
+    public void Hayalet_KisiSayisiBilinmiyorsa_EskiKural() =>
+        Assert.Equal(new[] { 0, -1 }, GhostSpeakerFilter.Apply(new[] { S(0, 0, 60), S(1, 60, 62) }, expectedSpeakers: 0)
+            .Select(s => s.Speaker.Index));
 }

@@ -7,18 +7,22 @@ namespace SentimentAnalysis.Application.Diarization;
 /// <see cref="SpeakerId.Unknown"/> olur; kalanlar ilk konuşma sırasına göre yeniden numaralanır.
 /// <para>Neden: 2026-11-09 canlı testinde 2 kişiye 4 konuşmacı çıktı (2 sn %3 ve 5 sn %6 kırıntı).
 /// Uydurma kişi göstermek yerine dürüst "?" (master §12.2). Uzun konuşan ama payı küçük gerçek bir
-/// katılımcı (6 sn ve üstü) korunur.</para> Saf.</summary>
+/// katılımcı (6 sn ve üstü) korunur.</para>
+/// <para>İt.2: kullanıcı kişi sayısını verdiyse ve ölçülebilir küme sayısı bunu AŞMIYORSA pay kuralı
+/// uygulanmaz — kısa konuşan gerçek kişi (ör. yalnız "Evet, olur" diyen) silinmez.</para> Saf.</summary>
 public static class GhostSpeakerFilter
 {
     private const double MinShare = 0.08;
     private static readonly TimeSpan MinDuration = TimeSpan.FromSeconds(6);
 
-    public static IReadOnlyList<SpeakerSegment> Apply(IReadOnlyList<SpeakerSegment> segments)
+    /// <param name="expectedSpeakers">Kullanıcının söylediği kişi sayısı; 0 = bilinmiyor.</param>
+    public static IReadOnlyList<SpeakerSegment> Apply(IReadOnlyList<SpeakerSegment> segments, int expectedSpeakers = 0)
     {
         var shares = TalkBalance.Compute(segments);          // süresiz bölgeler paya girmez
         var measurable = shares.Select(s => s.Speaker).ToHashSet();
         // Ölçülebilir süresi hiç olmayan kimlik de hayalettir; tek kişi varsa paya bakılmaz.
-        var ghosts = shares.Count <= 1
+        bool countHonoured = expectedSpeakers > 0 && shares.Count <= expectedSpeakers;
+        var ghosts = shares.Count <= 1 || countHonoured
             ? new HashSet<SpeakerId>()
             : shares.Where(s => s.Share < MinShare && s.Duration < MinDuration).Select(s => s.Speaker).ToHashSet();
         var cleaned = segments.Select(s =>

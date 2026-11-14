@@ -9,6 +9,19 @@ namespace SentimentAnalysis.Application.Fusion;
 /// güvenilmezse sonuç aynen döner (dürüst belirsizlik korunur). Saf, deterministik.</summary>
 public static class FaceFusion
 {
+    /// <summary>İt.5: yüzü parçaya ekler. Kamera KARŞI TARAFI çeker; rol bilgisi varsa yüz yalnız karşı tarafın
+    /// sonucuna katılır — yalnız yönetenin konuştuğu parçada karşı tarafın yüzü onun duygusuna karışmaz.
+    /// Rol bilgisi yoksa (tanıtma/seçim yok) eski davranış: parçanın genel sonucuna.</summary>
+    public static ChunkResult ApplyToChunk(ChunkResult chunk, IReadOnlyList<FaceWindowSummary> faces, FusionConfig cfg)
+    {
+        if (chunk.Roles is null) return chunk with { Fused = Apply(chunk.Fused, faces, cfg) };
+        if (chunk.Counterpart is not { } other) return chunk;                       // karşı taraf konuşmadı
+        var withFace = Apply(other, faces, cfg);
+        return ReferenceEquals(other, chunk.Fused) || other.Equals(chunk.Fused)    // parça tamamen karşı tarafın
+            ? chunk with { Fused = withFace, Counterpart = withFace }
+            : chunk with { Counterpart = withFace };
+    }
+
     public static FusedResult Apply(FusedResult speech, IReadOnlyList<FaceWindowSummary> faces, FusionConfig cfg)
     {
         // Konuşmacı–yüz eşleşmesi yok: ortalama, dinleyenin ifadesini konuşanın duygusuna karıştırırdı.

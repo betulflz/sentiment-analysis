@@ -32,7 +32,7 @@ public sealed class SpeakerPreparation(IDiarizer diarizer)
         catch (OperationCanceledException) { throw; }
         catch (Exception) { return SpeakerPreparationResult.Failed(mono16k, truncated); }
 
-        var segments = GhostSpeakerFilter.Apply(raw);
+        var segments = GhostSpeakerFilter.Apply(raw, expectedSpeakers);
         var choices = segments
             .Where(s => s.Speaker != SpeakerId.Unknown)
             .GroupBy(s => s.Speaker)

@@ -86,7 +86,7 @@ public sealed class DiarizationJob
         // A) burada, saklamadan önce verilir — böylece okuyan her yüzey aynı numarayı görür.
         // Hayalet kümeler (kırıntı) de saklamadan ÖNCE ayıklanır: kayıt, rapor ve ses tonu ölçümü tek
         // numara uzayını paylaşır (ayrı bir sunum-zamanı yeniden numaralama kimlik ayrışması yaratırdı).
-        var canonical = GhostSpeakerFilter.Apply(speakers);
+        var canonical = GhostSpeakerFilter.Apply(speakers, expectedSpeakers);
 
         // Boş liste de saklanır: "diarization çalıştı, konuşmacı ayırt edilemedi" ile
         // "diarization hiç çalışmadı" farklı durumlardır ve rapor bunları ayırt etmelidir.
