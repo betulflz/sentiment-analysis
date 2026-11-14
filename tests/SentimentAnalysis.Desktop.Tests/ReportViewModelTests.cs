@@ -391,4 +391,33 @@ public class ReportViewModelTests
         });
         Assert.Equal("Konuşmanın en büyük kısmında (%60) model duygudan emin değildi.", vm.EmotionMapSummary);
     }
+
+    // --- İt.4: açık olaylar kaynak cümleleriyle ---
+    [Fact]
+    public void AcikOlaylar_KaynakCumleVeKonusmaciAdiyla()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.ApplySpeakers(
+            [T("Bütçeyi ne zaman onaylarsınız?", 0, 4), T("Neyse, teşekkürler.", 5, 9)],
+            [S(0, 0, 9)],
+            minOverlapRatio: 0.5);
+
+        Assert.True(vm.HasOpenEvents);
+        var q = vm.OpenEvents.First(e => e.Title == "Cevapsız soru");
+        Assert.Equal("00:00", q.Time);
+        Assert.Equal("Konuşmacı A", q.Who);
+        Assert.Equal("Bütçeyi ne zaman onaylarsınız?", q.Source);
+        Assert.Contains(vm.OpenEvents, e => e.Title == "Belirsiz sonraki adım");
+    }
+
+    [Fact]
+    public void AcikOlaylar_AyrimBasarisizsaTemizlenir()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.ApplySpeakers([T("Uygun mu?", 0, 4)], [S(0, 0, 4)], minOverlapRatio: 0.5);
+        Assert.True(vm.HasOpenEvents);
+        vm.SetDiarizationOutcome(DiarizationOutcome.Failed);
+        Assert.False(vm.HasOpenEvents);
+        Assert.Empty(vm.OpenEvents);
+    }
 }

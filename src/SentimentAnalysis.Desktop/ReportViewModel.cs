@@ -360,8 +360,21 @@ public sealed partial class ReportViewModel : ObservableObject
         if (outcome != DiarizationOutcome.Completed) ClearSpeakers();
     }
 
+    /// <summary>İt.4: açık olaylar (cevapsız soru, belirsiz sonraki adım, uzun tek kişi), kaynak cümleleriyle.
+    /// Konuşmacı ayrımı yoksa boş — kimin sorduğu/cevapladığı bilinmeden olay uydurulmaz.</summary>
+    public IReadOnlyList<OpenEventVm> OpenEvents { get; private set; } = System.Array.Empty<OpenEventVm>();
+    public bool HasOpenEvents => OpenEvents.Count > 0;
+
+    private void SetOpenEvents(IReadOnlyList<OpenEventVm> events)
+    {
+        OpenEvents = events;
+        OnPropertyChanged(nameof(OpenEvents));
+        OnPropertyChanged(nameof(HasOpenEvents));
+    }
+
     private void ClearSpeakers()
     {
+        SetOpenEvents(System.Array.Empty<OpenEventVm>());
         SpeakerLines = System.Array.Empty<SpeakerLineVm>();
         HasSpeakers = false;
         OnPropertyChanged(nameof(SpeakerLines));
@@ -395,9 +408,14 @@ public sealed partial class ReportViewModel : ObservableObject
     {
         if (_lastSpeakerInput is not var (transcript, speakers, minOverlapRatio)) return;
         var aligned = SpeakerAligner.Align(transcript, speakers, minOverlapRatio);
-        SpeakerLines = SpeakerLineBuilder.Build(aligned).Select(l => new SpeakerLineVm(l, GivenName(l.Speaker))).ToList();
+        var lines = SpeakerLineBuilder.Build(aligned);
+        SpeakerLines = lines.Select(l => new SpeakerLineVm(l, GivenName(l.Speaker))).ToList();
         HasSpeakers = SpeakerLines.Count > 0;
         OnPropertyChanged(nameof(SpeakerLines));
+        SetOpenEvents(OpenEventDetector.Detect(lines)
+            .Select(e => new OpenEventVm(Clock(e.At), OpenEventVm.TitleOf(e.Kind),
+                e.Speaker is { } who ? GivenName(who) ?? who.DefaultLabel : string.Empty, e.Source, e.Suggestion))
+            .ToList());
 
         TalkBalance = Application.Diarization.TalkBalance.Compute(speakers)
             .Select(t => new TalkShareVm(GivenName(t.Speaker) ?? t.Speaker.DefaultLabel, t.Share, $"{Duration(t.Duration)} · {Percent(t.Share)}", t.Speaker.Index))
@@ -686,6 +704,20 @@ public sealed record IndicatorRowVm(string Name, IReadOnlyList<double> Values)
 }
 
 /// <summary>Verilen öneri satırı: "00:40", eylem, gerekçe; düşük güvenli satır soluk gösterilir.</summary>
+/// <summary>Rapordaki açık olay satırı (İt.4).</summary>
+public sealed record OpenEventVm(string Time, string Title, string Who, string Source, string Suggestion)
+{
+    public bool HasWho => Who.Length > 0;
+
+    public static string TitleOf(OpenEventKind kind) => kind switch
+    {
+        OpenEventKind.CevapsizSoru => "Cevapsız soru",
+        OpenEventKind.BelirsizSonrakiAdim => "Belirsiz sonraki adım",
+        OpenEventKind.UzunTekKisi => "Tek kişinin uzun konuşması",
+        _ => kind.ToString(),
+    };
+}
+
 public sealed record RecommendationRowVm(string Time, string Action, string Reason, bool IsLowConfidence);
 
 /// <summary>Kritik an: "01:10–01:40" ve "Gerilim %72 — Yüz 2 · gösterilen öneri: …".</summary>
