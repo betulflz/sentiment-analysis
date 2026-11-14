@@ -17,7 +17,7 @@ using SentimentAnalysis.Infrastructure.Stt;
 if (args.Length == 1 && args[0] == "--help")
 {
     Console.WriteLine("transcribe|diarize|analyze --input audio.wav --output prediction.json --models DIRECTORY " +
-        "[--threads 2] [--speakers 0] [--model large-v3-turbo] [--quantization q5_0]");
+        "[--threads 2] [--speakers 0] [--model large-v3-turbo] [--quantization q5_0] [--profile satis|mulakat|toplanti]");
     return 0;
 }
 
@@ -82,7 +82,7 @@ try
         using var stt = new WhisperSpeechToText(config, new FileSttModelProvider(config));
         var pipeline = new EmotionPipeline(new ChunkProcessor(vad, stt, prosody, text, new EmotionFusion(config)),
             new InMemorySessionStore(), new MeetingAggregator(config), config);
-        var report = await AudioReportBenchmark.RunAsync(pipeline, AudioReportBenchmark.FromSamples(samples), duration, config, CancellationToken.None);
+        var report = await AudioReportBenchmark.RunAsync(pipeline, AudioReportBenchmark.FromSamples(samples), duration, config, CancellationToken.None, options.Profile);
         complete = report.Complete;
         result = new { report.Transcript, report.DurationSeconds, report.Complete, report.Diagnostics,
             report.Summary, report.Chunks, report.Decisions, report.FollowUp, models,

@@ -1,14 +1,15 @@
 namespace SentimentAnalysis.Benchmark;
 
 public sealed record BenchmarkOptions(string Task, string Input, string Output, string Models,
-    int Threads, int ExpectedSpeakers, string Model, string Quantization = "q5_0", string Diarizer = "windowed")
+    int Threads, int ExpectedSpeakers, string Model, string Quantization = "q5_0", string Diarizer = "windowed",
+    SentimentAnalysis.Core.MeetingProfile Profile = SentimentAnalysis.Core.MeetingProfile.Satis)
 {
     public static BenchmarkOptions Parse(string[] args)
     {
         if (args.Length == 0 || args[0] is not ("transcribe" or "diarize" or "analyze"))
             throw new ArgumentException("İlk seçenek transcribe, diarize veya analyze olmalı.");
         var values = new Dictionary<string, string>();
-        var accepted = new[] { "--input", "--output", "--models", "--threads", "--speakers", "--model", "--quantization", "--diarizer" };
+        var accepted = new[] { "--input", "--output", "--models", "--threads", "--speakers", "--model", "--quantization", "--diarizer", "--profile" };
         for (int i = 1; i < args.Length; i += 2)
         {
             if (i + 1 >= args.Length || !accepted.Contains(args[i]) || !values.TryAdd(args[i], args[i + 1]))
@@ -32,7 +33,14 @@ public sealed record BenchmarkOptions(string Task, string Input, string Output, 
         var diarizer = values.GetValueOrDefault("--diarizer", "windowed");
         if (diarizer is not ("windowed" or "pyannote"))
             throw new ArgumentException("Desteklenen konuşmacı ayrımı yöntemleri: windowed (varsayılan), pyannote (eski temel çizgi).");
+        var profile = values.GetValueOrDefault("--profile", "satis") switch
+        {
+            "satis" => SentimentAnalysis.Core.MeetingProfile.Satis,
+            "mulakat" => SentimentAnalysis.Core.MeetingProfile.Mulakat,
+            "toplanti" => SentimentAnalysis.Core.MeetingProfile.Toplanti,
+            _ => throw new ArgumentException("Desteklenen profiller: satis (varsayılan), mulakat, toplanti."),
+        };
         return new(args[0], Required("--input"), Required("--output"), Required("--models"),
-            Number("--threads", 2, 1, 4), Number("--speakers", 0, 0, 8), model, quantization, diarizer);
+            Number("--threads", 2, 1, 4), Number("--speakers", 0, 0, 8), model, quantization, diarizer, profile);
     }
 }

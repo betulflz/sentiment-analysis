@@ -58,4 +58,13 @@ public class BenchmarkOptionsTests
                                               "--models", "/a folder/models"]);
         Assert.Equal("/a folder/models", options.Models);
     }
+
+    [Fact]
+    public void Profile_DefaultsToSales_AndAcceptsInterviewAndMeeting()
+    {
+        Assert.Equal(SentimentAnalysis.Core.MeetingProfile.Satis, BenchmarkOptions.Parse(Args()).Profile);
+        Assert.Equal(SentimentAnalysis.Core.MeetingProfile.Mulakat, BenchmarkOptions.Parse(Args("--profile", "mulakat")).Profile);
+        Assert.Equal(SentimentAnalysis.Core.MeetingProfile.Toplanti, BenchmarkOptions.Parse(Args("--profile", "toplanti")).Profile);
+        Assert.Throws<ArgumentException>(() => BenchmarkOptions.Parse(Args("--profile", "x")));
+    }
 }

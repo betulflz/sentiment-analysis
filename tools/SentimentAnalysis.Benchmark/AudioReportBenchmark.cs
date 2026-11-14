@@ -16,12 +16,11 @@ public sealed record AudioReportResult(string Transcript, double DurationSeconds
 public static class AudioReportBenchmark
 {
     public static async Task<AudioReportResult> RunAsync(EmotionPipeline pipeline, IAudioCaptureSource source,
-        double durationSeconds, AppConfig config, CancellationToken ct)
+        double durationSeconds, AppConfig config, CancellationToken ct, MeetingProfile profile = MeetingProfile.Satis)
     {
         var summary = await pipeline.RunAsync(source, new(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(5)),
             Guid.NewGuid(), DateTimeOffset.UnixEpoch, DetectedLanguage.Turkish, null, ct,
             mode: PipelineExecutionMode.Offline);
-        const MeetingProfile profile = MeetingProfile.Satis;
         var weights = DecisionKnowledgeBase.DefaultWeights(profile);
         var advisor = new LiveAdvisor(profile, config.Decision);
         var previousValences = new List<double>();

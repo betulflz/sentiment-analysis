@@ -52,7 +52,17 @@ public static class OpenEventDetector
     internal static bool IsQuestion(string text)
     {
         var t = text.Trim();
-        return t.EndsWith('?') || QuestionParticle.IsMatch(t.ToLower(Tr));
+        if (t.EndsWith('?')) return true;
+        // Soru işareti yoksa: soru eki cümlenin SON 3 sözcüğünde olmalı ve ardından "diye" (aktarma) gelmemeli.
+        // Gerçek kayıtta (semsi-01) "… kelimeler mi bunlar diye … hatırlıyorum" yanlış "cevapsız soru" üretiyordu.
+        var words = Regex.Split(t.ToLower(Tr), @"[^\p{L}\d]+").Where(w => w.Length > 0).ToArray();
+        for (int i = words.Length - 1; i >= Math.Max(0, words.Length - 3); i--)
+        {
+            var m = QuestionParticle.Match(words[i]);
+            if (m.Success && m.Length == words[i].Length)
+                return !words.Skip(i + 1).Contains("diye");
+        }
+        return false;
     }
 
     private static void UnansweredQuestions(List<SpeakerLine> lines, OpenEventConfig cfg, List<OpenEvent> events)

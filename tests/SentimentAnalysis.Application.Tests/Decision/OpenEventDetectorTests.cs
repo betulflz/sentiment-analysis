@@ -127,4 +127,25 @@ public class OpenEventDetectorTests
         });
         Assert.Equal(ev.OrderBy(e => e.At).Select(e => e.At), ev.Select(e => e.At));
     }
+
+    // Gerçek kayıt (semsi-01, 53,9 sn): aktarılan iç ses soru sayılıp yanlış "cevapsız soru" üretiyordu.
+    [Theory]
+    [InlineData("Acaba gerçekten benim yazdığım kelimeler mi bunlar diye uzun uzun baktığımı hatırlıyorum.")]
+    [InlineData("Gelecek mi diye merak ettim.")]
+    [InlineData("Bunu yapabilir miyim bilmiyordum ama denedim ve sonunda proje çok güzel oldu.")]
+    public void AktarilanSoru_SoruSayilmaz(string text)
+    {
+        var ev = OpenEventDetector.Detect(new[] { L(A, 0, 4, text), L(A, 5, 9, "Neyse, devam edelim, yarın ararım.") });
+        Assert.DoesNotContain(ev, e => e.Kind == OpenEventKind.CevapsizSoru);
+    }
+
+    [Theory]
+    [InlineData("Bütçe uygun mu sizce")]
+    [InlineData("Yarın gelebilir misiniz")]
+    [InlineData("Bunu biz mi yapacağız diye soruyorum?")]
+    public void SonaYakinSoruEki_YaDaSoruIsareti_SoruSayilir(string text)
+    {
+        var ev = OpenEventDetector.Detect(new[] { L(A, 0, 4, text), L(A, 5, 9, "Neyse, devam edelim, yarın ararım.") });
+        Assert.Contains(ev, e => e.Kind == OpenEventKind.CevapsizSoru);
+    }
 }
