@@ -270,6 +270,8 @@ public sealed partial class ReportViewModel : ObservableObject
     /// güvenebileceğini bilmelidir.</summary>
     [ObservableProperty] private string _diarizationStatus = string.Empty;
     [ObservableProperty] private string _analysisQualityNotice = string.Empty;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasUncertainNotice))] private string _uncertainNotice = string.Empty;
+    public bool HasUncertainNotice => !string.IsNullOrEmpty(UncertainNotice);
 
     /// <summary>Gösterilecek konuşmacı satırı var mı? Yoksa rapor bugünkü düz transkripti
     /// gösterir (davranış değişmez).</summary>
@@ -580,6 +582,17 @@ public sealed partial class ReportViewModel : ObservableObject
             : PartialRoleNotice;
     }
 
+    /// <summary>İt.3 "belirsiz": baskın duygu ve kapsam notu. Hepsi belirsizse duygu adı uydurulmaz.</summary>
+    private void LoadUncertainty(MeetingSummary s)
+    {
+        bool allUncertain = s.SummarizedChunks > 0 && s.UncertainChunks == s.SummarizedChunks;
+        DominantEmotion = allUncertain ? EmotionLocalizer.Uncertain : EmotionLocalizer.Emotion(s.DominantEmotion);
+        UncertainNotice = s.UncertainChunks == 0 ? string.Empty
+            : $"Model {s.SummarizedChunks} parçanın {s.UncertainChunks} tanesinde emin değildi "
+              + $"(süre payı %{System.Math.Round(100 * s.UncertainShare, System.MidpointRounding.AwayFromZero)}); "
+              + "bu bölümler \"belirsiz\" sayıldı, duygu paylarına girmedi.";
+    }
+
     /// <summary>Duygu haritası: paylar büyükten küçüğe, süre ve tek cümlelik özet.</summary>
     private void LoadTimeShare(MeetingSummary s)
     {
@@ -588,6 +601,8 @@ public sealed partial class ReportViewModel : ObservableObject
             .Select(kv => new TimeShareVm(kv.Key, kv.Value, s.AnalyzedDuration))
             .ToList();
         EmotionMapSummary = TimeShare.Count == 0 ? string.Empty
+            : s.UncertainShare > TimeShare[0].Share
+                ? $"Konuşmanın en büyük kısmında (%{System.Math.Round(100 * s.UncertainShare, System.MidpointRounding.AwayFromZero)}) model duygudan emin değildi."
             : $"Konuşmanın en büyük kısmı (%{System.Math.Round(100 * TimeShare[0].Share, System.MidpointRounding.AwayFromZero)}) "
               + $"{TimeShare[0].Emotion.ToLower(new System.Globalization.CultureInfo("tr-TR"))} bir havada geçti.";
         OnPropertyChanged(nameof(TimeShare));
@@ -597,7 +612,7 @@ public sealed partial class ReportViewModel : ObservableObject
     {
         var s = _aggregator.Aggregate(session);
         AnalysisQualityNotice = AnalysisQualityText.Format(s.Diagnostics);
-        DominantEmotion = EmotionLocalizer.Emotion(s.DominantEmotion);
+        LoadUncertainty(s);
         TurkishSummary = s.TurkishSummary;
         ValenceTrend = s.ValenceTrend;
         Volatility = s.EmotionalVolatility;
@@ -615,7 +630,7 @@ public sealed partial class ReportViewModel : ObservableObject
     public void LoadSummary(MeetingSummary s)
     {
         AnalysisQualityNotice = AnalysisQualityText.Format(s.Diagnostics);
-        DominantEmotion = EmotionLocalizer.Emotion(s.DominantEmotion);
+        LoadUncertainty(s);
         TurkishSummary = s.TurkishSummary;
         ValenceTrend = s.ValenceTrend;
         Volatility = s.EmotionalVolatility;

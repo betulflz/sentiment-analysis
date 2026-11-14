@@ -196,4 +196,36 @@ public class MeetingAggregatorTests
         Assert.Equal(1.0, s.TimeShareByEmotion[Emotion.Uzgun], 3);
         Assert.False(s.TimeShareByEmotion.ContainsKey(Emotion.Mutlu));
     }
+
+    // --- İt.3 "belirsiz": model emin değilse (Confidence.Dusuk) duygu adı verilmez ---
+    private static ChunkResult Uncertain(int startSec, int endSec, double v, double a, Emotion e) =>
+        new(TimeSpan.FromSeconds(startSec), TimeSpan.FromSeconds(endSec),
+            Fused(v, a, e) with { Confidence = Confidence.Dusuk }, "x");
+
+    [Fact]
+    public void Belirsiz_DuyguPayinaGirmez_KapsamRaporlanir()
+    {
+        var s = Agg.Aggregate(Session(
+            Chunk(0, 10, 0.6, 0.5, Emotion.Mutlu),
+            Uncertain(10, 30, -0.6, 0.3, Emotion.Uzgun)));
+        Assert.Equal(Emotion.Mutlu, s.DominantEmotion);
+        Assert.False(s.TimeShareByEmotion.ContainsKey(Emotion.Uzgun));
+        Assert.Equal(1.0 / 3, s.TimeShareByEmotion[Emotion.Mutlu], 3);   // pay TÜM süreye göre
+        Assert.Equal(2.0 / 3, s.UncertainShare, 3);
+        Assert.Equal(1, s.UncertainChunks);
+        Assert.Equal(2, s.SummarizedChunks);
+        // VA sürekli bir ölçüdür (etiket iddiası değil): ortalamaya yine girer.
+        Assert.Equal(0.0, s.AverageVa.Valence, 3);
+    }
+
+    [Fact]
+    public void HepsiBelirsiz_DuyguPayiBos()
+    {
+        var s = Agg.Aggregate(Session(Uncertain(0, 10, -0.6, 0.3, Emotion.Uzgun)));
+        Assert.Empty(s.TimeShareByEmotion);
+        Assert.Equal(1.0, s.UncertainShare, 3);
+        Assert.Equal(1, s.UncertainChunks);
+        Assert.Contains("belirsiz", s.TurkishSummary);
+        Assert.DoesNotContain("en çok", s.TurkishSummary);
+    }
 }

@@ -92,4 +92,20 @@ public class ChunkRowVmTests
         Assert.Equal(string.Empty, new ChunkRowVm(MakeChunk(ValenceArousal.Neutral)).FaceNote);
         Assert.Equal(string.Empty, new ChunkRowVm(MakeChunk(ValenceArousal.Neutral), Array.Empty<FaceWindowSummary>()).FaceNote);
     }
+
+    [Fact]
+    public void DusukGuven_DuyguAdiYerineBelirsiz()
+    {
+        var c = MakeChunk(new ValenceArousal(-0.6, 0.3));
+        var row = new ChunkRowVm(c with { Fused = c.Fused with { PrimaryEmotion = Emotion.Uzgun, Confidence = Confidence.Dusuk } });
+        Assert.Equal("Belirsiz", row.Emotion);
+    }
+
+    [Fact]
+    public void OrtaGuven_DuyguAdiGosterilir()
+    {
+        var c = MakeChunk(new ValenceArousal(-0.6, 0.3));
+        var row = new ChunkRowVm(c with { Fused = c.Fused with { PrimaryEmotion = Emotion.Uzgun } });
+        Assert.Equal("Üzgün", row.Emotion);
+    }
 }

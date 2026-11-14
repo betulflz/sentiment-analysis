@@ -53,7 +53,7 @@ public sealed class ChunkRowVm
         };
         // Tanıtma şüpheliyse (kayıtta iki ses) rol etiketi kesin gibi gösterilmez.
         if (Who.Length > 0 && r.Roles is { EnrollmentDoubtful: true }) Who += " (ses tanıtması şüpheli)";
-        Emotion = EmotionLocalizer.Emotion(shown.PrimaryEmotion);
+        Emotion = shown.Uncertain ? EmotionLocalizer.Uncertain : EmotionLocalizer.Emotion(shown.PrimaryEmotion);
         Valence = shown.Combined.Valence;
         Arousal = shown.Combined.Arousal;
         Flagged = shown.Flagged;

@@ -54,10 +54,13 @@ public static class TurkishSummaryWriter
 
     public static string Write(MeetingSummary m)
     {
-        string dominant = Adlar[m.DominantEmotion].ToLower(new System.Globalization.CultureInfo("tr-TR"));
         string trend = Trend(m).Text, volatilite = Volatility(m).Text, congruence = Congruence(m).Text;
+        // Hiçbir parçada model emin değilse duygu adı uydurulmaz (İt.3 "belirsiz").
+        string opening = m.SummarizedChunks > 0 && m.UncertainChunks == m.SummarizedChunks
+            ? "Görüşmenin havası belirsiz: model hiçbir bölümde duygudan emin olamadı. "
+            : $"Görüşmede en çok {Adlar[m.DominantEmotion].ToLower(new System.Globalization.CultureInfo("tr-TR"))} bir hava vardı. ";
 
-        return $"Görüşmede en çok {dominant} bir hava vardı. "
+        return opening
              + $"Görüşme ilerledikçe hava {trend}; duygular {volatilite}. "
              + $"Söylenenlerle ses tonu {congruence}.";
     }

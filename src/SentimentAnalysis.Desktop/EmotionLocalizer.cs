@@ -19,6 +19,9 @@ public static class EmotionLocalizer
         _ => e.ToString(),
     };
 
+    /// <summary>İt.3: model emin değilken duygu adı yerine gösterilen metin.</summary>
+    public const string Uncertain = "Belirsiz";
+
     public static string Confidence(Confidence c) => c switch
     {
         Core.Confidence.Yuksek => "Yüksek",

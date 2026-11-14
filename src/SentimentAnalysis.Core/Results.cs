@@ -39,6 +39,11 @@ public sealed record FusedResult(
     /// noktadan bununla yapmalı — yalnızca <see cref="Incongruent"/>'a bakmak eşik-altı ironiyi
     /// kaçırır (master §5.1: ironi "bayraklı" bir sinyaldir).</summary>
     public bool Flagged => Incongruent || Pattern != IncongruencePattern.Yok;
+
+    /// <summary>İt.3 "belirsiz": model emin değil (<see cref="Confidence.Dusuk"/>) → yanlış bir duygu adı
+    /// göstermek yerine "belirsiz" denir; parça duygu paylarına girmez. VA sürekli ölçü olarak kalır.
+    /// Kural TEK yerde: UI ve özet bununla karar verir.</summary>
+    public bool Uncertain => Confidence == Confidence.Dusuk;
 }
 
 /// <summary>Bir chunk'ın tam sonucu (zaman çizelgesi öğesi).

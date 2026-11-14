@@ -341,4 +341,54 @@ public class ReportViewModelTests
         Assert.False(vm.HasSpeakers);
         Assert.Equal(string.Empty, vm.DiarizationStatus);
     }
+
+    // --- İt.3 "belirsiz": kapsam kaybı raporda görünür ---
+    [Fact]
+    public void Belirsiz_KapsamNotuGosterilir()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.LoadSummary(new FakeAggregator().Aggregate(Session()) with
+        {
+            TimeShareByEmotion = new Dictionary<Emotion, double> { [Emotion.Mutlu] = 0.75 },
+            SummarizedChunks = 4, UncertainChunks = 1, UncertainShare = 0.25,
+        });
+        Assert.Equal("Model 4 parçanın 1 tanesinde emin değildi (süre payı %25); bu bölümler \"belirsiz\" sayıldı, duygu paylarına girmedi.",
+            vm.UncertainNotice);
+        Assert.True(vm.HasUncertainNotice);
+        Assert.Equal("Mutlu", vm.DominantEmotion);
+    }
+
+    [Fact]
+    public void BelirsizYoksa_KapsamNotuBos()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.Load(Session());
+        Assert.Equal(string.Empty, vm.UncertainNotice);
+        Assert.False(vm.HasUncertainNotice);
+    }
+
+    [Fact]
+    public void HepsiBelirsiz_BaskinDuyguBelirsiz()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.LoadSummary(new FakeAggregator().Aggregate(Session()) with
+        {
+            TimeShareByEmotion = new Dictionary<Emotion, double>(),
+            SummarizedChunks = 2, UncertainChunks = 2, UncertainShare = 1.0,
+        });
+        Assert.Equal("Belirsiz", vm.DominantEmotion);
+        Assert.Equal(string.Empty, vm.EmotionMapSummary);
+    }
+
+    [Fact]
+    public void BelirsizPayEnBuyukse_HaritaOzetiBunuSoyler()
+    {
+        var vm = new ReportViewModel(new FakeAggregator());
+        vm.LoadSummary(new FakeAggregator().Aggregate(Session()) with
+        {
+            TimeShareByEmotion = new Dictionary<Emotion, double> { [Emotion.Mutlu] = 0.3, [Emotion.Uzgun] = 0.1 },
+            SummarizedChunks = 5, UncertainChunks = 3, UncertainShare = 0.6,
+        });
+        Assert.Equal("Konuşmanın en büyük kısmında (%60) model duygudan emin değildi.", vm.EmotionMapSummary);
+    }
 }

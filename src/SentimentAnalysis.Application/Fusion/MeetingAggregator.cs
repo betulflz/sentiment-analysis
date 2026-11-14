@@ -41,7 +41,7 @@ public sealed class MeetingAggregator : IMeetingAggregator
                 TurkishSummary: string.Empty) with { AnalyzedDuration = Union(all) };
         }
 
-        var timeShare = ComputeTimeShare(chunks, out var dominant);
+        var timeShare = ComputeTimeShare(chunks, out var dominant, out double uncertainShare);
         var valences = chunks.Select(c => c.Fused.Combined.Valence).ToArray();
         var times = chunks.Select(c => (c.TimeStart + (c.TimeEnd - c.TimeStart) / 2).TotalSeconds).ToArray();
         double trend = Slope(times, valences);
@@ -64,30 +64,41 @@ public sealed class MeetingAggregator : IMeetingAggregator
             AverageVa: averageVa,
             AverageCongruence: avgCongruence,
             TurkishSummary: string.Empty);
+        summary = summary with
+        {
+            SummarizedChunks = chunks.Count,
+            UncertainChunks = chunks.Count(c => c.Fused.Uncertain),
+            UncertainShare = uncertainShare,
+        };
         return summary with { TurkishSummary = TurkishSummaryWriter.Write(summary), AnalyzedDuration = Union(all) };
     }
 
     /// <summary>Kritiklik: yüksek arousal + düşük valence = en kritik an.</summary>
     private static double Criticality(ValenceArousal va) => va.Arousal - va.Valence;
 
+    /// <summary>Duygu süre payları. Belirsiz parçalar (<see cref="FusedResult.Uncertain"/>) hiçbir duyguya yazılmaz;
+    /// paylar yine TÜM süreye bölünür, böylece kapsam kaybı <paramref name="uncertainShare"/> olarak görünür kalır.
+    /// Hepsi belirsizse paylar boş, baskın duygu yer tutucu Nötr'dür (UI "belirsiz" gösterir).</summary>
     private static IReadOnlyDictionary<Emotion, double> ComputeTimeShare(
-        IReadOnlyList<ChunkResult> chunks, out Emotion dominant)
+        IReadOnlyList<ChunkResult> chunks, out Emotion dominant, out double uncertainShare)
     {
         var weights = new Dictionary<Emotion, double>();
-        double total = 0;
+        double total = 0, uncertain = 0;
         foreach (var c in chunks)
         {
             double w = Weight(c);
             total += w;
+            if (c.Fused.Uncertain) { uncertain += w; continue; }
             weights[c.Fused.PrimaryEmotion] = weights.GetValueOrDefault(c.Fused.PrimaryEmotion) + w;
         }
 
         var share = new Dictionary<Emotion, double>();
         foreach (var kv in weights)
             share[kv.Key] = kv.Value / total;
+        uncertainShare = uncertain / total;
 
         // Baskın: en yüksek pay; eşitlikte enum sırasına göre deterministik.
-        dominant = share
+        dominant = share.Count == 0 ? Emotion.Notr : share
             .OrderByDescending(kv => kv.Value)
             .ThenBy(kv => (int)kv.Key)
             .First().Key;
